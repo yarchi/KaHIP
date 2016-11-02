@@ -33,7 +33,6 @@
 #include "tools/random_functions.h"
 #include "uncoarsening.h"
 
-
 uncoarsening::uncoarsening() {
 
 }

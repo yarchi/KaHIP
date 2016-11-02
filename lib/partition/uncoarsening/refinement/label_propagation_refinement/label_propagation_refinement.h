@@ -24,6 +24,10 @@
 #ifndef LABEL_PROPAGATION_REFINEMENT_R4XW141Y
 #define LABEL_PROPAGATION_REFINEMENT_R4XW141Y
 
+#include "data_structure/parallel/algorithm.h"
+#include "data_structure/parallel/atomics.h"
+#include "data_structure/parallel/thread_pool.h"
+
 #include "definitions.h"
 #include "../refinement.h"
 
@@ -34,7 +38,35 @@ public:
 
         virtual EdgeWeight perform_refinement(PartitionConfig & config, 
                                               graph_access & G, 
-                                              complete_boundary & boundary); 
+                                              complete_boundary & boundary);
+
+private:
+        std::chrono::system_clock::time_point begin, end;
+        enum class parallel_lp_type {
+                parallel_queue, parallel
+        };
+
+        EdgeWeight sequential_label_propagation(PartitionConfig & config,
+                                                graph_access & G,
+                                                complete_boundary & boundary);
+
+        EdgeWeight parallel_label_propagation(PartitionConfig & config,
+                                              graph_access & G,
+                                              complete_boundary & boundary);
+
+        EdgeWeight parallel_label_propagation_with_queue(graph_access& G,
+                                                         PartitionConfig& config,
+                                                         parallel::TThreadPool& pool,
+                                                         parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
+                                                         std::vector<std::vector<PartitionID>>& hash_maps,
+                                                         std::vector<NodeID>& permutation);
+
+        EdgeWeight parallel_label_propagation(graph_access& G,
+                                              PartitionConfig& config,
+                                              parallel::TThreadPool& pool,
+                                              parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
+                                              std::vector<std::vector<PartitionID>>& hash_maps,
+                                              std::vector<NodeID>& permutation);
 };
 
 

@@ -115,9 +115,9 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *initial_partition_optimize_multitry_rounds   = arg_int0(NULL, "initial_partition_optimize_multitry_rounds", NULL, "(Default: 100)");
 
 #ifdef MODE_KAFFPA
-        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: eco) [strong|eco|fast|fastsocial|ecosocial|strongsocial]." );
+        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|fastsocial_parallel)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: eco) [strong|eco|fast|fastsocial|ecosocial|strongsocial]." );
 #else
-        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: strong) [strong|eco|fast|fastsocial|ecosocial|strongsocial]." );
+        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|fastsocial_parallel)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: strong) [strong|eco|fast|fastsocial|ecosocial|strongsocial]." );
 #endif
 
         struct arg_dbl *time_limit                           = arg_dbl0(NULL, "time_limit", NULL, "Time limit in s. Default 0s .");
@@ -164,6 +164,9 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *sep_loc_fm_no_snodes                 = arg_int0(NULL, "sep_loc_fm_no_snodes", NULL, "Number of FM repetitions during uncoarsening on each level.");
         struct arg_int *sep_num_vert_stop                    = arg_int0(NULL, "sep_num_vert_stop", NULL, "Number of vertices to stop coarsening at.");
         struct arg_rex *sep_edge_rating_during_ip            = arg_rex0(NULL, "sep_edge_rating_during_ip", "^(weight|expansionstar|expansionstar2|expansionstar2deg|punch|expansionstar2algdist|expansionstar2algdist2|algdist|algdist2|sepmultx|sepaddx|sepmax|seplog|r1|r2|r3|r4|r5|r6|r7|r8)$", "RATING", REG_EXTENDED, "Edge rating to use. One of {weight, expansionstar, expansionstar2, punch, sepmultx, sepaddx, sepmax, seplog, " " expansionstar2deg}. Default: weight"  );
+        struct arg_lit *use_multithreading                   = arg_lit0(NULL, "use_multithreading","Enable multithreading.");
+        struct arg_int *num_threads                          = arg_int0(NULL, "num_threads", NULL, "Number of threads to use. Should be at least 1");
+        struct arg_int *block_size                           = arg_int0(NULL, "block_size", NULL, "Size of block in parallel lp. Should be at least 1");
         struct arg_end *end                                  = arg_end(100);
 
         // Define argtable.
@@ -202,7 +205,10 @@ int parse_parameters(int argn, char **argv,
                 time_limit, 
                 enforce_balance, 
 		balance_edges,
-                filename_output, 
+                filename_output,
+                use_multithreading,
+                num_threads,
+                block_size,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -336,6 +342,8 @@ int parse_parameters(int argn, char **argv,
                         cfg.ecosocial(partition_config);
                 } else if (strcmp("strongsocial", preconfiguration->sval[0]) == 0) {
                         cfg.strongsocial(partition_config);
+                } else if (strcmp("fastsocial_parallel", preconfiguration->sval[0]) == 0) {
+                        cfg.fastsocial_parallel(partition_config);
                 } else {
                         fprintf(stderr, "Invalid preconfiguration variant: \"%s\"\n", preconfiguration->sval[0]);
                         exit(0);
@@ -984,6 +992,28 @@ int parse_parameters(int argn, char **argv,
                 partition_config.cluster_upperbound = cluster_upperbound->ival[0];
         } else {
                 partition_config.cluster_upperbound = std::numeric_limits< NodeWeight >::max()/2;
+        }
+
+        if (use_multithreading->count > 0) {
+                partition_config.parallel_local_search = true;
+        }
+
+        if (num_threads->count > 0) {
+                partition_config.num_threads = num_threads->ival[0];
+                if (partition_config.num_threads < 1) {
+                        fprintf(stderr, "Invalid number of threads: %d\n. Should be at least 1 thread.",
+                                partition_config.num_threads);
+                        exit(0);
+                }
+        }
+
+        if (block_size->count > 0) {
+                partition_config.block_size = block_size->ival[0];
+                if (partition_config.block_size < 1) {
+                        fprintf(stderr, "Invalid size of block: %d\n. Should be at least 1 thread.",
+                                partition_config.block_size);
+                        exit(0);
+                }
         }
 
         return 0;

@@ -82,6 +82,15 @@ int main(int argn, char **argv) {
         random_functions::setSeed(partition_config.seed);
 
         std::cout <<  "graph has " <<  G.number_of_nodes() <<  " nodes and " <<  G.number_of_edges() <<  " edges"  << std::endl;
+        if (partition_config.label_propagation_refinement) {
+                if (partition_config.parallel_local_search) {
+                        std::cout << "Algorithm\tparallel lp" << std::endl;
+                } else {
+                        std::cout << "Algorithm\tsequential lp" << std::endl;
+                }
+                std::cout << "Num threads\t" << partition_config.num_threads << std::endl;
+                std::cout << "Block size\t" << partition_config.block_size << std::endl;
+        }
         // ***************************** perform partitioning ***************************************       
         t.restart();
         graph_partitioner partitioner;

@@ -43,6 +43,7 @@ class configuration {
                 void standardsnw( PartitionConfig & config );
 
                 void fastsocial( PartitionConfig & config );
+                void fastsocial_parallel( PartitionConfig & config );
                 void ecosocial( PartitionConfig & config );
                 void strongsocial( PartitionConfig & config ); 
 
@@ -543,6 +544,11 @@ inline void configuration::fastsocial( PartitionConfig & partition_config ) {
         partition_config.label_propagation_refinement = true;
         partition_config.cluster_coarsening_during_ip = true;
         partition_config.balance_factor               = 0;
+}
+
+inline void configuration::fastsocial_parallel( PartitionConfig & partition_config ) {
+        fastsocial(partition_config);
+        partition_config.parallel_local_search = true;
 }
 
 inline void configuration::ecosocial( PartitionConfig & partition_config ) {
