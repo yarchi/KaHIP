@@ -166,6 +166,15 @@ typedef enum {
         DEGREE_NODEORDERING
 } NodeOrderingType;
 
+enum class ParallelLPType {
+        QUEUE,
+        NO_QUEUE
+};
+
+enum class BlockSizeUnit {
+        NODES,
+        EDGES
+};
 
 #endif
 

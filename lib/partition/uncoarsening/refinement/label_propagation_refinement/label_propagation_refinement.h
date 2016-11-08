@@ -26,10 +26,16 @@
 
 #include "data_structure/parallel/algorithm.h"
 #include "data_structure/parallel/atomics.h"
+
+#include "data_structure/parallel/pool_allocator.h"
 #include "data_structure/parallel/thread_pool.h"
 
 #include "definitions.h"
 #include "../refinement.h"
+
+#include <tbb/concurrent_queue.h>
+
+#include <vector>
 
 class label_propagation_refinement : public refinement {
 public:
@@ -41,11 +47,14 @@ public:
                                               complete_boundary & boundary);
 
 private:
-        std::chrono::system_clock::time_point begin, end;
-        enum class parallel_lp_type {
-                parallel_queue, parallel
-        };
+        using Allocator = growt::PoolAllocator<NodeID>;
+        using Block = std::vector<NodeID, Allocator>;
+        using ConcurrentQueue = tbb::concurrent_queue<Block>;
+        using Pair = std::pair<NodeID, NodeID>;
 
+        Allocator m_block_allocator;
+
+        std::chrono::system_clock::time_point begin, end;
         EdgeWeight sequential_label_propagation(PartitionConfig & config,
                                                 graph_access & G,
                                                 complete_boundary & boundary);
@@ -59,14 +68,24 @@ private:
                                                          parallel::TThreadPool& pool,
                                                          parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                          std::vector<std::vector<PartitionID>>& hash_maps,
-                                                         std::vector<NodeID>& permutation);
+                                                         std::vector<Pair>& permutation);
 
         EdgeWeight parallel_label_propagation(graph_access& G,
                                               PartitionConfig& config,
                                               parallel::TThreadPool& pool,
                                               parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                               std::vector<std::vector<PartitionID>>& hash_maps,
-                                              std::vector<NodeID>& permutation);
+                                              std::vector<Pair>& permutation);
+
+        void init_for_edge_unit(graph_access& G, const size_t block_size, parallel::TThreadPool& pool,
+                                std::vector<Pair>& permutation,
+                                std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
+                                std::unique_ptr<ConcurrentQueue>& queue);
+
+        void init_for_node_unit(graph_access& G, const size_t block_size, parallel::TThreadPool& pool,
+                                std::vector<Pair>& permutation,
+                                std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
+                                std::unique_ptr<ConcurrentQueue>& queue);
 };
 
 

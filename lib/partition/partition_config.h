@@ -391,6 +391,8 @@ struct PartitionConfig
         //============================================================
         int num_threads = 1;
         int block_size = 10000;
+        BlockSizeUnit block_size_unit = BlockSizeUnit::NODES;
+        ParallelLPType parallel_lp_type = ParallelLPType::QUEUE;
         //============================================================
         //====================REFINEMENT PARAMETERS===================
         //============================================================
