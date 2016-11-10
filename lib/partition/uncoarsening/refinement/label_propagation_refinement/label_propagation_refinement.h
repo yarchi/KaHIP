@@ -77,10 +77,15 @@ private:
                                               std::vector<std::vector<PartitionID>>& hash_maps,
                                               std::vector<Pair>& permutation);
 
-        void init_for_edge_unit(graph_access& G, const size_t block_size, parallel::TThreadPool& pool,
+        void seq_init_for_edge_unit(graph_access& G, const size_t block_size, parallel::TThreadPool& pool,
                                 std::vector<Pair>& permutation,
                                 std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                 std::unique_ptr<ConcurrentQueue>& queue);
+
+        void par_init_for_edge_unit(graph_access& G, const size_t block_size, parallel::TThreadPool& pool,
+                                    std::vector<Pair>& permutation,
+                                    std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
+                                    std::unique_ptr<ConcurrentQueue>& queue);
 
         void init_for_node_unit(graph_access& G, const size_t block_size, parallel::TThreadPool& pool,
                                 std::vector<Pair>& permutation,
