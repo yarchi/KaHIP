@@ -30,6 +30,7 @@
 
 #include "balance_configuration.h"
 #include "data_structure/graph_access.h"
+#include "data_structure/parallel/thread_pool.h"
 #include "graph_io.h"
 #include "macros_assertions.h"
 #include "parse_parameters.h"
@@ -81,16 +82,24 @@ int main(int argn, char **argv) {
         srand(partition_config.seed);
         random_functions::setSeed(partition_config.seed);
 
+        parallel::g_thread_pool.Resize(partition_config.num_threads - 1);
+
         std::cout <<  "graph has " <<  G.number_of_nodes() <<  " nodes and " <<  G.number_of_edges() <<  " edges"  << std::endl;
         if (partition_config.label_propagation_refinement) {
-                if (partition_config.parallel_local_search) {
+                if (partition_config.parallel_lp) {
                         std::cout << "Algorithm\tparallel lp" << std::endl;
                 } else {
                         std::cout << "Algorithm\tsequential lp" << std::endl;
                 }
-                std::cout << "Num threads\t" << partition_config.num_threads << std::endl;
                 std::cout << "Block size\t" << partition_config.block_size << std::endl;
+        } else {
+                if (partition_config.parallel_multitry_kway) {
+                        std::cout << "Algorithm\tparallel multitry kway" << std::endl;
+                } else {
+                        std::cout << "Algorithm\tsequential multitry kway" << std::endl;
+                }
         }
+        std::cout << "Num threads\t" << partition_config.num_threads << std::endl;
         // ***************************** perform partitioning ***************************************       
         t.restart();
         graph_partitioner partitioner;

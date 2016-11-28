@@ -31,6 +31,15 @@
 
 #include "macros_common.h"
 
+#define ALWAYS_ASSERT(expression) \
+        do { \
+                if (not (expression)) { \
+                        std::cerr << "ASSERTION FAILED [" << __FILE__ << ":" << __LINE__ << \
+                        "]. Asserted: " << STR(expression) << std::endl; \
+                        abort(); \
+                } \
+        } while (false)
+
 // A custom assertion macro that does not kill the program but prints to
 // stderr instead.  
 #if (defined(NDEBUG) || defined(SPEEDPROFILING))

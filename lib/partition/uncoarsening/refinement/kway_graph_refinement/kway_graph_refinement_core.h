@@ -38,66 +38,66 @@ class kway_graph_refinement_core  {
                 kway_graph_refinement_core( );
                 virtual ~kway_graph_refinement_core();
 
-                EdgeWeight single_kway_refinement_round(PartitionConfig & config, 
-                                                        graph_access & G, 
-                                                        complete_boundary & boundary, 
-                                                        boundary_starting_nodes & start_nodes, 
-                                                        int step_limit, 
+                EdgeWeight single_kway_refinement_round(PartitionConfig & config,
+                                                        graph_access & G,
+                                                        complete_boundary & boundary,
+                                                        boundary_starting_nodes & start_nodes,
+                                                        int step_limit,
                                                         vertex_moved_hashtable & moved_idx );
 
-                EdgeWeight single_kway_refinement_round(PartitionConfig & config, 
-                                                        graph_access & G, 
-                                                        complete_boundary & boundary, 
-                                                        boundary_starting_nodes & start_nodes, 
-                                                        int step_limit, 
+                EdgeWeight single_kway_refinement_round(PartitionConfig & config,
+                                                        graph_access & G,
+                                                        complete_boundary & boundary,
+                                                        boundary_starting_nodes & start_nodes,
+                                                        int step_limit,
                                                         vertex_moved_hashtable & moved_idx,
-                                                        std::unordered_map<PartitionID, PartitionID> & touched_blocks); 
+                                                        std::unordered_map<PartitionID, PartitionID> & touched_blocks);
 
 
          private:
-               EdgeWeight single_kway_refinement_round_internal(PartitionConfig & config, 
-                                                                graph_access & G, 
-                                                                complete_boundary & boundary, 
-                                                                boundary_starting_nodes & start_nodes, 
+               EdgeWeight single_kway_refinement_round_internal(PartitionConfig & config,
+                                                                graph_access & G,
+                                                                complete_boundary & boundary,
+                                                                boundary_starting_nodes & start_nodes,
                                                                 int step_limit,
                                                                 vertex_moved_hashtable & moved_idx,
                                                                 bool compute_touched_partitions,
-                                                                std::unordered_map<PartitionID, PartitionID> &  touched_blocks); 
+                                                                std::unordered_map<PartitionID, PartitionID> &  touched_blocks);
 
 
-                void init_queue_with_boundary(const PartitionConfig & config, 
-                                              graph_access & G, 
-                                              std::vector<NodeID> & bnd_nodes, 
-                                              refinement_pq * queue, 
+                void init_queue_with_boundary(const PartitionConfig & config,
+                                              graph_access & G,
+                                              std::vector<NodeID> & bnd_nodes,
+                                              refinement_pq * queue,
                                               vertex_moved_hashtable & moved_idx);
 
-                inline bool move_node(PartitionConfig & config, 
-                                      graph_access & G, 
-                                      NodeID & node, 
-                                      vertex_moved_hashtable & moved_idx, 
-                                      refinement_pq * queue, 
+                inline bool move_node(PartitionConfig & config,
+                                      graph_access & G,
+                                      NodeID & node,
+                                      vertex_moved_hashtable & moved_idx,
+                                      refinement_pq * queue,
                                       complete_boundary & boundary);
 
-                inline void move_node_back(PartitionConfig & config, 
-                                           graph_access & G, 
+                inline void move_node_back(PartitionConfig & config,
+                                           graph_access & G,
                                            NodeID & node,
-                                           PartitionID & to, 
-                                           vertex_moved_hashtable & moved_idx, 
-                                           refinement_pq * queue, 
+                                           PartitionID & to,
+                                           vertex_moved_hashtable & moved_idx,
+                                           refinement_pq * queue,
                                            complete_boundary & boundary);
 
-                void initialize_partition_moves_array(PartitionConfig & config, 
-                                                      complete_boundary & boundary, 
-                                                      std::vector<bool> & partition_move_valid); 
-                
+                void initialize_partition_moves_array(PartitionConfig & config,
+                                                      complete_boundary & boundary,
+                                                      std::vector<bool> & partition_move_valid);
+
                 kway_graph_refinement_commons* commons;
 };
 
-inline bool kway_graph_refinement_core::move_node(PartitionConfig & config, 
-                graph_access & G, 
-                NodeID & node, 
-                vertex_moved_hashtable & moved_idx, 
-                refinement_pq * queue, 
+inline bool kway_graph_refinement_core::move_node(PartitionConfig & config,
+                graph_access & G,
+                NodeID & node,
+                vertex_moved_hashtable & moved_idx,
+                refinement_pq * queue,
                 complete_boundary & boundary) {
 
         ASSERT_TRUE(boundary.assert_bnodes_in_boundaries());
@@ -109,13 +109,13 @@ inline bool kway_graph_refinement_core::move_node(PartitionConfig & config,
         commons->compute_gain(G, node, to, node_ext_deg);
 
         NodeWeight this_nodes_weight = G.getNodeWeight(node);
-        if(boundary.getBlockWeight(to) + this_nodes_weight >= config.upper_bound_partition) 
+        if(boundary.getBlockWeight(to) + this_nodes_weight >= config.upper_bound_partition)
                 return false;
 
         if(boundary.getBlockNoNodes(from) - 1 == 0) // assure that no block gets accidentally empty
                 return false;
 
-        G.setPartitionIndex(node, to);        
+        G.setPartitionIndex(node, to);
 
         boundary_pair pair;
         pair.k = config.k;
@@ -151,8 +151,8 @@ inline bool kway_graph_refinement_core::move_node(PartitionConfig & config,
                                 if(moved_idx.find(target) == moved_idx.end()) {
                                         queue->insert(target, gain);
                                         moved_idx[target].index = NOT_MOVED;
-                                } 
-                        } 
+                                }
+                        }
                 }
         } endfor
 

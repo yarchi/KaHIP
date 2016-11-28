@@ -35,34 +35,35 @@ kway_graph_refinement_core::kway_graph_refinement_core() {
 kway_graph_refinement_core::~kway_graph_refinement_core() {
 
 }
-EdgeWeight kway_graph_refinement_core::single_kway_refinement_round(PartitionConfig & config, 
-                                                                    graph_access & G, 
-                                                                    complete_boundary & boundary, 
-                                                                    boundary_starting_nodes & start_nodes, 
-                                                                    int step_limit, 
+
+EdgeWeight kway_graph_refinement_core::single_kway_refinement_round(PartitionConfig & config,
+                                                                    graph_access & G,
+                                                                    complete_boundary & boundary,
+                                                                    boundary_starting_nodes & start_nodes,
+                                                                    int step_limit,
                                                                     vertex_moved_hashtable & moved_idx) {
         std::unordered_map<PartitionID, PartitionID> touched_blocks;
-        return single_kway_refinement_round_internal(config, G, boundary, start_nodes, 
+        return single_kway_refinement_round_internal(config, G, boundary, start_nodes,
                                                      step_limit, moved_idx, false, touched_blocks);
 }
 
-EdgeWeight kway_graph_refinement_core::single_kway_refinement_round(PartitionConfig & config, 
-                                                                    graph_access & G, 
-                                                                    complete_boundary & boundary, 
-                                                                    boundary_starting_nodes & start_nodes, 
-                                                                    int step_limit, 
+EdgeWeight kway_graph_refinement_core::single_kway_refinement_round(PartitionConfig & config,
+                                                                    graph_access & G,
+                                                                    complete_boundary & boundary,
+                                                                    boundary_starting_nodes & start_nodes,
+                                                                    int step_limit,
                                                                     vertex_moved_hashtable & moved_idx,
                                                                     std::unordered_map<PartitionID, PartitionID> & touched_blocks) {
 
-        return single_kway_refinement_round_internal(config, G, boundary, start_nodes, 
+        return single_kway_refinement_round_internal(config, G, boundary, start_nodes,
                                                      step_limit, moved_idx, true, touched_blocks);
 }
 
 
-EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(PartitionConfig & config, 
-                                                                    graph_access & G, 
-                                                                    complete_boundary & boundary, 
-                                                                    boundary_starting_nodes & start_nodes, 
+EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(PartitionConfig & config,
+                                                                    graph_access & G,
+                                                                    complete_boundary & boundary,
+                                                                    boundary_starting_nodes & start_nodes,
                                                                     int step_limit,
                                                                     vertex_moved_hashtable & moved_idx,
                                                                     bool compute_touched_partitions,
@@ -74,11 +75,11 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(Par
                 EdgeWeight max_degree = G.getMaxDegree();
                 queue                 = new bucket_pq(max_degree);
         } else {
-                queue                 = new maxNodeHeap(); 
+                queue                 = new maxNodeHeap();
         }
 
-        init_queue_with_boundary(config, G, start_nodes, queue, moved_idx);  
-        
+        init_queue_with_boundary(config, G, start_nodes, queue, moved_idx);
+
         if(queue->empty()) {delete queue; return 0;}
 
         std::vector<NodeID> transpositions;
@@ -98,10 +99,10 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(Par
 
         kway_stop_rule* stopping_rule = NULL;
         switch(config.kway_stop_rule) {
-                case KWAY_SIMPLE_STOP_RULE: 
+                case KWAY_SIMPLE_STOP_RULE:
                         stopping_rule = new kway_simple_stop_rule(config);
                         break;
-                case KWAY_ADAPTIVE_STOP_RULE: 
+                case KWAY_ADAPTIVE_STOP_RULE:
                         stopping_rule = new kway_adaptive_stop_rule(config);
                         break;
 
@@ -122,7 +123,7 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(Par
                 ASSERT_TRUE(ext_degree > 0);
 #endif
 
-                PartitionID from = G.getPartitionIndex(node); 
+                PartitionID from = G.getPartitionIndex(node);
                 bool successfull = move_node(config, G, node, moved_idx, queue, boundary);
 
                 if(successfull) {
@@ -131,10 +132,10 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(Par
 
                         bool accept_equal = random_functions::nextBool();
                         if( cut < best_cut || ( cut == best_cut && accept_equal )) {
-                                best_cut = cut;
-                                min_cut_index = number_of_swaps;
                                 if(cut < best_cut)
                                         stopping_rule->reset_statistics();
+                                best_cut = cut;
+                                min_cut_index = number_of_swaps;
                         }
 
                         from_partitions.push_back(from);
@@ -147,7 +148,7 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(Par
                 ASSERT_TRUE(boundary.assert_bnodes_in_boundaries());
                 ASSERT_TRUE(boundary.assert_boundaries_are_bnodes());
 
-        } 
+        }
 
         ASSERT_TRUE(boundary.assert_bnodes_in_boundaries());
         ASSERT_TRUE(boundary.assert_boundaries_are_bnodes());
@@ -166,7 +167,7 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(Par
                 move_node_back(config, G, node, to,  moved_idx, queue, boundary);
         }
 
-       
+
         //reconstruct the touched partitions
         if(compute_touched_partitions) {
                 ASSERT_EQ(from_partitions.size(), to_partitions.size());
@@ -181,7 +182,7 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(Par
 
         delete queue;
         delete stopping_rule;
-        return initial_cut - best_cut; 
+        return initial_cut - best_cut;
 }
 
 void kway_graph_refinement_core::init_queue_with_boundary(const PartitionConfig & config,
@@ -210,16 +211,16 @@ void kway_graph_refinement_core::init_queue_with_boundary(const PartitionConfig 
 }
 
 
-void kway_graph_refinement_core::move_node_back(PartitionConfig & config, 
-                graph_access & G, 
+void kway_graph_refinement_core::move_node_back(PartitionConfig & config,
+                graph_access & G,
                 NodeID & node,
-                PartitionID & to, 
-                vertex_moved_hashtable & moved_idx, 
-                refinement_pq * queue, 
+                PartitionID & to,
+                vertex_moved_hashtable & moved_idx,
+                refinement_pq * queue,
                 complete_boundary & boundary) {
 
         PartitionID from = G.getPartitionIndex(node);
-        G.setPartitionIndex(node, to);        
+        G.setPartitionIndex(node, to);
 
         boundary_pair pair;
         pair.k   = config.k;
@@ -235,4 +236,3 @@ void kway_graph_refinement_core::move_node_back(PartitionConfig & config,
         boundary.setBlockWeight( from, boundary.getBlockWeight(from)-this_nodes_weight);
         boundary.setBlockWeight( to,   boundary.getBlockWeight(to)+this_nodes_weight);
 }
-

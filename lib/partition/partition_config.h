@@ -396,7 +396,8 @@ struct PartitionConfig
         //============================================================
         //====================REFINEMENT PARAMETERS===================
         //============================================================
-        bool parallel_local_search = false;
+        bool parallel_lp = false;
+        bool parallel_multitry_kway = false;
 };
 
 

@@ -34,7 +34,7 @@
 #include <chrono>
 #include <random>
 
-#include "ittnotify.h"
+//#include "ittnotify.h"
 
 using namespace parallel;
 
@@ -49,8 +49,8 @@ label_propagation_refinement::~label_propagation_refinement() {
 EdgeWeight label_propagation_refinement::perform_refinement(PartitionConfig& config, graph_access& G,
                                                             complete_boundary& boundary) {
 
-        //if (!config.parallel_local_search || G.number_of_nodes() < 10000000) {
-        if (!config.parallel_local_search) {
+        //if (!config.parallel_lp || G.number_of_nodes() < 10000000) {
+        if (!config.parallel_lp) {
                 auto begin = std::chrono::high_resolution_clock::now();
                 auto res = sequential_label_propagation(config, G, boundary);
                 auto end = std::chrono::high_resolution_clock::now();
@@ -79,7 +79,7 @@ EdgeWeight label_propagation_refinement::sequential_label_propagation(PartitionC
                                                                       graph_access & G,
                                                                       complete_boundary & boundary) {
         auto begin = std::chrono::high_resolution_clock::now();
-        __itt_resume();
+        //__itt_resume();
         NodeWeight block_upperbound = partition_config.upper_bound_partition;
 
         // in this case the _matching paramter is not used 
@@ -126,9 +126,6 @@ EdgeWeight label_propagation_refinement::sequential_label_propagation(PartitionC
                                         NodeID target = G.getEdgeTarget(e);
                                         PartitionID part = G.getPartitionIndex(target);
                                         hash_map[part] += G.getEdgeWeight(e);
-                                        // ONLY FOR UNIT WEIGHTS <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-                                        //++hash_map[part];
-                                        // ONLY FOR UNIT WEIGHTS <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
                                         partIDs.push_back(part);
                                 } endfor
                         } else {
@@ -215,7 +212,7 @@ EdgeWeight label_propagation_refinement::sequential_label_propagation(PartitionC
         delete next_Q;
         delete Q_contained;
         delete next_Q_contained;
-        __itt_pause();
+        //__itt_pause();
 
 
         // in this case the _matching paramter is not used 
@@ -357,7 +354,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                                                                                std::vector<std::vector<PartitionID>>& hash_maps,
                                                                                std::vector<Pair>& permutation) {
         std::cout << "Num threads:\t" << config.num_threads << std::endl;
-        __itt_resume();
+        //__itt_resume();
         const NodeWeight block_upperbound = config.upper_bound_partition;
         auto queue = std::make_unique<ConcurrentQueue>();
         auto next_queue = std::make_unique<ConcurrentQueue>();
@@ -538,7 +535,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
 
                                                 if (perform_move) {
                                                         cluster_sizes[G.getPartitionIndex(node)].
-                                                                fetch_add(-G.getNodeWeight(node),
+                                                                fetch_sub(G.getNodeWeight(node),
                                                                           std::memory_order_acq_rel);
 
                                                         G.setPartitionIndex(node, max_block);
@@ -588,7 +585,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                 std::swap(queue_contains, next_queue_contains);
                 futures.clear();
         }
-        __itt_pause();
+        //__itt_pause();
         end = std::chrono::high_resolution_clock::now();
         std::cout << "Main parallel lp:\t" << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
                   << std::endl;

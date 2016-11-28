@@ -7,6 +7,7 @@
 #include <mutex>
 #include <thread>
 #include <type_traits>
+#include <vector>
 
 namespace parallel {
 
@@ -261,5 +262,7 @@ public:
                 return futures;
         }
 };
+
+extern TThreadPool g_thread_pool;
 
 }

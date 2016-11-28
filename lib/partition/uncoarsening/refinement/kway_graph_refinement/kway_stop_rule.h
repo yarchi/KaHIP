@@ -23,6 +23,8 @@
 #ifndef KWAY_STOP_RULE_ULPK0ZTF
 #define KWAY_STOP_RULE_ULPK0ZTF
 
+#include "partition/partition_config.h"
+
 class kway_stop_rule {
 public:
         kway_stop_rule(PartitionConfig & config) {};

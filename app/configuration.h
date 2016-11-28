@@ -45,7 +45,8 @@ class configuration {
                 void fastsocial( PartitionConfig & config );
                 void fastsocial_parallel( PartitionConfig & config );
                 void ecosocial( PartitionConfig & config );
-                void strongsocial( PartitionConfig & config ); 
+                void strongsocial( PartitionConfig & config );
+                void strongsocial_parallel( PartitionConfig& config);
 
                 //void fastsocial_separator( PartitionConfig & config );
                 //void ecosocial_separator( PartitionConfig & config );
@@ -548,7 +549,7 @@ inline void configuration::fastsocial( PartitionConfig & partition_config ) {
 
 inline void configuration::fastsocial_parallel( PartitionConfig & partition_config ) {
         fastsocial(partition_config);
-        partition_config.parallel_local_search = true;
+        partition_config.parallel_lp = true;
 }
 
 inline void configuration::ecosocial( PartitionConfig & partition_config ) {
@@ -570,6 +571,11 @@ inline void configuration::strongsocial( PartitionConfig & partition_config ) {
         partition_config.cluster_coarsening_during_ip = true;
         partition_config.ensemble_clusterings         = true;
 
+}
+
+inline void configuration::strongsocial_parallel( PartitionConfig& partition_config) {
+        strongsocial(partition_config);
+        partition_config.parallel_multitry_kway = true;
 }
 
 #endif /* end of include guard: CONFIGURATION_3APG5V7Z */

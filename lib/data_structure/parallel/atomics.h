@@ -83,6 +83,10 @@ struct AtomicWrapper {
                 return m_atomic.fetch_add(value, order);
         }
 
+        inline T fetch_sub(T value, std::memory_order order = std::memory_order_seq_cst) {
+                return m_atomic.fetch_sub(value, order);
+        }
+
         inline T exchange(T desired, std::memory_order order = std::memory_order_seq_cst) {
                 return m_atomic.exchange(desired, order);
         }

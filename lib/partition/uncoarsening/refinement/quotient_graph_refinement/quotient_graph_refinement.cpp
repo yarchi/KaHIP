@@ -24,6 +24,7 @@
 
 #include "2way_fm_refinement/two_way_fm.h"
 #include "complete_boundary.h"
+#include "data_structure/parallel/time.h"
 #include "flow_refinement/two_way_flow_refinement.h"
 #include "quality_metrics.h"
 #include "quotient_graph_refinement.h"
@@ -31,6 +32,8 @@
 #include "quotient_graph_scheduling/simple_quotient_graph_scheduler.h"
 #include "uncoarsening/refinement/kway_graph_refinement/kway_graph_refinement.h"
 #include "uncoarsening/refinement/kway_graph_refinement/multitry_kway_fm.h"
+
+#include "ittnotify.h"
 
 quotient_graph_refinement::quotient_graph_refinement() {
 
@@ -64,7 +67,8 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
 
         ASSERT_TRUE(boundary.assert_bnodes_in_boundaries());
         ASSERT_TRUE(boundary.assert_boundaries_are_bnodes());
-
+        CLOCK_START;
+        __itt_resume();
         QuotientGraphEdges qgraph_edges;
         boundary.getQuotientGraphEdges(qgraph_edges);
         quotient_graph_scheduling* scheduler = NULL;
@@ -85,7 +89,7 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
         EdgeWeight overall_improvement                = 0;
         unsigned int no_of_pairwise_improvement_steps = 0;
         quality_metrics qm;
-
+        EdgeWeight cut_improvement = 0;
         do {
                 no_of_pairwise_improvement_steps++;
                 // ********** preconditions ********************
@@ -124,11 +128,11 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
                         multitry_kway_fm kway_ref;
                         std::unordered_map<PartitionID, PartitionID> touched_blocks;
 
-                        multitry_improvement = kway_ref.perform_refinement_around_parts(cfg, G, 
-                                                                                boundary, true, 
-                                                                                config.local_multitry_fm_alpha, lhs, rhs, 
-                                                                                touched_blocks); 
-
+                        multitry_improvement = kway_ref.perform_refinement_around_parts(cfg, G,
+                                                                                boundary, true,
+                                                                                config.local_multitry_fm_alpha, lhs, rhs,
+                                                                                touched_blocks);
+                        cut_improvement += multitry_improvement;
                         if(multitry_improvement > 0) {
                                 ((active_block_quotient_graph_scheduler*)scheduler)->activate_blocks(touched_blocks);
                         }
@@ -147,6 +151,9 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
                 ASSERT_TRUE(boundary.getBlockNoNodes(rhs)>0);
                 //*************************** end **************************************** 
         } while(!scheduler->hasFinished());
+        __itt_pause();
+        CLOCK_END("Cut improvement time");
+        std::cout << "Cut improvement\t" << cut_improvement << std::endl;
 
         delete scheduler;
         return overall_improvement;
