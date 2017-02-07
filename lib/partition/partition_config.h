@@ -389,7 +389,7 @@ struct PartitionConfig
         //============================================================
         //====================MULTITHREADING PARAMETERS===================
         //============================================================
-        int num_threads = 1;
+        uint32_t num_threads = 1;
         int block_size = 10000;
         BlockSizeUnit block_size_unit = BlockSizeUnit::NODES;
         ParallelLPType parallel_lp_type = ParallelLPType::QUEUE;

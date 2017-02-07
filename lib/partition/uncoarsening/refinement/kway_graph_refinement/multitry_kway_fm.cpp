@@ -23,8 +23,6 @@
 #include <algorithm>
 #include <unordered_map>
 
-#include "data_structure/parallel/algorithm.h"
-#include "data_structure/parallel/thread_pool.h"
 #include "data_structure/parallel/time.h"
 #include "kway_graph_refinement_core.h"
 #include "kway_stop_rule.h"
@@ -32,58 +30,27 @@
 #include "quality_metrics.h"
 #include "random_functions.h"
 #include "uncoarsening/refinement/quotient_graph_refinement/2way_fm_refinement/vertex_moved_hashtable.h"
-#include "uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_core.h"
+#include "partition/uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.h"
 
-#include <tbb/concurrent_queue.h>
+double multitry_kway_fm::time_setup_start_nodes(0);
+double multitry_kway_fm::time_local_search(0);
+double multitry_kway_fm::time_generate_moves(0);
+uint32_t multitry_kway_fm::tried_movements(0);
 
-using parallel::AtomicWrapper;
-using parallel::Cvector;
+std::unique_ptr<multitry_kway_fm> get_multitry_kway_fm_instance(PartitionConfig& config,
+                                                                graph_access& G, complete_boundary& boundary) {
+        if (config.parallel_multitry_kway) {
+                return std::make_unique<parallel::multitry_kway_fm>(config, G, boundary);
+        } else {
+                return std::make_unique<multitry_kway_fm>();
+        }
+}
 
 multitry_kway_fm::multitry_kway_fm() {
 }
 
 multitry_kway_fm::~multitry_kway_fm() {
 
-}
-
-int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& G,
-                                         complete_boundary& boundary, unsigned rounds,
-                                         bool init_neighbors, unsigned alpha) {
-        if (!config.parallel_multitry_kway) {
-                //CLOCK_START;
-                auto res = perform_refinement(config, G, boundary, rounds, init_neighbors, alpha);
-                //CLOCK_END("Sequential multitry kway");
-
-                return res;
-        } else {
-                //CLOCK_START;
-                auto res = perform_refinement_par(config, G, boundary, rounds, init_neighbors, alpha);
-                //CLOCK_END("Parallel multitry kway");
-
-                return res;
-        }
-}
-
-int multitry_kway_fm::perform_refinement_around_parts(PartitionConfig& config, graph_access& G,
-                                                      complete_boundary& boundary, bool init_neighbors,
-                                                      unsigned alpha,
-                                                      PartitionID& lhs, PartitionID& rhs,
-                                                      std::unordered_map <PartitionID, PartitionID>& touched_blocks) {
-        if (!config.parallel_multitry_kway) {
-                //CLOCK_START;
-                auto res = perform_refinement_around_parts(config, G, boundary, init_neighbors, alpha, lhs, rhs,
-                                                               touched_blocks);
-                //CLOCK_END("Sequential multitry kway (around parts)");
-
-                return res;
-        } else {
-                //CLOCK_START;
-                auto res = perform_refinement_around_parts_par(config, G, boundary, init_neighbors, alpha, lhs, rhs,
-                                                               touched_blocks);
-                //CLOCK_END("Parallel multitry kway (around parts)");
-
-                return res;
-        }
 }
 
 int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& G,
@@ -144,8 +111,10 @@ int multitry_kway_fm::perform_refinement_around_parts(PartitionConfig& config, g
         int overall_improvement = 0;
 
         for (unsigned i = 0; i < config.local_multitry_rounds; i++) {
+                CLOCK_START;
                 boundary_starting_nodes start_nodes;
                 boundary.setup_start_nodes_around_blocks(G, lhs, rhs, start_nodes);
+                time_setup_start_nodes += CLOCK_END_TIME;
 
                 if (start_nodes.size() == 0) { return 0; }// nothing to refine
 
@@ -155,9 +124,12 @@ int multitry_kway_fm::perform_refinement_around_parts(PartitionConfig& config, g
                         todolist.push_back(start_nodes[i]);
                 }
 
+                CLOCK_START_N;
                 EdgeWeight improvement = start_more_locallized_search(config, G, boundary,
                                                                       init_neighbors, true,
                                                                       touched_blocks, todolist);
+                time_local_search += CLOCK_END_TIME;
+
                 if (improvement == 0) break;
 
                 overall_improvement += improvement;
@@ -185,6 +157,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
         unsigned idx = todolist.size() - 1;
         int overall_improvement = 0;
 
+        CLOCK_START;
         while (!todolist.empty()) {
                 int random_idx = random_functions::nextInt(0, idx);
                 NodeID node = todolist[random_idx];
@@ -212,8 +185,9 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                 endfor
                         }
                         int improvement = 0;
+                        uint32_t tried_movements = 0;
                         if (compute_touched_blocks) {
-                                improvement = refinement_core.single_kway_refinement_round(config, G,
+                                std::tie(improvement, tried_movements) = refinement_core.single_kway_refinement_round(config, G,
                                                                                            boundary, real_start_nodes,
                                                                                            local_step_limit, moved_idx,
                                                                                            touched_blocks);
@@ -221,7 +195,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                         std::cout << "buf error improvement < 0" << std::endl;
                                 }
                         } else {
-                                improvement = refinement_core.single_kway_refinement_round(config, G,
+                                std::tie(improvement, tried_movements) = refinement_core.single_kway_refinement_round(config, G,
                                                                                            boundary, real_start_nodes,
                                                                                            local_step_limit, moved_idx);
                                 if (improvement < 0) {
@@ -230,6 +204,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                         }
 
                         overall_improvement += improvement;
+                        this->tried_movements += tried_movements;
 
                 }
 
@@ -237,6 +212,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 std::swap(todolist[random_idx], todolist[idx--]);
                 todolist.pop_back();
         }
+        time_generate_moves += CLOCK_END_TIME;
 
         //std::cout << "Cut improvement\t" << overall_improvement << std::endl;
         //std::cout << "Number of nodes moved\t" << moved_idx.size() << std::endl;

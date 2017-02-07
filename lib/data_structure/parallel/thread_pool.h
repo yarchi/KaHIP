@@ -1,10 +1,11 @@
 #pragma once
 
+#include "data_structure/parallel/spin_lock.h"
+
 #include <atomic>
 #include <functional>
 #include <future>
 #include <memory>
-#include <mutex>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -30,18 +31,18 @@ private:
                 std::unique_ptr <TNode> Next;
         };
 
-        std::mutex HeadMutex;
+        parallel::spin_lock HeadMutex;
         std::unique_ptr <TNode> Head;
-        std::mutex TailMutex;
+        parallel::spin_lock TailMutex;
         TNode* Tail;
 
         TNode* GetTail() {
-                std::lock_guard <std::mutex> tailLock(TailMutex);
+                std::lock_guard <parallel::spin_lock> tailLock(TailMutex);
                 return Tail;
         }
 
         bool PopHead(T& value) {
-                std::lock_guard <std::mutex> headLock(HeadMutex);
+                std::lock_guard <parallel::spin_lock> headLock(HeadMutex);
 
                 if (Head.get() == GetTail()) {
                         return false;
@@ -58,7 +59,7 @@ private:
                 std::shared_ptr <T> newData(std::make_shared<T>(std::forward<TType>(newValue)));
                 std::unique_ptr <TNode> p(new TNode);
                 TNode* const newTail = p.get();
-                std::lock_guard <std::mutex> tailLock(TailMutex);
+                std::lock_guard <parallel::spin_lock> tailLock(TailMutex);
                 Tail->Data = newData;
                 Tail->Next = std::move(p);
                 Tail = newTail;
@@ -184,8 +185,8 @@ private:
                         TFunctionWrapper task;
                         if (TaskQueue.TryPop(task))
                                 task();
-                        else
-                                std::this_thread::yield();
+//                        else
+//                                std::this_thread::yield();
                 }
         }
 

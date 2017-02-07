@@ -33,19 +33,21 @@
 #include "uncoarsening/refinement/quotient_graph_refinement/2way_fm_refinement/vertex_moved_hashtable.h"
 #include "uncoarsening/refinement/refinement.h"
 
-class kway_graph_refinement_core  {
+
+
+class kway_graph_refinement_core {
         public:
                 kway_graph_refinement_core( );
                 virtual ~kway_graph_refinement_core();
 
-                EdgeWeight single_kway_refinement_round(PartitionConfig & config,
+                std::pair<EdgeWeight, uint32_t> single_kway_refinement_round(PartitionConfig & config,
                                                         graph_access & G,
                                                         complete_boundary & boundary,
                                                         boundary_starting_nodes & start_nodes,
                                                         int step_limit,
                                                         vertex_moved_hashtable & moved_idx );
 
-                EdgeWeight single_kway_refinement_round(PartitionConfig & config,
+                std::pair<EdgeWeight, uint32_t> single_kway_refinement_round(PartitionConfig & config,
                                                         graph_access & G,
                                                         complete_boundary & boundary,
                                                         boundary_starting_nodes & start_nodes,
@@ -55,7 +57,7 @@ class kway_graph_refinement_core  {
 
 
          private:
-               EdgeWeight single_kway_refinement_round_internal(PartitionConfig & config,
+                std::pair<EdgeWeight, uint32_t> single_kway_refinement_round_internal(PartitionConfig & config,
                                                                 graph_access & G,
                                                                 complete_boundary & boundary,
                                                                 boundary_starting_nodes & start_nodes,

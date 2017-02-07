@@ -15,27 +15,40 @@
 namespace parallel {
 class thread_data_refinement_core : public parallel::thread_config {
 public:
-        using nodes_partitions_hash_table = parallel::HashMap<NodeID, PartitionID, parallel::xxhash<NodeID>, true>;
+        using nodes_partitions_hash_table = parallel::hash_map<NodeID, PartitionID>;
+        //using nodes_partitions_hash_table = std::unordered_map<NodeID, PartitionID>;
 
+        // global data
         PartitionConfig& config;
         graph_access& G;
         complete_boundary& boundary;
-        boundary_starting_nodes& start_nodes;
         int step_limit;
         std::vector <AtomicWrapper<bool>>& moved_idx;
-        bool compute_touched_partitions;
-        std::unordered_map <PartitionID, PartitionID>& touched_blocks;
         Cvector <AtomicWrapper<NodeWeight>>& parts_weights;
         Cvector <AtomicWrapper<NodeWeight>>& parts_sizes;
+        Cvector <AtomicWrapper<int>>& moved_count;
         int upper_bound_gain_improvement;
 
+        // local thread data
+        boundary_starting_nodes start_nodes;
         nodes_partitions_hash_table nodes_partitions;
-        std::vector<std::pair<PartitionID, uint32_t>> min_cut_indices;
+        std::vector<std::pair<int, int>> min_cut_indices;
         std::vector <NodeID> transpositions;
         std::vector <PartitionID> from_partitions;
         std::vector <PartitionID> to_partitions;
         std::vector <EdgeWeight> gains;
         std::vector <NodeID> moved;
+
+        // local statistics about time in all iterations
+        double total_thread_time;
+        uint32_t tried_movements;
+        uint32_t accepted_movements;
+        double total_thread_try_move_time;
+        double total_thread_accepted_move_time;
+        double total_thread_unroll_move_time;
+        uint32_t scaned_neighbours;
+        double time_move_nodes;
+        uint32_t transpositions_size;
 
 
         thread_data_refinement_core(uint32_t _id,
@@ -43,26 +56,32 @@ public:
                                     PartitionConfig& _config,
                                     graph_access& _G,
                                     complete_boundary& _boundary,
-                                    boundary_starting_nodes& _start_nodes,
-                                    int _step_limit,
                                     std::vector <AtomicWrapper<bool>>& _moved_idx,
-                                    bool _compute_touched_partitions,
-                                    std::unordered_map <PartitionID, PartitionID>& _touched_blocks,
                                     Cvector <AtomicWrapper<NodeWeight>>& _parts_weights,
-                                    Cvector <AtomicWrapper<NodeWeight>>& _parts_sizes)
+                                    Cvector <AtomicWrapper<NodeWeight>>& _parts_sizes,
+                                    Cvector <AtomicWrapper<int>>& _moved_count,
+                                    AtomicWrapper<uint32_t>& _moved_idx_counter)
                 :       parallel::thread_config(_id, _seed)
                 ,       config(_config)
                 ,       G(_G)
                 ,       boundary(_boundary)
-                ,       start_nodes(_start_nodes)
-                ,       step_limit(_step_limit)
+                ,       step_limit(0)
                 ,       moved_idx(_moved_idx)
-                ,       compute_touched_partitions(_compute_touched_partitions)
-                ,       touched_blocks(_touched_blocks)
                 ,       parts_weights(_parts_weights)
                 ,       parts_sizes(_parts_sizes)
+                ,       moved_count(_moved_count)
                 ,       upper_bound_gain_improvement(0)
-                ,       nodes_partitions(nodes_partitions_hash_table::get_max_size_to_fit_l1())
+                //,       nodes_partitions(nodes_partitions_hash_table::get_max_size_to_fit_l1())
+                ,       nodes_partitions(131072)
+                ,       total_thread_time(0.0)
+                ,       tried_movements(0)
+                ,       accepted_movements(0)
+                ,       total_thread_try_move_time(0.0)
+                ,       total_thread_unroll_move_time(0.0)
+                ,       scaned_neighbours(0)
+                ,       time_move_nodes(0.0)
+                ,       transpositions_size(0)
+                ,       m_moved_idx_counter(_moved_idx_counter)
         {
                 m_local_degrees.resize(config.k);
 
@@ -75,77 +94,40 @@ public:
                 to_partitions.reserve(100);
                 gains.reserve(100);
                 moved.reserve(100);
+                start_nodes.reserve(100);
         }
 
         thread_data_refinement_core(const thread_data_refinement_core& td) = default;
-//                :       parallel::thread_config(td)
-//                ,       config(td.config)
-//                ,       G(td.G)
-//                ,       boundary(td.boundary)
-//                ,       start_nodes(td.start_nodes)
-//                ,       step_limit(td.step_limit)
-//                ,       moved_idx(td.moved_idx)
-//                ,       compute_touched_partitions(td.compute_touched_partitions)
-//                ,       touched_blocks(td.touched_blocks)
-//                ,       parts_weights(td.parts_weights)
-//                ,       parts_sizes(td.parts_sizes)
-//                ,       upper_bound_gain_improvement(td.upper_bound_gain_improvement)
-//                ,       nodes_partitions(td.nodes_partitions)
-//                ,       transpositions(td.transpositions)
-//                ,       from_partitions(td.from_partitions)
-//                ,       to_partitions(td.to_partitions)
-//                ,       gains(td.gains)
-//                ,       min_cut_indices(td.min_cut_indices)
-//                ,       m_local_degrees(td.m_local_degrees)
-//                ,       m_round(td.m_round)
-//        {
-//                m_local_degrees.resize(config.k);
-//
-//                // needed for the computation of internal and external degrees
-//                m_round = 0;
-//        }
-
         thread_data_refinement_core(thread_data_refinement_core&& td) = default;
-//                :       parallel::thread_config(td)
-//                ,       config(td.config)
-//                ,       G(td.G)
-//                ,       boundary(td.boundary)
-//                ,       start_nodes(td.start_nodes)
-//                ,       step_limit(td.step_limit)
-//                ,       moved_idx(td.moved_idx)
-//                ,       compute_touched_partitions(td.compute_touched_partitions)
-//                ,       touched_blocks(td.touched_blocks)
-//                ,       parts_weights(td.parts_weights)
-//                ,       parts_sizes(td.parts_sizes)
-//                ,       upper_bound_gain_improvement(td.upper_bound_gain_improvement)
-//                ,       nodes_partitions(std::move(td.nodes_partitions))
-//                ,       transpositions(std::move(td.transpositions))
-//                ,       from_partitions(td.from_partitions)
-//                ,       to_partitions(td.to_partitions)
-//                ,       gains(td.gains)
-//                ,       min_cut_indices(td.min_cut_indices)
-//        {}
 
         thread_data_refinement_core& operator=(const thread_data_refinement_core&) = delete;
         thread_data_refinement_core& operator=(thread_data_refinement_core&&) = delete;
 
-        inline PartitionID get_local_partition(NodeID node) const {
+        inline PartitionID get_local_partition(NodeID node) {
                 return nodes_partitions.contains(node) ? nodes_partitions[node] : G.getPartitionIndex(node);
+                //return nodes_partitions.find(node) != nodes_partitions.end() ? nodes_partitions[node] : G.getPartitionIndex(node);
         }
 
-        void clear() {
+        void reset_thread_data() {
+                for (auto node : moved) {
+                        moved_idx[node].store(false, std::memory_order_relaxed);
+                }
+                m_moved_idx_counter.fetch_add(1, std::memory_order_release);
+
+                moved.clear();
+
                 nodes_partitions.clear();
+                //nodes_partitions.reserve(nodes_partitions_hash_table::get_max_size_to_fit_l1());
+                nodes_partitions.reserve(131072);
+
                 min_cut_indices.clear();
                 transpositions.clear();
                 from_partitions.clear();
                 to_partitions.clear();
                 gains.clear();
+                start_nodes.clear();
 
-                for (auto node : moved) {
-                        moved_idx[node].store(false, std::memory_order_relaxed);
-                }
-                moved.clear();
-
+                while (!is_all_data_reseted());
         }
 
         inline Gain compute_gain(NodeID node, PartitionID from, PartitionID& to, EdgeWeight& ext_degree) {
@@ -198,6 +180,12 @@ public:
         }
 
 private:
+        AtomicWrapper<uint32_t>& m_moved_idx_counter;
+
+        inline bool is_all_data_reseted() const {
+                return m_moved_idx_counter.load(std::memory_order_acquire) == config.num_threads;
+        }
+
         //for efficient computation of internal and external degrees
         struct round_struct {
                 round_struct()

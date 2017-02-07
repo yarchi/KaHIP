@@ -36,7 +36,7 @@ kway_graph_refinement_core::~kway_graph_refinement_core() {
 
 }
 
-EdgeWeight kway_graph_refinement_core::single_kway_refinement_round(PartitionConfig & config,
+std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::single_kway_refinement_round(PartitionConfig & config,
                                                                     graph_access & G,
                                                                     complete_boundary & boundary,
                                                                     boundary_starting_nodes & start_nodes,
@@ -47,7 +47,7 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round(PartitionCon
                                                      step_limit, moved_idx, false, touched_blocks);
 }
 
-EdgeWeight kway_graph_refinement_core::single_kway_refinement_round(PartitionConfig & config,
+std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::single_kway_refinement_round(PartitionConfig & config,
                                                                     graph_access & G,
                                                                     complete_boundary & boundary,
                                                                     boundary_starting_nodes & start_nodes,
@@ -60,7 +60,7 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round(PartitionCon
 }
 
 
-EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(PartitionConfig & config,
+std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::single_kway_refinement_round_internal(PartitionConfig & config,
                                                                     graph_access & G,
                                                                     complete_boundary & boundary,
                                                                     boundary_starting_nodes & start_nodes,
@@ -80,7 +80,7 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(Par
 
         init_queue_with_boundary(config, G, start_nodes, queue, moved_idx);
 
-        if(queue->empty()) {delete queue; return 0;}
+        if(queue->empty()) {delete queue; return {0, 0};}
 
         std::vector<NodeID> transpositions;
         std::vector<PartitionID> from_partitions;
@@ -95,7 +95,7 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(Par
         //roll forwards
         EdgeWeight best_cut = cut;
         int number_of_swaps = 0;
-        int movements       = 0;
+        uint32_t movements       = 0;
 
         kway_stop_rule* stopping_rule = NULL;
         switch(config.kway_stop_rule) {
@@ -110,7 +110,7 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(Par
 
         for(number_of_swaps = 0, movements = 0; movements < max_number_of_swaps; movements++, number_of_swaps++) {
                 if( queue->empty() ) break;
-                if( stopping_rule->search_should_stop(min_cut_index, number_of_swaps, step_limit) ) break;
+                if( stopping_rule->search_should_stop(min_cut_index >= 0 ? min_cut_index : 0, number_of_swaps, step_limit) ) break;
 
                 Gain gain = queue->maxValue();
                 NodeID node = queue->deleteMax();
@@ -182,7 +182,7 @@ EdgeWeight kway_graph_refinement_core::single_kway_refinement_round_internal(Par
 
         delete queue;
         delete stopping_rule;
-        return initial_cut - best_cut;
+        return std::make_pair(initial_cut - best_cut, movements);
 }
 
 void kway_graph_refinement_core::init_queue_with_boundary(const PartitionConfig & config,

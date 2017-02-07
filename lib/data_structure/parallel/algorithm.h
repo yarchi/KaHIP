@@ -196,6 +196,11 @@ public:
                 static_assert(sizeof(Self) % g_cache_line_size == 0, "No cache line alignment");
         }
 
+        template <typename... Args>
+        CacheAlignedData(Args&&... args)
+                :       m_elem(std::forward<Args>(args)...)
+        {}
+
         CacheAlignedData(const CacheAlignedData& other)
                 :       m_elem(other.m_elem)
         {}
@@ -203,6 +208,7 @@ public:
         CacheAlignedData(CacheAlignedData&& other)
                 :       m_elem(other.m_elem)
         {}
+
 
         T& get() {
                 return m_elem;

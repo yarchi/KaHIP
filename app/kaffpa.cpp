@@ -40,6 +40,8 @@
 #include "quality_metrics.h"
 #include "random_functions.h"
 #include "timer.h"
+#include "uncoarsening/refinement/kway_graph_refinement/multitry_kway_fm.h"
+#include "uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.h"
 
 int main(int argn, char **argv) {
 
@@ -82,6 +84,7 @@ int main(int argn, char **argv) {
         srand(partition_config.seed);
         random_functions::setSeed(partition_config.seed);
 
+        parallel::PinToCore(0);
         parallel::g_thread_pool.Resize(partition_config.num_threads - 1);
 
         std::cout <<  "graph has " <<  G.number_of_nodes() <<  " nodes and " <<  G.number_of_edges() <<  " edges"  << std::endl;
@@ -149,6 +152,16 @@ int main(int argn, char **argv) {
         std::cout << "bnd \t\t"         << qm.boundary_nodes(G)           << std::endl;
         std::cout << "balance \t"       << qm.balance(G)                  << std::endl;
         std::cout << "max_comm_vol \t"  << qm.max_communication_volume(G) << std::endl;
+
+        if (!partition_config.label_propagation_refinement) {
+                std::cout << "Local search statistics:" << std::endl;
+                if (partition_config.parallel_multitry_kway) {
+                        parallel::multitry_kway_fm::print_full_statistics();
+                } else {
+                        multitry_kway_fm::print_full_statistics();
+                }
+        }
+
 
         // write the partition to the disc 
         std::stringstream filename;

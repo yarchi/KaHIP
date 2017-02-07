@@ -30,24 +30,38 @@
 #include "kway_graph_refinement_commons.h"
 #include "uncoarsening/refinement/refinement.h"
 
+#include <memory>
+
+
 class multitry_kway_fm {
 public:
         multitry_kway_fm();
 
         virtual ~multitry_kway_fm();
 
-        int perform_refinement(PartitionConfig& config, graph_access& G,
+        virtual int perform_refinement(PartitionConfig& config, graph_access& G,
                                complete_boundary& boundary, unsigned rounds,
                                bool init_neighbors, unsigned alpha);
 
-        int perform_refinement_around_parts(PartitionConfig& config, graph_access& G,
+        virtual int perform_refinement_around_parts(PartitionConfig& config, graph_access& G,
                                             complete_boundary& boundary, bool init_neighbors,
                                             unsigned alpha,
                                             PartitionID& lhs, PartitionID& rhs,
                                             std::unordered_map <PartitionID, PartitionID>& touched_blocks);
 
+        static void print_full_statistics() {
+                std::cout << "Time setup start nodes\t" << time_setup_start_nodes << " s" << std::endl;
+                std::cout << "Time local search\t" << time_local_search << " s" << std::endl;
+                std::cout << "Time generate moves\t" << time_generate_moves << " s" << std::endl;
+                std::cout << "Total tried moves\t" << tried_movements << std::endl;
+        }
 
 private:
+        static double time_setup_start_nodes;
+        static double time_local_search;
+        static double time_generate_moves;
+        static uint32_t tried_movements;
+
         int start_more_locallized_search(PartitionConfig& config, graph_access& G,
                                          complete_boundary& boundary,
                                          bool init_neighbors,
@@ -58,6 +72,7 @@ private:
         kway_graph_refinement_commons* commons;
 };
 
+std::unique_ptr<multitry_kway_fm> get_multitry_kway_fm_instance(PartitionConfig& config,
+                                                                graph_access& G, complete_boundary& boundary);
+
 #endif /* end of include guard: MULTITRY_KWAYFM_PVGY97EW  */
-
-

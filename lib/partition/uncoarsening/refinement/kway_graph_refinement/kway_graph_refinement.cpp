@@ -58,13 +58,14 @@ EdgeWeight kway_graph_refinement::perform_refinement(PartitionConfig & config, g
                 int step_limit = (int)((config.kway_fm_search_limit/100.0)*max_number_of_swaps);
                 step_limit = std::max(step_limit, 15);
 
-                vertex_moved_hashtable moved_idx; 
-                improvement += refinement_core.single_kway_refinement_round(config, G, boundary, 
+                vertex_moved_hashtable moved_idx;
+                uint32_t tried_movements;
+                std::tie(improvement, tried_movements) = refinement_core.single_kway_refinement_round(config, G, boundary,
                                                                             start_nodes, step_limit, 
                                                                             moved_idx);
 
                 sth_changed = improvement != 0 && config.no_change_convergence;
-                if(improvement == 0) break; 
+                if(improvement == 0) break;
                 overall_improvement += improvement; 
 
         } 

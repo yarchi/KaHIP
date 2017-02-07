@@ -32,8 +32,11 @@
 #include "quotient_graph_scheduling/simple_quotient_graph_scheduler.h"
 #include "uncoarsening/refinement/kway_graph_refinement/kway_graph_refinement.h"
 #include "uncoarsening/refinement/kway_graph_refinement/multitry_kway_fm.h"
+#include "uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.h"
 
-#include "ittnotify.h"
+//#include "ittnotify.h"
+
+#include "quality_metrics.h"
 
 quotient_graph_refinement::quotient_graph_refinement() {
 
@@ -65,97 +68,137 @@ void quotient_graph_refinement::setup_start_nodes(graph_access & G,
 
 EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & config, graph_access & G, complete_boundary & boundary) {
 
-        ASSERT_TRUE(boundary.assert_bnodes_in_boundaries());
-        ASSERT_TRUE(boundary.assert_boundaries_are_bnodes());
         CLOCK_START;
-        __itt_resume();
-        QuotientGraphEdges qgraph_edges;
-        boundary.getQuotientGraphEdges(qgraph_edges);
-        quotient_graph_scheduling* scheduler = NULL;
-
-        int factor = ceil(config.bank_account_factor*qgraph_edges.size());
-        switch(config.refinement_scheduling_algorithm) {
-                case REFINEMENT_SCHEDULING_FAST:
-                        scheduler = new simple_quotient_graph_scheduler(config, qgraph_edges, factor);
-                        break;
-                case REFINEMENT_SCHEDULING_ACTIVE_BLOCKS:
-                        scheduler = new active_block_quotient_graph_scheduler(config, qgraph_edges, factor);
-                        break;
-                case REFINEMENT_SCHEDULING_ACTIVE_BLOCKS_REF_KWAY:
-                        scheduler = new active_block_quotient_graph_scheduler(config, qgraph_edges, factor);
-                        break;
-        }
-
-        EdgeWeight overall_improvement                = 0;
-        unsigned int no_of_pairwise_improvement_steps = 0;
-        quality_metrics qm;
-        EdgeWeight cut_improvement = 0;
-        do {
-                no_of_pairwise_improvement_steps++;
-                // ********** preconditions ********************
+        EdgeWeight overall_improvement = 0;
+        {
                 ASSERT_TRUE(boundary.assert_bnodes_in_boundaries());
                 ASSERT_TRUE(boundary.assert_boundaries_are_bnodes());
-                // *************** end *************************
 
-                if(scheduler->hasFinished()) break; //fetch the case where we have no qgraph edges
+                QuotientGraphEdges qgraph_edges;
+                boundary.getQuotientGraphEdges(qgraph_edges);
+                quotient_graph_scheduling* scheduler = NULL;
 
-                boundary_pair & bp = scheduler->getNext();
-                PartitionID lhs = bp.lhs;
-                PartitionID rhs = bp.rhs;
-
-                NodeWeight lhs_part_weight = boundary.getBlockWeight(lhs);
-                NodeWeight rhs_part_weight = boundary.getBlockWeight(rhs);
-
-                EdgeWeight initial_cut_value = boundary.getEdgeCut(&bp);
-                if( initial_cut_value < 0 ) continue; // quick fix, for bug 02 (very rare cross combine bug / coarsest level) !
-
-                bool something_changed = false;
-
-#ifndef NDEBUG  
-                EdgeWeight oldcut = initial_cut_value;
-#endif
-
-                PartitionConfig cfg    = config;
-                EdgeWeight improvement = perform_a_two_way_refinement(cfg, G, boundary, bp, 
-                                                                      lhs, rhs, 
-                                                                      lhs_part_weight, rhs_part_weight, 
-                                                                      initial_cut_value, something_changed);
-
-                overall_improvement += improvement;
-
-                EdgeWeight multitry_improvement = 0;
-                if(config.refinement_scheduling_algorithm == REFINEMENT_SCHEDULING_ACTIVE_BLOCKS_REF_KWAY ) {
-                        multitry_kway_fm kway_ref;
-                        std::unordered_map<PartitionID, PartitionID> touched_blocks;
-
-                        multitry_improvement = kway_ref.perform_refinement_around_parts(cfg, G,
-                                                                                boundary, true,
-                                                                                config.local_multitry_fm_alpha, lhs, rhs,
-                                                                                touched_blocks);
-                        cut_improvement += multitry_improvement;
-                        if(multitry_improvement > 0) {
-                                ((active_block_quotient_graph_scheduler*)scheduler)->activate_blocks(touched_blocks);
-                        }
-
+                int factor = ceil(config.bank_account_factor * qgraph_edges.size());
+                switch (config.refinement_scheduling_algorithm) {
+                        case REFINEMENT_SCHEDULING_FAST:
+                                scheduler = new simple_quotient_graph_scheduler(config, qgraph_edges, factor);
+                                break;
+                        case REFINEMENT_SCHEDULING_ACTIVE_BLOCKS:
+                                scheduler = new active_block_quotient_graph_scheduler(config, qgraph_edges, factor);
+                                break;
+                        case REFINEMENT_SCHEDULING_ACTIVE_BLOCKS_REF_KWAY:
+                                scheduler = new active_block_quotient_graph_scheduler(config, qgraph_edges, factor);
+                                break;
                 }
 
-                qgraph_edge_statistics stat(improvement, &bp, something_changed);
-                scheduler->pushStatistics(stat);
+                //EdgeWeight overall_improvement = 0;
+                unsigned int no_of_pairwise_improvement_steps = 0;
+                quality_metrics qm;
+                EdgeWeight cut_improvement = 0;
 
-                //**************** assertions / postconditions ************************** 
-                ASSERT_TRUE( oldcut - improvement == qm.edge_cut(G, lhs, rhs) 
-                          || config.refinement_scheduling_algorithm == REFINEMENT_SCHEDULING_ACTIVE_BLOCKS_REF_KWAY);
-                ASSERT_TRUE(boundary.assert_bnodes_in_boundaries());
-                ASSERT_TRUE(boundary.assert_boundaries_are_bnodes());
-                ASSERT_TRUE(boundary.getBlockNoNodes(lhs)>0);
-                ASSERT_TRUE(boundary.getBlockNoNodes(rhs)>0);
-                //*************************** end **************************************** 
-        } while(!scheduler->hasFinished());
-        __itt_pause();
-        CLOCK_END("Cut improvement time");
-        std::cout << "Cut improvement\t" << cut_improvement << std::endl;
 
-        delete scheduler;
+                // CHANGING STOPPING RULE
+                config.kway_stop_rule = KWAY_SIMPLE_STOP_RULE;
+
+                CLOCK_START;
+                double time = 0.0;
+                // __itt_resume();
+                auto kway_ref = get_multitry_kway_fm_instance(config, G, boundary);
+                //__itt_pause();
+                time += CLOCK_END_TIME;
+
+                double time_two_way = 0.0;
+
+
+                //int i = 1;
+                do {
+                        no_of_pairwise_improvement_steps++;
+                        // ********** preconditions ********************
+                        ASSERT_TRUE(boundary.assert_bnodes_in_boundaries());
+                        ASSERT_TRUE(boundary.assert_boundaries_are_bnodes());
+                        // *************** end *************************
+
+                        if (scheduler->hasFinished()) break; //fetch the case where we have no qgraph edges
+
+                        boundary_pair& bp = scheduler->getNext();
+                        PartitionID lhs = bp.lhs;
+                        PartitionID rhs = bp.rhs;
+
+                        NodeWeight lhs_part_weight = boundary.getBlockWeight(lhs);
+                        NodeWeight rhs_part_weight = boundary.getBlockWeight(rhs);
+
+                        EdgeWeight initial_cut_value = boundary.getEdgeCut(&bp);
+                        if (initial_cut_value < 0)
+                                continue; // quick fix, for bug 02 (very rare cross combine bug / coarsest level) !
+
+                        bool something_changed = false;
+
+#ifndef NDEBUG
+                        EdgeWeight oldcut = initial_cut_value;
+#endif
+
+                        PartitionConfig cfg = config;
+                        CLOCK_START;
+                        EdgeWeight improvement = perform_a_two_way_refinement(cfg, G, boundary, bp,
+                                                                              lhs, rhs,
+                                                                              lhs_part_weight, rhs_part_weight,
+                                                                              initial_cut_value, something_changed);
+
+                        time_two_way += CLOCK_END_TIME;
+
+                        overall_improvement += improvement;
+
+                        EdgeWeight multitry_improvement = 0;
+                        if (config.refinement_scheduling_algorithm == REFINEMENT_SCHEDULING_ACTIVE_BLOCKS_REF_KWAY) {
+                                std::unordered_map <PartitionID, PartitionID> touched_blocks;
+
+                                //int old_cut = qm.edge_cut(G);
+                                CLOCK_START;
+                                //__itt_resume();
+                                multitry_improvement = kway_ref->perform_refinement_around_parts(cfg, G,
+                                                                                                 boundary, true,
+                                                                                                 config.local_multitry_fm_alpha,
+                                                                                                 lhs, rhs,
+                                                                                                 touched_blocks);
+                                //__itt_pause();
+                                //std::cout << "Multiway done" << std::endl;
+                                time += CLOCK_END_TIME;
+                                cut_improvement += multitry_improvement;
+                                //int cut_diff = old_cut - qm.edge_cut(G);
+                                //std::cout << "Improved:\t" << multitry_improvement << ", expected:\t" << cut_diff << std::endl;
+                                //ALWAYS_ASSERT(cut_diff == multitry_improvement);
+
+                                if (multitry_improvement > 0) {
+                                        ((active_block_quotient_graph_scheduler*) scheduler)->activate_blocks(
+                                                touched_blocks);
+                                }
+
+                        }
+//                        --i;
+//                        if (i == 0) {
+//                                break;
+//                        }
+
+                        qgraph_edge_statistics stat(improvement, &bp, something_changed);
+                        scheduler->pushStatistics(stat);
+
+                        //**************** assertions / postconditions **************************
+                        ASSERT_TRUE(oldcut - improvement == qm.edge_cut(G, lhs, rhs)
+                                    || config.refinement_scheduling_algorithm ==
+                                       REFINEMENT_SCHEDULING_ACTIVE_BLOCKS_REF_KWAY);
+                        ASSERT_TRUE(boundary.assert_bnodes_in_boundaries());
+                        ASSERT_TRUE(boundary.assert_boundaries_are_bnodes());
+                        ASSERT_TRUE(boundary.getBlockNoNodes(lhs) > 0);
+                        ASSERT_TRUE(boundary.getBlockNoNodes(rhs) > 0);
+                        //*************************** end ****************************************
+                } while (!scheduler->hasFinished());
+                std::cout << "Cut improvement time\t" << time << std::endl;
+                std::cout << "Two way time\t" << time_two_way;
+                std::cout << "Cut improvement\t" << cut_improvement << std::endl;
+
+                delete scheduler;
+        }
+        CLOCK_END("Quotient graph refinement");
         return overall_improvement;
 }
 

@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#define XXH_PRIVATE_API
 #include "data_structure/parallel/lib/xxhash.h"
 #include "tools/macros_assertions.h"
 
@@ -87,17 +88,18 @@ public:
                 _ht_size = max_size * SizeFactor;
                 _max_size = max_size;
                 _ht.resize(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value()));
+                _poses.reserve(_max_size);
         }
 
-        uint64_t size() const {
+        inline uint64_t size() const {
                 return _poses.size();
         }
 
-        bool empty() const {
+        inline bool empty() const {
                 return size() == 0;
         }
 
-        Value& operator[](const Key& key) {
+        inline Value& operator[](const Key& key) {
                 if (TGrowable && size() == _max_size / 2)
                         resize();
 
@@ -111,19 +113,19 @@ public:
                 return _ht[pos].second;
         }
 
-        bool contains(const Key& key) {
+        inline bool contains(const Key& key) {
                 return _ht[findPosition(key)].first != _empty_element;
         }
 
-        void insert(const Element& elem) {
+        inline void insert(const Element& elem) {
                 insertImpl(elem.first, elem.second);
         }
 
-        void insert(const Key& key, const Value& value) {
+        inline void insert(const Key& key, const Value& value) {
                 insertImpl(key, value);
         }
 
-        void clear() {
+        inline void clear() {
                 for (auto pos : _poses) {
                         _ht[pos].first = _empty_element;
                 }
@@ -134,7 +136,7 @@ public:
                 _last_position = 0;
         }
 
-        void swap(TSelf& hash_map) {
+        inline void swap(TSelf& hash_map) {
                 std::swap(_ht_size, hash_map._ht_size);
                 std::swap(_max_size, hash_map._max_size);
                 _ht.swap(hash_map._ht);
@@ -154,7 +156,7 @@ private:
                 swap(new_hash_map);
         }
 
-        void insertImpl(const Key& key, const Value& value) {
+        inline void insertImpl(const Key& key, const Value& value) {
                 if (TGrowable && size() == _max_size / 2)
                         resize();
 
@@ -166,7 +168,7 @@ private:
                 }
         }
 
-        Position findPosition(const Key& key) {
+        inline Position findPosition(const Key& key) {
                 if (Cache && key == _last_key) {
                         return _last_position;
                 }
@@ -231,10 +233,11 @@ public:
         TSelf& operator=(TSelf&& other) = default;
 
         static constexpr size_t get_max_size_to_fit_l1() {
-                // (SizeFactor + 1.1) * max_size * sizeof(Element) + sizeof(Position) * max_size Bytes = 16 * 1024 Bytes,
+                // (SizeFactor + 1.1) * max_size * sizeof(Element) + (sizeof(Position) + sizeof(uint32_t)) * max_size Bytes = 16 * 1024 Bytes,
                 // where 16 * 1024 Bytes is half of L1 cache and (2 + 1.1) * max_size * 8 + 4 * max_size Bytes
                 // is the size of a hash table. We calculate that max_size ~ 560.
-                return round_up_to_next_power_2(16 * 1024 / (sizeof(Element) * (SizeFactor + 1.1) + sizeof(Position)) - sizeof(TSelf)) / SizeFactor;
+                return round_up_to_next_power_2(16 * 1024 / (sizeof(Element) * (SizeFactor + 1.1) + sizeof(Position) +
+                        sizeof(uint32_t)) - sizeof(TSelf)) / SizeFactor;
         }
 
         void reserve(const uint32_t max_size) {
@@ -242,19 +245,20 @@ public:
                 _max_size = max_size;
                 _ht.resize(_ht_size + _max_size * 1.1, std::make_pair(_empty_element.first, Value()));
                 _pos_in_position.resize(_ht_size + _max_size * 1.1);
+                _poses.reserve(_max_size);
         }
 
-        size_t size() const {
+        inline size_t size() const {
                 return _poses.size();
         }
 
-        bool empty() const {
+        inline bool empty() const {
                 return size() == 0;
         }
 
-        void erase(const Key& key) {
+        inline void erase(const Key& key) {
                 const Position pos = findPosition(key);
-                if (_ht[pos].first != _empty_element) {
+                if (_ht[pos].first != _empty_element && _ht[pos].first != _deleted_element) {
                         _ht[pos].first = _deleted_element;
                         const uint32_t pos_of_deleted = _pos_in_position[pos];
                         _pos_in_position[_poses.back()] = pos_of_deleted;
@@ -263,12 +267,12 @@ public:
                 }
         }
 
-        Value& operator[] (const Key& key) {
+        inline Value& operator[] (const Key& key) {
                 if (TGrowable && size() == _max_size / 2)
                         resize();
 
                 const Position pos = findPosition(key);
-                if (_ht[pos].first == _empty_element) {
+                if (_ht[pos].first == _empty_element || _ht[pos].first == _deleted_element) {
                         _ht[pos].first = key;
                         _ht[pos].second = Value();
                         _poses.push_back(pos);
@@ -278,23 +282,28 @@ public:
                 return _ht[pos].second;
         }
 
-        bool contains(const Key& key) {
-                if (_ht[findPosition(key)].first == _empty_element) {
+        inline bool contains(const Key& key) {
+                // Sometimes findPosition can return _delete_element
+                // which means that in searched until the end of _ht and did not
+                // find element but found _deleted_element. This means that
+                // element is NOT in hash table
+                const Position pos = findPosition(key);
+                if (_ht[pos].first == _empty_element || _ht[pos].first == _deleted_element) {
                         return false;
                 }
 
                 return true;
         }
 
-        void insert(const Element& elem) {
+        inline void insert(const Element& elem) {
                 insertImpl(elem.first, elem.second);
         }
 
-        void insert(const Key& key, const Value& value) {
+        inline void insert(const Key& key, const Value& value) {
                 insertImpl(key, value);
         }
 
-        void clear() {
+        inline void clear() {
                 for (auto pos : _poses) {
                         _ht[pos].first = _empty_element;
                 }
@@ -304,7 +313,7 @@ public:
                 _last_position = 0;
         }
 
-        void swap(TSelf& hash_map) {
+        inline void swap(TSelf& hash_map) {
                 std::swap(_ht_size, hash_map._ht_size);
                 std::swap(_max_size, hash_map._max_size);
                 _ht.swap(hash_map._ht);
@@ -326,12 +335,12 @@ private:
                 swap(new_hash_map);
         }
 
-        void insertImpl(const Key& key, const Value& value) {
+        inline void insertImpl(const Key& key, const Value& value) {
                 if (TGrowable && size() == _max_size / 2)
                         resize();
 
                 const Position pos = findPosition(key);
-                if (_ht[pos].first == _empty_element) {
+                if (_ht[pos].first == _empty_element || _ht[pos].first == _deleted_element) {
                         _ht[pos].first = key;
                         _ht[pos].second = value;
                         _poses.push_back(pos);
@@ -339,7 +348,7 @@ private:
                 }
         }
 
-        Position findPosition(const Key& key) {
+        inline Position findPosition(const Key& key) {
                 if (Cache && key == _last_key) {
                         return _last_position;
                 }
@@ -425,28 +434,29 @@ public:
                 _ht_size = max_size * SizeFactor;
                 _max_size = max_size;
                 _ht.resize(_ht_size + _max_size * 1.1, _empty_element);
+                _poses.reserve(_max_size);
         }
 
-        uint64_t size() const {
+        inline uint64_t size() const {
                 return _poses.size();
         }
 
-        bool empty() const {
+        inline bool empty() const {
                 return size() == 0;
         }
 
-        bool contains(const Key& key) {
+        inline bool contains(const Key& key) {
                 if (_ht[findPosition(key)] == _empty_element) {
                         return false;
                 }
                 return true;
         }
 
-        void insert(const Key& key) {
+        inline void insert(const Key& key) {
                 insertImpl(key);
         }
 
-        void clear() {
+        inline void clear() {
                 for (auto pos : _poses) {
                         _ht[pos] = _empty_element;
                 }
@@ -457,7 +467,7 @@ public:
                 _last_position = 0;
         }
 
-        void swap(TSelf& hash_set) {
+        inline void swap(TSelf& hash_set) {
                 std::swap(_ht_size, hash_set._ht_size);
                 std::swap(_max_size, hash_set._max_size);
                 _ht.swap(hash_set._ht);
@@ -476,7 +486,7 @@ private:
                 swap(new_hash_map);
         }
 
-        void insertImpl(const Key& key) {
+        inline void insertImpl(const Key& key) {
                 if (TGrowable && size() == _max_size / 2)
                         resize();
 
@@ -487,7 +497,7 @@ private:
                 }
         }
 
-        Position findPosition(const Key& key) {
+        inline Position findPosition(const Key& key) {
                 if (Cache && key == _last_key) {
                         return _last_position;
                 }
@@ -516,16 +526,13 @@ private:
         Position _last_position;
 };
 
-template <typename key_type>
-using hash = xxhash<key_type>;
+template <typename key_type, typename value_type>
+using hash_map = HashMap<key_type, value_type, simple_hash<key_type>, true>;
 
 template <typename key_type, typename value_type>
-using hash_map = HashMap<key_type, value_type, hash<key_type>, true>;
-
-template <typename key_type, typename value_type>
-using hash_map_with_erase = HashMapWithErase<key_type, value_type, hash<key_type>, true>;
+using hash_map_with_erase = HashMapWithErase<key_type, value_type, simple_hash<key_type>, true>;
 
 template <typename key_type>
-using hash_set = HashSet<key_type, hash<key_type>, true>;
+using hash_set = HashSet<key_type, simple_hash<key_type>, true>;
 
 }
