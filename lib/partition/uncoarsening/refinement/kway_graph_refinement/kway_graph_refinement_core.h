@@ -143,7 +143,7 @@ inline bool kway_graph_refinement_core::move_node(PartitionConfig & config,
 
                 if(queue->contains(target)) {
                         assert(moved_idx.find(target) != moved_idx.end());
-                        if(ext_degree > 0) {
+                        if (ext_degree > 0) {
                                 queue->changeKey(target, gain);
                         } else {
                                 queue->deleteNode(target);

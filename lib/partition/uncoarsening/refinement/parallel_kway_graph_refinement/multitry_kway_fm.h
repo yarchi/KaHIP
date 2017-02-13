@@ -30,6 +30,7 @@ public:
                 ,       m_parts_sizes(config.k)
                 ,       m_moved_count(config.num_threads)
                 ,       m_moved_idx_counter(0)
+                ,       m_time_stamp(0)
         {
                 for (PartitionID block = 0; block < G.get_partition_count(); ++block) {
                         m_parts_weights[block].get().store(boundary.getBlockWeight(block), std::memory_order_relaxed);
@@ -40,15 +41,16 @@ public:
 
                 for (uint32_t id = 0; id < config.num_threads; ++id) {
                         m_thread_data.emplace_back(id,
-                                                 id,
-                                                 config,
-                                                 G,
-                                                 boundary,
-                                                 m_moved_idx,
-                                                 m_parts_weights,
-                                                 m_parts_sizes,
-                                                 m_moved_count,
-                                                 m_moved_idx_counter);
+                                                   id,
+                                                   config,
+                                                   G,
+                                                   boundary,
+                                                   m_moved_idx,
+                                                   m_parts_weights,
+                                                   m_parts_sizes,
+                                                   m_moved_count,
+                                                   m_moved_idx_counter,
+                                                   m_time_stamp);
                 }
 
         }
@@ -65,6 +67,7 @@ public:
                 }
 
                 m_moved_idx_counter.store(0, std::memory_order_relaxed);
+                m_time_stamp.store(0, std::memory_order_relaxed);
                 queue.clear();
         }
 
@@ -109,6 +112,8 @@ public:
                 double total_tried = 0.0;
                 double total_accepted = 0.0;
                 double total_unroll = 0.0;
+                int total_unperformed_gain = 0;
+
                 for (uint32_t id = 0; id < m_config.num_threads; ++id) {
                         std::cout << "proc_id\t" << id << " | "
                                   << "time\t" << m_thread_data[id].get().total_thread_time << " s | "
@@ -119,12 +124,14 @@ public:
                                   << "accepted moves time\t" << m_thread_data[id].get().total_thread_accepted_move_time << " s | "
                                   << "unroll moves time\t" << m_thread_data[id].get().total_thread_unroll_move_time << " s | "
                                   << "move nodes time\t" << m_thread_data[id].get().time_move_nodes << " s | "
-                                  << "transpositions size\t" << m_thread_data[id].get().transpositions_size
+                                  << "transpositions size\t" << m_thread_data[id].get().transpositions_size << " | "
+                                  << "unperformed gain\t" << m_thread_data[id].get().unperformed_gain
                                   << std::endl;
 
                         total_tried_movements += m_thread_data[id].get().tried_movements;
                         total_accepted_movements += m_thread_data[id].get().accepted_movements;
                         total_scaned_neighbours += m_thread_data[id].get().scaned_neighbours;
+                        total_unperformed_gain += m_thread_data[id].get().unperformed_gain;
 
                         statistics_type::proc_stat proc_stat;
                         proc_stat.proc_id = id;
@@ -151,6 +158,7 @@ public:
                 std::cout << "Total tried moves\t" << total_tried_movements << std::endl;
                 std::cout << "Total accepted movse\t" << total_accepted_movements << std::endl;
                 std::cout << "Total scanned neighbours\t" << total_scaned_neighbours << std::endl;
+                std::cout << "Total unperformed gain\t" << total_unperformed_gain << std::endl;
 
                 std::cout << "Average TIME per thread\t" << total / m_config.num_threads << " s" << std::endl;
                 std::cout << "Average TIME tried moves per thread\t" << total_tried / m_config.num_threads << " s" << std::endl;
@@ -299,6 +307,7 @@ private:
         Cvector <AtomicWrapper<NodeWeight>> m_parts_sizes;
         Cvector <AtomicWrapper<int>> m_moved_count;
         AtomicWrapper<uint32_t> m_moved_idx_counter;
+        AtomicWrapper<uint32_t> m_time_stamp;
 };
 
 class multitry_kway_fm : public ::multitry_kway_fm {

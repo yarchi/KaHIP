@@ -95,7 +95,7 @@ std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::single_kway_refineme
         //roll forwards
         EdgeWeight best_cut = cut;
         int number_of_swaps = 0;
-        uint32_t movements       = 0;
+        uint32_t movements = 0;
 
         kway_stop_rule* stopping_rule = NULL;
         switch(config.kway_stop_rule) {

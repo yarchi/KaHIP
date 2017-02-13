@@ -112,7 +112,7 @@ class complete_boundary {
         public:
                 bool assert_bnodes_in_boundaries();
                 bool assert_boundaries_are_bnodes();
-#endif 
+#endif
 };
 
 

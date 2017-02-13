@@ -28,16 +28,18 @@ public:
         Cvector <AtomicWrapper<NodeWeight>>& parts_sizes;
         Cvector <AtomicWrapper<int>>& moved_count;
         int upper_bound_gain_improvement;
+        AtomicWrapper<uint32_t>& time_stamp;
 
         // local thread data
         boundary_starting_nodes start_nodes;
         nodes_partitions_hash_table nodes_partitions;
         std::vector<std::pair<int, int>> min_cut_indices;
-        std::vector <NodeID> transpositions;
-        std::vector <PartitionID> from_partitions;
-        std::vector <PartitionID> to_partitions;
-        std::vector <EdgeWeight> gains;
-        std::vector <NodeID> moved;
+        std::vector<NodeID> transpositions;
+        std::vector<PartitionID> from_partitions;
+        std::vector<PartitionID> to_partitions;
+        std::vector<EdgeWeight> gains;
+        std::vector<NodeID> moved;
+        std::vector<uint32_t> time_stamps;
 
         // local statistics about time in all iterations
         double total_thread_time;
@@ -49,7 +51,7 @@ public:
         uint32_t scaned_neighbours;
         double time_move_nodes;
         uint32_t transpositions_size;
-
+        int unperformed_gain;
 
         thread_data_refinement_core(uint32_t _id,
                                     uint32_t _seed,
@@ -60,7 +62,8 @@ public:
                                     Cvector <AtomicWrapper<NodeWeight>>& _parts_weights,
                                     Cvector <AtomicWrapper<NodeWeight>>& _parts_sizes,
                                     Cvector <AtomicWrapper<int>>& _moved_count,
-                                    AtomicWrapper<uint32_t>& _moved_idx_counter)
+                                    AtomicWrapper<uint32_t>& _moved_idx_counter,
+                                    AtomicWrapper<uint32_t>& _time_stamp)
                 :       parallel::thread_config(_id, _seed)
                 ,       config(_config)
                 ,       G(_G)
@@ -71,7 +74,7 @@ public:
                 ,       parts_sizes(_parts_sizes)
                 ,       moved_count(_moved_count)
                 ,       upper_bound_gain_improvement(0)
-                //,       nodes_partitions(nodes_partitions_hash_table::get_max_size_to_fit_l1())
+                ,       time_stamp(_time_stamp)
                 ,       nodes_partitions(131072)
                 ,       total_thread_time(0.0)
                 ,       tried_movements(0)
@@ -81,6 +84,7 @@ public:
                 ,       scaned_neighbours(0)
                 ,       time_move_nodes(0.0)
                 ,       transpositions_size(0)
+                ,       unperformed_gain(0)
                 ,       m_moved_idx_counter(_moved_idx_counter)
         {
                 m_local_degrees.resize(config.k);
@@ -126,6 +130,7 @@ public:
                 to_partitions.clear();
                 gains.clear();
                 start_nodes.clear();
+                time_stamps.clear();
 
                 while (!is_all_data_reseted());
         }
@@ -165,6 +170,16 @@ public:
                         }
                 }
                 endfor
+
+                //std::cout << "Node " << node << ", degree " << G.getNodeDegree(node) << ", cur part " << from << ", best part: " << to << std::endl;
+
+//                if (to == 4294967295) {
+//                        forall_out_edges(G, e, node) {
+//                                NodeID target = G.getEdgeTarget(e);
+//                                PartitionID target_partition = get_local_partition(target);
+//                                std::cout << "target " << target << ", part: " << target_partition << std::endl;
+//                        } endfor
+//                }
 
                 if (to != INVALID_PARTITION) {
                         ext_degree = max_degree;

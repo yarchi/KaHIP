@@ -98,7 +98,7 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
 
 
                 // CHANGING STOPPING RULE
-                config.kway_stop_rule = KWAY_SIMPLE_STOP_RULE;
+                //config.kway_stop_rule = KWAY_SIMPLE_STOP_RULE;
 
                 CLOCK_START;
                 double time = 0.0;
@@ -110,7 +110,7 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
                 double time_two_way = 0.0;
 
 
-                //int i = 1;
+                int i = 1;
                 do {
                         no_of_pairwise_improvement_steps++;
                         // ********** preconditions ********************
@@ -193,7 +193,7 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
                         //*************************** end ****************************************
                 } while (!scheduler->hasFinished());
                 std::cout << "Cut improvement time\t" << time << std::endl;
-                std::cout << "Two way time\t" << time_two_way;
+                std::cout << "Two way time\t" << time_two_way << std::endl;
                 std::cout << "Cut improvement\t" << cut_improvement << std::endl;
 
                 delete scheduler;
