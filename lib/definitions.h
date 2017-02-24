@@ -145,7 +145,8 @@ typedef enum {
 
 typedef enum {
         KWAY_SIMPLE_STOP_RULE, 
-	KWAY_ADAPTIVE_STOP_RULE
+	KWAY_ADAPTIVE_STOP_RULE,
+        KWAY_CHEBYSHEV_ADAPTIVE_STOP_RULE
 } KWayStopRule;
 
 typedef enum {
@@ -174,6 +175,13 @@ enum class ParallelLPType {
 enum class BlockSizeUnit {
         NODES,
         EDGES
+};
+
+enum class ApplyMoveStrategy {
+        LOCAL_SEARCH,
+        GAIN_RECALCULATION,
+        REACTIVE_VERTICES,
+        SKIP
 };
 
 #endif

@@ -29,7 +29,7 @@ public:
                 ,       m_parts_weights(config.k)
                 ,       m_parts_sizes(config.k)
                 ,       m_moved_count(config.num_threads)
-                ,       m_moved_idx_counter(0)
+                ,       m_reset_counter(0)
                 ,       m_time_stamp(0)
         {
                 for (PartitionID block = 0; block < G.get_partition_count(); ++block) {
@@ -49,7 +49,7 @@ public:
                                                    m_parts_weights,
                                                    m_parts_sizes,
                                                    m_moved_count,
-                                                   m_moved_idx_counter,
+                                                   m_reset_counter,
                                                    m_time_stamp);
                 }
 
@@ -57,16 +57,20 @@ public:
 
 
         void reset_global_data() {
+                for (uint32_t id = 0; id < m_config.num_threads; ++id) {
+                        m_moved_count[id].get().store(0, std::memory_order_relaxed);
+                }
+
+                partial_reset_global_data();
+        }
+
+        void partial_reset_global_data() {
                 for (PartitionID block = 0; block < m_G.get_partition_count(); ++block) {
                         m_parts_weights[block].get().store(m_boundary.getBlockWeight(block), std::memory_order_relaxed);
                         m_parts_sizes[block].get().store(m_boundary.getBlockNoNodes(block), std::memory_order_relaxed);
                 }
 
-                for (uint32_t id = 0; id < m_config.num_threads; ++id) {
-                         m_moved_count[id].get().store(0, std::memory_order_relaxed);
-                }
-
-                m_moved_idx_counter.store(0, std::memory_order_relaxed);
+                m_reset_counter.store(0, std::memory_order_relaxed);
                 m_time_stamp.store(0, std::memory_order_relaxed);
                 queue.clear();
         }
@@ -89,7 +93,8 @@ public:
 
         void print_iteration_statistics() {
                 statistics_type stat;
-                
+
+                std::cout << "Time full search\t" << time_setup_start_nodes + time_local_search << " s" << std::endl;
                 std::cout << "Time setup start nodes\t" << time_setup_start_nodes << " s" << std::endl;
                 std::cout << "Time local search\t" << time_local_search << " s" << std::endl;
 
@@ -103,16 +108,26 @@ public:
                 stat.time_generate_moves = time_generate_moves;
                 stat.time_move_nodes = time_move_nodes;
 
-
+                // vertices and edges
                 uint32_t total_tried_movements = 0;
                 uint32_t total_accepted_movements = 0;
                 uint32_t total_scaned_neighbours = 0;
 
+                // time
                 double total = 0.0;
                 double total_tried = 0.0;
                 double total_accepted = 0.0;
                 double total_unroll = 0.0;
+
+                // gain
+                int total_performed_gain = 0;
                 int total_unperformed_gain = 0;
+
+                // stop reason
+                uint32_t total_stop_empty_queue = 0;
+                uint32_t total_stop_stopping_rule = 0;
+                uint32_t total_stop_max_number_of_swaps = 0;
+                uint32_t total_stop_faction_of_nodes_moved = 0;
 
                 for (uint32_t id = 0; id < m_config.num_threads; ++id) {
                         std::cout << "proc_id\t" << id << " | "
@@ -125,13 +140,23 @@ public:
                                   << "unroll moves time\t" << m_thread_data[id].get().total_thread_unroll_move_time << " s | "
                                   << "move nodes time\t" << m_thread_data[id].get().time_move_nodes << " s | "
                                   << "transpositions size\t" << m_thread_data[id].get().transpositions_size << " | "
-                                  << "unperformed gain\t" << m_thread_data[id].get().unperformed_gain
+                                  << "performed gain\t" << m_thread_data[id].get().performed_gain << " | "
+                                  << "unperformed gain\t" << m_thread_data[id].get().unperformed_gain << " | "
+                                  << "stop empty queue\t" << m_thread_data[id].get().stop_empty_queue << " | "
+                                  << "stop stopping rule\t" << m_thread_data[id].get().stop_stopping_rule << " | "
+                                  << "stop max number of swaps\t" << m_thread_data[id].get().stop_max_number_of_swaps << " | "
+                                  << "stop faction of nodes moved\t" << m_thread_data[id].get().stop_faction_of_nodes_moved
                                   << std::endl;
 
                         total_tried_movements += m_thread_data[id].get().tried_movements;
                         total_accepted_movements += m_thread_data[id].get().accepted_movements;
                         total_scaned_neighbours += m_thread_data[id].get().scaned_neighbours;
+                        total_performed_gain += m_thread_data[id].get().performed_gain;
                         total_unperformed_gain += m_thread_data[id].get().unperformed_gain;
+                        total_stop_empty_queue += m_thread_data[id].get().stop_empty_queue;
+                        total_stop_stopping_rule += m_thread_data[id].get().stop_stopping_rule;
+                        total_stop_max_number_of_swaps += m_thread_data[id].get().stop_max_number_of_swaps;
+                        total_stop_faction_of_nodes_moved += m_thread_data[id].get().stop_faction_of_nodes_moved;
 
                         statistics_type::proc_stat proc_stat;
                         proc_stat.proc_id = id;
@@ -142,6 +167,8 @@ public:
                         proc_stat.total_thread_try_move_time = m_thread_data[id].get().total_thread_try_move_time;
                         proc_stat.total_thread_accepted_move_time = m_thread_data[id].get().total_thread_accepted_move_time;
                         proc_stat.total_thread_unroll_move_time = m_thread_data[id].get().total_thread_unroll_move_time;
+                        proc_stat.performed_gain = m_thread_data[id].get().performed_gain;
+                        proc_stat.unperformed_gain = m_thread_data[id].get().unperformed_gain;
                         
                         stat.proc_stats.push_back(proc_stat);
                         
@@ -154,11 +181,22 @@ public:
                 stat.total_tried_movements = total_tried_movements;
                 stat.total_accepted_movements = total_accepted_movements;
                 stat.total_scanned_neighbours = total_scaned_neighbours;
+                stat.total_performed_gain = total_performed_gain;
+                stat.total_unperformed_gain = total_unperformed_gain;
+                stat.total_stop_empty_queue = total_stop_empty_queue;
+                stat.total_stop_stopping_rule = total_stop_stopping_rule;
+                stat.total_stop_max_number_of_swaps = total_stop_max_number_of_swaps;
+                stat.total_stop_faction_of_nodes_moved = total_stop_faction_of_nodes_moved;
 
                 std::cout << "Total tried moves\t" << total_tried_movements << std::endl;
-                std::cout << "Total accepted movse\t" << total_accepted_movements << std::endl;
+                std::cout << "Total accepted moves\t" << total_accepted_movements << std::endl;
                 std::cout << "Total scanned neighbours\t" << total_scaned_neighbours << std::endl;
+                std::cout << "Total performed gain\t" << total_performed_gain << std::endl;
                 std::cout << "Total unperformed gain\t" << total_unperformed_gain << std::endl;
+                std::cout << "Total stop empty queue\t" << total_stop_empty_queue << std::endl;
+                std::cout << "Total stop stopping rule\t" << total_stop_stopping_rule << std::endl;
+                std::cout << "Total stop max number of swaps\t" << total_stop_max_number_of_swaps << std::endl;
+                std::cout << "Total stop faction of nodes moved\t" << total_stop_faction_of_nodes_moved << std::endl;
 
                 std::cout << "Average TIME per thread\t" << total / m_config.num_threads << " s" << std::endl;
                 std::cout << "Average TIME tried moves per thread\t" << total_tried / m_config.num_threads << " s" << std::endl;
@@ -185,6 +223,11 @@ public:
                         stat += st;
                 }
 
+                double full_time = stat.time_setup_start_nodes + stat.time_local_search;
+                std::cout << "Time full search\t" << full_time << " s" << std::endl;
+                std::cout << "Total performed gain\t" << stat.total_performed_gain << std::endl;
+                std::cout << "Time per gain\t" << full_time / stat.total_performed_gain << " sec / gain" << std::endl;
+
                 std::cout << "Time setup start nodes\t" << stat.time_setup_start_nodes << " s" << std::endl;
                 std::cout << "Time local search\t" << stat.time_local_search << " s" << std::endl;
 
@@ -201,12 +244,23 @@ public:
                                   << "try moves time\t" << pr.total_thread_try_move_time << " s | "
                                   << "accepted moves time\t" << pr.total_thread_accepted_move_time << " s | "
                                   << "unroll moves time\t" << pr.total_thread_unroll_move_time << " s | "
+                                  << "performed gain\t" << pr.performed_gain << " | "
+                                  << "unperformed gain\t" << pr.unperformed_gain << " | "
+                                  << "stop empty queue\t" << pr.stop_empty_queue << " | "
+                                  << "stop stopping rule\t" << pr.stop_stopping_rule << " | "
+                                  << "stop max number of swaps\t" << pr.stop_max_number_of_swaps << " | "
+                                  << "stop faction of nodes moved\t" << pr.stop_faction_of_nodes_moved
                                   << std::endl;
                 }
 
                 std::cout << "Total tried moves\t" << stat.total_tried_movements << std::endl;
-                std::cout << "Total accepted movse\t" << stat.total_accepted_movements << std::endl;
+                std::cout << "Total accepted moves\t" << stat.total_accepted_movements << std::endl;
                 std::cout << "Total scanned neighbours\t" << stat.total_scanned_neighbours << std::endl;
+                std::cout << "Total unperformed gain\t" << stat.total_unperformed_gain << std::endl;
+                std::cout << "Total stop empty queue\t" << stat.total_stop_empty_queue << std::endl;
+                std::cout << "Total stop stopping rule\t" << stat.total_stop_stopping_rule << std::endl;
+                std::cout << "Total stop max number of swaps\t" << stat.total_stop_max_number_of_swaps << std::endl;
+                std::cout << "Total stop faction of nodes moved\t" << stat.total_stop_faction_of_nodes_moved << std::endl;
 
                 std::cout << "Average TIME per thread\t" << stat.avg_thread_time << " s" << std::endl;
                 std::cout << "Average TIME tried moves per thread\t" << stat.avg_tried << " s" << std::endl;
@@ -226,6 +280,7 @@ public:
         double time_init;
         double time_generate_moves;
         double time_move_nodes;
+
 private:
         struct statistics_type {
                 double time_setup_start_nodes = 0.0;
@@ -243,6 +298,14 @@ private:
                 uint32_t total_accepted_movements = 0;
                 uint32_t total_scanned_neighbours = 0;
 
+                int total_performed_gain = 0;
+                int total_unperformed_gain = 0;
+
+                uint32_t total_stop_empty_queue = 0;
+                uint32_t total_stop_stopping_rule = 0;
+                uint32_t total_stop_max_number_of_swaps = 0;
+                uint32_t total_stop_faction_of_nodes_moved = 0;
+
                 struct proc_stat {
                         uint32_t proc_id = 0;
                         double total_thread_time = 0.0;
@@ -252,6 +315,12 @@ private:
                         double total_thread_try_move_time = 0.0;
                         double total_thread_accepted_move_time = 0.0;
                         double total_thread_unroll_move_time = 0.0;
+                        int performed_gain = 0;
+                        int unperformed_gain = 0;
+                        uint32_t stop_empty_queue = 0;
+                        uint32_t stop_stopping_rule = 0;
+                        uint32_t stop_max_number_of_swaps = 0;
+                        uint32_t stop_faction_of_nodes_moved = 0;
 
                         proc_stat& operator+= (const proc_stat& ps) {
                                 proc_id = ps.proc_id;
@@ -263,6 +332,12 @@ private:
                                 total_thread_try_move_time += ps.total_thread_try_move_time;
                                 total_thread_accepted_move_time += ps.total_thread_accepted_move_time;
                                 total_thread_unroll_move_time += ps.total_thread_unroll_move_time;
+                                performed_gain += ps.performed_gain;
+                                unperformed_gain += ps.unperformed_gain;
+                                stop_empty_queue += ps.stop_empty_queue;
+                                stop_stopping_rule += ps.stop_stopping_rule;
+                                stop_max_number_of_swaps += ps.stop_max_number_of_swaps;
+                                stop_faction_of_nodes_moved += ps.stop_faction_of_nodes_moved;
 
                                 return *this;
                         }
@@ -280,6 +355,13 @@ private:
                         total_tried_movements += stat.total_tried_movements;
                         total_accepted_movements += stat.total_accepted_movements;
                         total_scanned_neighbours += stat.total_scanned_neighbours;
+                        total_performed_gain += stat.total_performed_gain;
+                        total_unperformed_gain += stat.total_unperformed_gain;
+
+                        total_stop_empty_queue += stat.total_stop_empty_queue;
+                        total_stop_stopping_rule += stat.total_stop_stopping_rule;
+                        total_stop_max_number_of_swaps += stat.total_stop_max_number_of_swaps;
+                        total_stop_faction_of_nodes_moved += stat.total_stop_faction_of_nodes_moved;
 
                         avg_thread_time += stat.avg_thread_time;
                         avg_tried += stat.avg_tried;
@@ -306,7 +388,7 @@ private:
         Cvector <AtomicWrapper<NodeWeight>> m_parts_weights;
         Cvector <AtomicWrapper<NodeWeight>> m_parts_sizes;
         Cvector <AtomicWrapper<int>> m_moved_count;
-        AtomicWrapper<uint32_t> m_moved_idx_counter;
+        AtomicWrapper<uint32_t> m_reset_counter;
         AtomicWrapper<uint32_t> m_time_stamp;
 };
 

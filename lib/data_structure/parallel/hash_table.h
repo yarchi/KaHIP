@@ -42,6 +42,41 @@ constexpr static bool is_power_2(uint64_t x) {
         return ((x != 0) && !(x & (x - 1)));
 }
 
+template <typename HashTable>
+class HashTableIterator {
+private:
+        using HashMap = HashTable;
+        using Element = typename HashMap::Element;
+        using Position = typename HashMap::Position;
+
+public:
+        HashTableIterator(const HashMap& hm, const Position offset) :
+                _hm(hm),
+                _offset(offset)
+        {}
+
+        const Element& operator* () {
+                return _hm._ht[_hm._poses[_offset]];
+        }
+
+        HashTableIterator& operator++ () {
+                ++_offset;
+                return *this;
+        }
+
+        bool operator== (const HashTableIterator& it) {
+                return _offset == it._offset;
+        }
+
+        bool operator!= (const HashTableIterator& it) {
+                return !(*this == it);
+        }
+
+private:
+        const HashMap& _hm;
+        Position _offset;
+};
+
 
 template <typename Key, typename Value, typename Hash = xxhash<Key>,
         bool TGrowable = false, bool Cache = true, size_t SizeFactor = 2>
@@ -58,6 +93,10 @@ private:
 
         static constexpr hash_type max_hash_value = std::numeric_limits<hash_type>::max();
 public:
+        using Iterator = HashTableIterator<TSelf>;
+
+        friend Iterator;
+
         explicit HashMap(const uint64_t max_size = 0) :
                 _empty_element(std::numeric_limits<Key>::max()),
                 _ht_size(max_size * SizeFactor),
@@ -82,6 +121,14 @@ public:
                 // where 16 * 1024 Bytes is half of L1 cache and (2 + 1.1) * max_size * 8 + 4 * max_size Bytes
                 // is the size of a hash table. We calculate that max_size ~ 560.
                 return round_up_to_next_power_2(16 * 1024 / (sizeof(Element) * (SizeFactor + 1.1) + sizeof(Position)) - sizeof(TSelf)) / SizeFactor;
+        }
+
+        Iterator begin() const {
+                return Iterator(*this, 0);
+        }
+
+        Iterator end() const {
+                return Iterator(*this, size());
         }
 
         void reserve(const uint32_t max_size) {

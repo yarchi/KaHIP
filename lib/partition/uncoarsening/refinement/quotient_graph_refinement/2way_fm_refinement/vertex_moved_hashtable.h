@@ -28,7 +28,9 @@
 #include "definitions.h"
 #include "limits.h"
 
+#ifdef __gnu_linux__
 using namespace __gnu_cxx;
+#endif
 
 struct compare_nodes {
         bool operator()(const NodeID lhs, const NodeID rhs) const {

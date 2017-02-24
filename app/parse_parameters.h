@@ -96,7 +96,7 @@ int parse_parameters(int argn, char **argv,
         struct arg_dbl *kway_adaptive_limits_alpha           = arg_dbl0(NULL, "kway_adaptive_limits_alpha", NULL, "This is the factor alpha used for the adaptive stopping criteria. Default: 1.0");
         struct arg_rex *stop_rule                            = arg_rex0(NULL, "stop_rule", "^(simple|multiplek|strong)$", "VARIANT", REG_EXTENDED, "Stop rule to use. One of {simple, multiplek, strong}. Default: simple" );
         struct arg_int *num_vert_stop_factor                 = arg_int0(NULL, "num_vert_stop_factor", NULL, "x*k (for multiple_k stop rule). Default 20.");
-        struct arg_rex *kway_search_stop_rule                = arg_rex0(NULL, "kway_stop_rule", "^(simple|adaptive)$", "VARIANT", REG_EXTENDED, "Stop rule to use during kway_refinement. One of {simple, adaptive}. Default: simple" );
+        struct arg_rex *kway_search_stop_rule                = arg_rex0(NULL, "kway_stop_rule", "^(simple|adaptive|chebyshev_adaptive)$", "VARIANT", REG_EXTENDED, "Stop rule to use during kway_refinement. One of {simple, adaptive, chebyshev_adaptive}. Default: simple" );
         struct arg_int *bubbling_iterations                  = arg_int0(NULL, "bubbling_iterations", NULL, "Number of bubbling iterations to perform: Default 1 .");
         struct arg_int *kway_rounds                          = arg_int0(NULL, "kway_rounds", NULL, "Number of kway refinement rounds to perform: Default 1 .");
         struct arg_int *kway_fm_limits                       = arg_int0(NULL, "kway_fm_search_limit", NULL, "Search limit for kway fm local search: Default 1 .");
@@ -168,6 +168,7 @@ int parse_parameters(int argn, char **argv,
         struct arg_rex *block_size_unit                      = arg_rex0(NULL, "block_size_unit", "^(nodes|edges)$", "VARIANT", REG_EXTENDED, "How to calculate sizes of blocks. Using nodes or edges.");
         struct arg_rex *parallel_lp_type                     = arg_rex0(NULL, "parallel_lp_type", "^(queue|no_queue)$", "VARIANT", REG_EXTENDED, "Type of parallel lp algorithm. Use queue or not.");
         struct arg_int *block_size                           = arg_int0(NULL, "block_size", NULL, "Size of block in parallel lp. Should be at least 1");
+        struct arg_rex *apply_move_strategy                  = arg_rex0(NULL, "move_strategy", "^(local_search|gain_recalculation|reactivate_vertices|skip)$", "VARIANT", REG_EXTENDED, "Strategy to apply for conflicting vertices. Default: local search. [local search | gain_recalculation|reactivate_vertices|skip].");
         struct arg_end *end                                  = arg_end(100);
 
         // Define argtable.
@@ -211,6 +212,8 @@ int parse_parameters(int argn, char **argv,
                 block_size_unit,
                 parallel_lp_type,
                 block_size,
+                apply_move_strategy,
+                kway_search_stop_rule,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -920,6 +923,8 @@ int parse_parameters(int argn, char **argv,
                         partition_config.kway_stop_rule = KWAY_SIMPLE_STOP_RULE;
                 } else if (strcmp("adaptive", kway_search_stop_rule->sval[0]) == 0) {
                         partition_config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
+                } else if (strcmp("chebyshev_adaptive", kway_search_stop_rule->sval[0]) == 0) {
+                        partition_config.kway_stop_rule = KWAY_CHEBYSHEV_ADAPTIVE_STOP_RULE;
                 } else {
                         fprintf(stderr, "Invalid kway stop rule: \"%s\"\n", kway_search_stop_rule->sval[0]);
                         exit(0);
@@ -1036,6 +1041,19 @@ int parse_parameters(int argn, char **argv,
                                 partition_config.block_size);
                         exit(0);
                 }
+        }
+
+        if (strcmp("local_search", apply_move_strategy->sval[0]) == 0) {
+                partition_config.apply_move_strategy = ApplyMoveStrategy::LOCAL_SEARCH;
+        } else if (strcmp("gain_recalculation", apply_move_strategy->sval[0]) == 0) {
+                partition_config.apply_move_strategy = ApplyMoveStrategy::GAIN_RECALCULATION;
+        } else if (strcmp("reactivate_vertices", apply_move_strategy->sval[0]) == 0) {
+                partition_config.apply_move_strategy = ApplyMoveStrategy::REACTIVE_VERTICES;
+        } else if (strcmp("skip", apply_move_strategy->sval[0]) == 0) {
+                partition_config.apply_move_strategy = ApplyMoveStrategy::SKIP;
+        } else {
+                fprintf(stderr, "Invalid apply_move_strategy value: \"%s\"\n", apply_move_strategy->sval[0]);
+                exit(0);
         }
 
         return 0;

@@ -29,7 +29,9 @@
 #include "limits.h"
 #include "partial_boundary.h"
 
+#ifdef __gnu_linux__
 using namespace __gnu_cxx;
+#endif
 
 struct boundary_pair {
         PartitionID k;

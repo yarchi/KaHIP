@@ -42,6 +42,7 @@
 #include "timer.h"
 #include "uncoarsening/refinement/kway_graph_refinement/multitry_kway_fm.h"
 #include "uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.h"
+#include "uncoarsening/refinement/quotient_graph_refinement/quotient_graph_refinement.h"
 
 int main(int argn, char **argv) {
 
@@ -103,6 +104,34 @@ int main(int argn, char **argv) {
                 }
         }
         std::cout << "Num threads\t" << partition_config.num_threads << std::endl;
+
+        switch (partition_config.apply_move_strategy) {
+                case ApplyMoveStrategy::LOCAL_SEARCH:
+                        std::cout << "Move strategy\tlocal search" << std::endl;
+                        break;
+                case ApplyMoveStrategy::GAIN_RECALCULATION:
+                        std::cout << "Move strategy\tgain recalculation" << std::endl;
+                        break;
+                case ApplyMoveStrategy::REACTIVE_VERTICES:
+                        std::cout << "Move strategy\treactivate_vertices" << std::endl;
+                        break;
+                case ApplyMoveStrategy::SKIP:
+                        std::cout << "Move strategy\tskip" << std::endl;
+                        break;
+        }
+
+        switch (partition_config.kway_stop_rule) {
+                case KWayStopRule::KWAY_SIMPLE_STOP_RULE:
+                        std::cout << "Kway stop rule\tsimple" << std::endl;
+                        break;
+                case KWayStopRule::KWAY_ADAPTIVE_STOP_RULE:
+                        std::cout << "Kway stop rule\tadaptive" << std::endl;
+                        break;
+                case KWayStopRule::KWAY_CHEBYSHEV_ADAPTIVE_STOP_RULE:
+                        std::cout << "Kway stop rule\tchebyshev_adaptive" << std::endl;
+                        break;
+        }
+
         // ***************************** perform partitioning ***************************************       
         t.restart();
         graph_partitioner partitioner;
@@ -154,12 +183,17 @@ int main(int argn, char **argv) {
         std::cout << "max_comm_vol \t"  << qm.max_communication_volume(G) << std::endl;
 
         if (!partition_config.label_propagation_refinement) {
+                std::cout << "Two way refinement:" << std::endl;
+                quotient_graph_refinement::print_full_statistics();
+                std::cout << std::endl;
+
                 std::cout << "Local search statistics:" << std::endl;
                 if (partition_config.parallel_multitry_kway) {
                         parallel::multitry_kway_fm::print_full_statistics();
                 } else {
                         multitry_kway_fm::print_full_statistics();
                 }
+                std::cout << std::endl;
         }
 
 

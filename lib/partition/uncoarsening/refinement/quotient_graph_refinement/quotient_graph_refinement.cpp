@@ -38,6 +38,8 @@
 
 #include "quality_metrics.h"
 
+double quotient_graph_refinement::total_time_two_way(0.0);
+
 quotient_graph_refinement::quotient_graph_refinement() {
 
 }
@@ -150,7 +152,7 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
 
                         EdgeWeight multitry_improvement = 0;
                         if (config.refinement_scheduling_algorithm == REFINEMENT_SCHEDULING_ACTIVE_BLOCKS_REF_KWAY) {
-                                std::unordered_map <PartitionID, PartitionID> touched_blocks;
+                                std::unordered_map<PartitionID, PartitionID> touched_blocks;
 
                                 //int old_cut = qm.edge_cut(G);
                                 CLOCK_START;
@@ -194,6 +196,7 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
                 } while (!scheduler->hasFinished());
                 std::cout << "Cut improvement time\t" << time << std::endl;
                 std::cout << "Two way time\t" << time_two_way << std::endl;
+                total_time_two_way += time_two_way;
                 std::cout << "Cut improvement\t" << cut_improvement << std::endl;
 
                 delete scheduler;

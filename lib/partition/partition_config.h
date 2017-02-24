@@ -398,6 +398,7 @@ struct PartitionConfig
         //============================================================
         bool parallel_lp = false;
         bool parallel_multitry_kway = false;
+        ApplyMoveStrategy apply_move_strategy = ApplyMoveStrategy::LOCAL_SEARCH;
 };
 
 

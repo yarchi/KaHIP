@@ -51,7 +51,15 @@ public:
         uint32_t scaned_neighbours;
         double time_move_nodes;
         uint32_t transpositions_size;
+        int performed_gain;
         int unperformed_gain;
+
+        // local statistics about stopping reason
+        uint32_t stop_empty_queue;
+        uint32_t stop_stopping_rule;
+        uint32_t stop_max_number_of_swaps;
+        uint32_t stop_faction_of_nodes_moved;
+
 
         thread_data_refinement_core(uint32_t _id,
                                     uint32_t _seed,
@@ -62,7 +70,7 @@ public:
                                     Cvector <AtomicWrapper<NodeWeight>>& _parts_weights,
                                     Cvector <AtomicWrapper<NodeWeight>>& _parts_sizes,
                                     Cvector <AtomicWrapper<int>>& _moved_count,
-                                    AtomicWrapper<uint32_t>& _moved_idx_counter,
+                                    AtomicWrapper<uint32_t>& _reset_counter,
                                     AtomicWrapper<uint32_t>& _time_stamp)
                 :       parallel::thread_config(_id, _seed)
                 ,       config(_config)
@@ -84,8 +92,13 @@ public:
                 ,       scaned_neighbours(0)
                 ,       time_move_nodes(0.0)
                 ,       transpositions_size(0)
+                ,       performed_gain(0)
                 ,       unperformed_gain(0)
-                ,       m_moved_idx_counter(_moved_idx_counter)
+                ,       stop_empty_queue(0)
+                ,       stop_stopping_rule(0)
+                ,       stop_max_number_of_swaps(0)
+                ,       stop_faction_of_nodes_moved(0)
+                ,       m_reset_counter(_reset_counter)
         {
                 m_local_degrees.resize(config.k);
 
@@ -116,7 +129,7 @@ public:
                 for (auto node : moved) {
                         moved_idx[node].store(false, std::memory_order_relaxed);
                 }
-                m_moved_idx_counter.fetch_add(1, std::memory_order_release);
+                m_reset_counter.fetch_add(1, std::memory_order_release);
 
                 moved.clear();
 
@@ -142,8 +155,7 @@ public:
                 to = INVALID_PARTITION;
 
                 m_round++;//can become zero again
-                forall_out_edges(G, e, node)
-                {
+                forall_out_edges(G, e, node) {
                         NodeID target = G.getEdgeTarget(e);
                         PartitionID target_partition = get_local_partition(target);
 
@@ -171,16 +183,6 @@ public:
                 }
                 endfor
 
-                //std::cout << "Node " << node << ", degree " << G.getNodeDegree(node) << ", cur part " << from << ", best part: " << to << std::endl;
-
-//                if (to == 4294967295) {
-//                        forall_out_edges(G, e, node) {
-//                                NodeID target = G.getEdgeTarget(e);
-//                                PartitionID target_partition = get_local_partition(target);
-//                                std::cout << "target " << target << ", part: " << target_partition << std::endl;
-//                        } endfor
-//                }
-
                 if (to != INVALID_PARTITION) {
                         ext_degree = max_degree;
                 } else {
@@ -195,10 +197,10 @@ public:
         }
 
 private:
-        AtomicWrapper<uint32_t>& m_moved_idx_counter;
+        AtomicWrapper<uint32_t>& m_reset_counter;
 
         inline bool is_all_data_reseted() const {
-                return m_moved_idx_counter.load(std::memory_order_acquire) == config.num_threads;
+                return m_reset_counter.load(std::memory_order_acquire) == config.num_threads;
         }
 
         //for efficient computation of internal and external degrees

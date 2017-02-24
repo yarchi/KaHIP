@@ -24,6 +24,11 @@
 #define KWAY_STOP_RULE_ULPK0ZTF
 
 #include "partition/partition_config.h"
+#include <data_structure/parallel/hash_table.h>
+
+#include <cmath>
+#include <ios>
+#include <fstream>
 
 class kway_stop_rule {
 public:
@@ -109,5 +114,273 @@ inline bool kway_adaptive_stop_rule::search_should_stop(unsigned int min_cut_idx
 }
 
 
+class kway_chebyshev_adaptive_stop_rule : public kway_stop_rule {
+public:
+        kway_chebyshev_adaptive_stop_rule(PartitionConfig& config)
+                :       m_steps(0)
+                ,       m_total_gain(0)
+                ,       m_max_gain(1)
+                ,       m_gain_expectation_estimation(0.0)
+                ,       probability(0.0)
+                ,       m_config(config)
+                //,       ftxt("out.log", std::ios_base::app | std::ios_base::out)
+        {
+                //ftxt << "START" << std::endl;
+        }
+
+        virtual ~kway_chebyshev_adaptive_stop_rule() {
+        }
+
+        void push_statistics(Gain gain) {
+                m_max_gain = std::max(m_max_gain, gain);
+
+                m_total_gain += gain;
+                //m_total_gain_squares += gain * gain;
+
+                m_gain_expectation_estimation *= m_steps;
+                probability *= m_steps;
+
+                m_gain_expectation_estimation += gain;
+
+                const double t = 1.0 / m_max_gain;
+                // E[exp(t*gain)]/E[exp(t)]
+                probability += (std::exp(t * (gain - 1)));
+
+                ++m_steps;
+                m_gain_expectation_estimation /= m_steps;
+                probability /= m_steps;
+        }
+
+        void reset_statistics() {
+                m_total_gain = 0;
+                m_steps = 0;
+                m_gain_expectation_estimation = 0.0;
+                probability = 0.0;
+                //ftxt << "RESET STATISTICS" << std::endl;
+        }
+
+        bool search_should_stop(uint32_t min_cut_idx, uint32_t cur_idx, uint32_t search_limit) {
+                if (m_steps > 1 && m_gain_expectation_estimation <= 0.0) {
+                        const double p = probability;
+
+                        return std::pow(p, int(1 - m_total_gain)) < m_stop_probability;
+                } else {
+                        return false;
+                }
+        }
+private:
+        static constexpr double m_stop_probability = 0.1;
+        //std::ofstream // ftxt;
+
+        uint32_t m_steps;
+        Gain m_total_gain;
+        Gain m_max_gain;
+        double m_gain_expectation_estimation;
+        double probability;
+        const PartitionConfig& m_config;
+};
+
+class kway_chernoff_adaptive_stop_rule : public kway_stop_rule {
+public:
+        kway_chernoff_adaptive_stop_rule(PartitionConfig& config)
+                :       m_steps(0)
+                ,       m_total_gain(0)
+                ,       m_max_gain(1)
+                ,       m_t(1.0)
+                ,       m_first(true)
+                ,       gains(32)
+                ,       m_config(config)
+                //,       ftxt("out.log", std::ios_base::app | std::ios_base::out)
+        {
+                // ftxt << "START" << std::endl;
+        }
+
+        virtual ~kway_chernoff_adaptive_stop_rule() {
+        }
+
+        void push_statistics(Gain gain) {
+                //ftxt << "gain " << gain << std::endl;
+                // ftxt << "{gain : " << gain;
+
+                ++m_steps;
+                m_total_gain += gain;
+                m_max_gain = std::max(m_max_gain, gain);
+                ++gains[gain];
+        }
+
+        void reset_statistics() {
+                m_steps = 0;
+                m_total_gain = 0;
+                m_max_gain = 1;
+                m_t = 1.0;
+                m_first = true;
+                gains.clear();
+                // ftxt << "RESET STATISTICS" << std::endl;
+        }
+
+        bool search_should_stop(uint32_t min_cut_idx, uint32_t cur_idx, uint32_t search_limit) {
+                bool res;
+                if (m_steps >= m_min_step_limit && m_total_gain <= 0.0) {
+                        if (m_first) {
+                                m_first = false;
+                                m_t = 1.0 / m_max_gain;
+                        }
+
+                        const double p = get_probability();
+
+                        // ftxt << ", t : " << m_t << ", n : " << get_n() << ", p : " << p << "}," << std::endl;
+
+                        // ftxt << "gains = {";
+                        // for (const auto& data : gains) {
+                               // ftxt << data.first << " : " << (data.second + 0.0) / m_steps << ", ";
+                        // }
+                        // ftxt << "}" << std::endl;
+
+                        res = p < m_stop_probability;
+                } else {
+                        res = false;
+                }
+
+                if (m_steps == step_limit) {
+                        reset_statistics();
+                }
+                return res;
+        }
+private:
+        static constexpr double m_stop_probability = 0.1;
+        static constexpr uint32_t m_gradient_descent_num_steps = 20;
+        static constexpr double m_gradient_descent_step_size = 1;
+        static constexpr uint32_t m_min_step_limit = 20;
+        static constexpr uint32_t step_limit = 1000;
+
+        uint32_t m_steps;
+        Gain m_total_gain;
+        Gain m_max_gain;
+        double m_t;
+        bool m_first;
+        parallel::hash_map<Gain, uint32_t> gains;
+
+        const PartitionConfig& m_config;
+        //mutable std::ofstream ftxt;
+
+        template <typename function_type>
+        double get_expectation(function_type function) const {
+                double expectation = 0;
+                for (const auto& data : gains) {
+                        // ftxt << "gain " << data.first << " freq " << (data.second + 0.0) / m_steps << std::endl;
+                        // ftxt << (data.second + 0.0) / m_steps * function(data.first) << ' ' << expectation << std::endl;
+                        expectation += (data.second + 0.0) / m_steps * function(data.first);
+                }
+                // ftxt << std::endl;
+                return expectation;
+        }
+
+        template <typename function_type, typename predicate_type>
+        double get_conditional_expectation(function_type function, predicate_type condition) const {
+                double expectation = 0;
+
+                uint32_t num_condition_true = 0;
+                for (const auto& data : gains) {
+                        if (condition(data.first)) {
+                                num_condition_true += data.second;
+                        }
+                }
+
+                for (const auto& data : gains) {
+                        if (condition(data.first)) {
+                                expectation += (data.second + 0.0) / num_condition_true * function(data.first);
+                        }
+                }
+                return expectation;
+        }
+
+        // X = sum_i X_i where X_i is random variable -- gain. Using chernoff bound
+        // we receive that P[X >= 1] <= min_t E[exp(tX)]/exp(t). We assume that all X_i are independent and
+        // then E[exp(tX)] = E[exp(tX_1)*exp(tX_2)*...*exp(tX_n)] = E[exp(t*X_1)] * E[exp(t*X_2)] * ... * E[exp(t*X_n)] =
+        //  E[exp(t*X_1)] ^ n
+        double get_probability() {
+                // ftxt << "Calculating prob start >>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
+                int n = get_n();
+
+                if (n == -1) {
+                        // there is no any positive gain
+                        return 0.0;
+                }
+
+                // ftxt << "n " << n << std::endl;
+
+                double gradient_step = m_gradient_descent_step_size;
+                double cur_val = get_probability(m_t, n);
+                double min_val = cur_val;
+                double min_t = m_t;
+                for (size_t i = 0; i < m_gradient_descent_num_steps; ++i) {
+                        double derivative = get_derivative(m_t, n);
+                        double new_t = m_t - gradient_step * derivative;
+
+                        double new_val = get_probability(new_t, n);
+                        while (i < m_gradient_descent_num_steps && (new_t <= 0.0 || new_val > cur_val)) {
+                                gradient_step *= 0.1;
+                                new_t = m_t - gradient_step * derivative;
+                                new_val = get_probability(new_t, n);
+                                ++i;
+                        }
+
+                        if (new_t > 0.0) {
+                                m_t = new_t;
+                                cur_val = new_val;
+                        }
+
+                        if (cur_val < min_val) {
+                                min_val = cur_val;
+                                min_t = m_t;
+                        }
+                }
+
+                m_t = min_t;
+                // ftxt << "t " << m_t << std::endl;
+
+
+                // ftxt << "E[exp(t*gain)] " << f << std::endl;
+                // ftxt << "E[exp(t*gain)] ^ n / exp(t) " << std::pow(f, n) / std::exp(m_t) << std::endl;
+                // ftxt << "Calculating prob end <<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+                // E[exp(t * gain)] ^ n / exp(t)
+                return get_probability(m_t, n);
+        }
+
+        double get_probability(double t, int n) const {
+                double f = get_expectation([t](Gain gain) {
+                        return std::exp(t * gain);
+                });
+                return std::pow(f, n) / std::exp(t);
+        }
+
+        double get_derivative(double t, int n) const {
+                // ftxt << "f1 ";
+                double f1 = get_expectation([t](Gain gain) {
+                        return std::exp(t * gain);
+                });
+
+                // ftxt << "f2 ";
+                double f2 = get_expectation([t, n](Gain gain) {
+                        return std::exp(t * gain) * (n * gain - 1);
+                });
+
+                //ftxt << ", t = " << t << ", f1 = " << f1 << ", f2 = " << f2 << ", res = " << std::pow(f1, n - 1) * f2 / std::exp(t) << ", ";
+
+
+                return std::pow(f1, n - 1) * f2 / std::exp(t);
+        }
+
+        int get_n() const {
+                // m_total_gain <= 0
+                // int(1 - m_total_gain) / E[X_1|X_1 >= 1]
+                double cond_expect = get_conditional_expectation([](Gain gain) {
+                        return gain;
+                }, [](Gain gain) {
+                        return gain >= 1;
+                });
+                return cond_expect > 0.0 ? (1 - m_total_gain) / cond_expect : -1;
+        }
+};
 
 #endif /* end of include guard: KWAY_STOP_RULE_ULPK0ZTF */
