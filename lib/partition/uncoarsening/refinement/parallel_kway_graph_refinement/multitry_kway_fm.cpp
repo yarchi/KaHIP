@@ -128,6 +128,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
         // we need the external loop for move strategy when conflicted nodes are reactivated for the next
         // parallel phase
         while (!m_factory.queue.empty()) {
+                tbb::concurrent_queue <NodeID> finished_threads;
                 auto task = [&](uint32_t id) {
                         CLOCK_START;
                         NodeID node;
@@ -192,10 +193,16 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                 if (overall_movement > 0.05 * G.number_of_nodes()) {
                                         td.total_thread_time += CLOCK_END_TIME;
                                         ++td.stop_faction_of_nodes_moved;
+                                        if (id > 0) {
+                                                finished_threads.push(id);
+                                        }
                                         return true;
                                 }
                         }
                         td.total_thread_time += CLOCK_END_TIME;
+                        if (id > 0) {
+                                finished_threads.push(id);
+                        }
                         return false;
                 };
 
@@ -208,12 +215,12 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 }
 
                 bool is_more_that_5percent_moved = task(0);
-                std::for_each(futures.begin(), futures.end(), [&](auto& future) {
-                        CLOCK_START;
-                        if (future.get()) {
-                                is_more_that_5percent_moved = true;
-                        }
-                });
+//                std::for_each(futures.begin(), futures.end(), [&](auto& future) {
+//                        CLOCK_START;
+//                        if (future.get()) {
+//                                is_more_that_5percent_moved = true;
+//                        }
+//                });
                 m_factory.time_generate_moves += CLOCK_END_TIME;
 
                 std::vector<NodeID> reactivated_vertices;
@@ -223,7 +230,8 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 uint32_t real_nodes_movement = 0;
                 CLOCK_START_N;
                 std::tie(real_gain_improvement, real_nodes_movement) = refinement_core.apply_moves(
-                        m_factory.get_all_threads_data(), compute_touched_blocks, touched_blocks, reactivated_vertices);
+                        m_factory.get_all_threads_data(), compute_touched_blocks, touched_blocks, reactivated_vertices,
+                        finished_threads, futures, is_more_that_5percent_moved);
 
                 total_gain_improvement += real_gain_improvement;
 

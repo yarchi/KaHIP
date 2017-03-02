@@ -21,6 +21,7 @@
  *****************************************************************************/
 
 #include <algorithm>
+#include <tbb/concurrent_queue.h>
 
 #include "data_structure/parallel/time.h"
 #include "data_structure/priority_queues/bucket_pq.h"
@@ -398,6 +399,43 @@ kway_graph_refinement_core::apply_moves(Cvector <thread_data_refinement_core>& t
         for (size_t id = 0; id < threads_data.size(); ++id) {
                 overall_gain += apply_moves(threads_data[id].get(), moved_nodes, compute_touched_partitions,
                                             touched_blocks, reactivated_vertices);
+        }
+        overall_moved = moved_nodes.size();
+        return std::make_pair(overall_gain, overall_moved);
+}
+
+std::pair<EdgeWeight, uint32_t>
+kway_graph_refinement_core::apply_moves(Cvector <thread_data_refinement_core>& threads_data,
+                                        bool compute_touched_partitions,
+                                        std::unordered_map<PartitionID, PartitionID>& touched_blocks,
+                                        std::vector<NodeID>& reactivated_vertices,
+                                        tbb::concurrent_queue<uint32_t>& finished_threads,
+                                        std::vector<std::future<bool>>& futures,
+                                        bool& is_more_that_5percent_moved) const {
+
+        uint32_t overall_moved = 0;
+        EdgeWeight overall_gain = 0;
+
+        moved_nodes_hash_map moved_nodes(moved_nodes_hash_map::get_max_size_to_fit_l1());
+
+        overall_gain += apply_moves(threads_data[0].get(), moved_nodes, compute_touched_partitions,
+                                    touched_blocks, reactivated_vertices);
+
+        if (threads_data.size() > 1) {
+                uint32_t num_threads = threads_data.size() - 1;
+                while (num_threads > 0) {
+                        uint32_t id;
+                        if (finished_threads.try_pop(id)) {
+                                ALWAYS_ASSERT(id > 0);
+                                if (futures[id - 1].get()) {
+                                        is_more_that_5percent_moved = true;
+                                }
+                                overall_gain += apply_moves(threads_data[id].get(), moved_nodes,
+                                                            compute_touched_partitions,
+                                                            touched_blocks, reactivated_vertices);
+                                --num_threads;
+                        }
+                }
         }
         overall_moved = moved_nodes.size();
         return std::make_pair(overall_gain, overall_moved);

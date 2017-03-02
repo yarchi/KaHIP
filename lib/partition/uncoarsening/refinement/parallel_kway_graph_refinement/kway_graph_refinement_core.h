@@ -9,6 +9,8 @@
 #include "uncoarsening/refinement/kway_graph_refinement/kway_graph_refinement_commons.h"
 #include "uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_commons.h"
 
+#include <tbb/concurrent_queue.h>
+
 namespace parallel {
 
 class kway_graph_refinement_core {
@@ -23,6 +25,14 @@ public:
                                                             bool compute_touched_partitions,
                                                             std::unordered_map<PartitionID, PartitionID>& touched_blocks,
                                                             std::vector<NodeID>& reactivated_vertices) const;
+
+        std::pair<EdgeWeight, uint32_t> apply_moves(Cvector <thread_data_refinement_core>& threads_data,
+                                                    bool compute_touched_partitions,
+                                                    std::unordered_map<PartitionID, PartitionID>& touched_blocks,
+                                                    std::vector<NodeID>& reactivated_vertices,
+                                                    tbb::concurrent_queue<uint32_t>& finished_threads,
+                                                    std::vector<std::future<bool>>& futures,
+                                                    bool& is_more_that_5percent_moved) const;
 
 private:
 

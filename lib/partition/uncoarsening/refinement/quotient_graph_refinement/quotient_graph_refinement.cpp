@@ -141,16 +141,17 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
 
                         PartitionConfig cfg = config;
 //                        COMMENT OF TWO REFINEMENT BEGIN;
-//                        CLOCK_START;
-//                        EdgeWeight improvement = perform_a_two_way_refinement(cfg, G, boundary, bp,
-//                                                                              lhs, rhs,
-//                                                                              lhs_part_weight, rhs_part_weight,
-//                                                                              initial_cut_value, something_changed);
-//
-//                        time_two_way += CLOCK_END_TIME;
-//
-//                        overall_improvement += improvement;
+                        CLOCK_START;
+                        EdgeWeight improvement = perform_a_two_way_refinement(cfg, G, boundary, bp,
+                                                                              lhs, rhs,
+                                                                              lhs_part_weight, rhs_part_weight,
+                                                                              initial_cut_value, something_changed);
+
+                        time_two_way += CLOCK_END_TIME;
+
+                        overall_improvement += improvement;
 //                        COMMENT OF TWO REFINEMENT END;
+//                        EdgeWeight improvement = 0;
 
                         EdgeWeight multitry_improvement = 0;
                         if (config.refinement_scheduling_algorithm == REFINEMENT_SCHEDULING_ACTIVE_BLOCKS_REF_KWAY) {

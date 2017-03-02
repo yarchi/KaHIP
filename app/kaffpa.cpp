@@ -88,11 +88,11 @@ int main(int argn, char **argv) {
                 std::cout <<  "reading input partition" << std::endl;
                 graph_io::readPartition(G, partition_config.input_partition);
                 partition_config.graph_allready_partitioned = true;
-                config.only_first_level = true;
-                config.mh_no_mh = false;
-                config.no_change_convergence = false;
-                config.corner_refinement_enabled = false;
-                config.kaffpa_perfectly_balanced_refinement = false;
+                partition_config.only_first_level = true;
+                partition_config.mh_no_mh = false;
+                partition_config.no_change_convergence = false;
+                partition_config.corner_refinement_enabled = false;
+                partition_config.kaffpa_perfectly_balanced_refinement = false;
 
                 input_partition.resize(G.number_of_nodes());
 

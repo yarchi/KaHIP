@@ -73,7 +73,7 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
                 }
 
                 if(config.kaffpa_perfectly_balanced_refinement) {
-                        CLOCK_START_N;
+                        CLOCK_START;
                         overall_improvement += cycle_refine->perform_refinement(config, G, boundary);
                         CLOCK_END("Cycle refinement");
                 }
