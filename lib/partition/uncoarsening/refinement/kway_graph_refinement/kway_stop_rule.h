@@ -65,7 +65,8 @@ inline bool kway_simple_stop_rule::search_should_stop(unsigned int min_cut_idx,
 class kway_adaptive_stop_rule : public kway_stop_rule {
 public:
         kway_adaptive_stop_rule(PartitionConfig & config) : m_steps(0), 
-                                                            m_expected_gain(0.0), 
+                                                            m_expected_gain(0.0),
+                                                            m_sum_squared_gain(0.0),
                                                             m_expected_variance2(0.0), 
                                                             pconfig(&config) {}
         virtual ~kway_adaptive_stop_rule() {};
@@ -74,24 +75,19 @@ public:
                 //erwartungstreue schätzer für varianz und erwartungswert
                 m_expected_gain *= m_steps;
                 m_expected_gain += gain;
-                if(m_steps == 0) {
-                        m_expected_variance2 = 0.0;
-                } else {
-                        m_expected_variance2 *= (m_steps-1);
-                        //expected_variance2 += (gain - expected_gain)*(gain - expected_gain);
-                        //real implementation in kaspar
-                        m_expected_variance2 += (gain )*(gain );
-                }
+
+                m_sum_squared_gain += gain * gain;
+
                 m_steps++;
                 
                 m_expected_gain /= m_steps;
-                if(m_steps > 1) 
-                        m_expected_variance2 /= (m_steps-1);
+                calc_variance();
         };
 
         void reset_statistics() {
                 m_steps              = 0;
                 m_expected_gain      = 0.0;
+                m_sum_squared_gain   = 0.0;
                 m_expected_variance2 = 0.0;
         };
 
@@ -101,8 +97,19 @@ public:
 private:
         unsigned m_steps;
         double   m_expected_gain;
+        Gain   m_sum_squared_gain;
         double   m_expected_variance2;
         PartitionConfig * pconfig;
+
+        void calc_variance() {
+                if (m_steps > 1) {
+                        Gain m_sum_gain = m_expected_gain * m_steps;
+                        m_expected_variance2 = (m_sum_squared_gain - 2 * m_expected_gain * m_sum_gain +
+                                m_expected_gain * m_expected_gain * m_steps) / (m_steps - 1);
+                } else {
+                        m_expected_variance2 = 0.0;
+                }
+        }
 };
 
 inline bool kway_adaptive_stop_rule::search_should_stop(unsigned int min_cut_idx, 
@@ -183,7 +190,12 @@ private:
 class kway_chernoff_adaptive_stop_rule : public kway_stop_rule {
 public:
         kway_chernoff_adaptive_stop_rule(PartitionConfig& config)
-                :       m_steps(0)
+                :       m_stop_probability(config.chernoff_stop_probability)
+                ,       m_gradient_descent_num_steps(config.chernoff_gradient_descent_num_steps)
+                ,       m_gradient_descent_step_size(config.chernoff_gradient_descent_step_size)
+                ,       m_min_step_limit(config.chernoff_min_step_limit)
+                ,       m_max_step_limit(config.chernoff_max_step_limit)
+                ,       m_steps(0)
                 ,       m_total_gain(0)
                 ,       m_max_gain(1)
                 ,       m_t(1.0)
@@ -241,17 +253,18 @@ public:
                         res = false;
                 }
 
-                if (m_steps == step_limit) {
+                if (m_steps == m_max_step_limit) {
                         reset_statistics();
                 }
                 return res;
         }
+
 private:
-        static constexpr double m_stop_probability = 0.1;
-        static constexpr uint32_t m_gradient_descent_num_steps = 20;
-        static constexpr double m_gradient_descent_step_size = 1;
-        static constexpr uint32_t m_min_step_limit = 20;
-        static constexpr uint32_t step_limit = 1000;
+        double m_stop_probability;
+        uint32_t m_gradient_descent_num_steps;
+        double m_gradient_descent_step_size;
+        uint32_t m_min_step_limit;
+        uint32_t m_max_step_limit;
 
         uint32_t m_steps;
         Gain m_total_gain;
@@ -306,7 +319,7 @@ private:
                         // there is no any positive gain
                         return 0.0;
                 }
-
+                n = std::min<int>(n, m_max_step_limit);
                 // ftxt << "n " << n << std::endl;
 
                 double gradient_step = m_gradient_descent_step_size;
@@ -344,7 +357,7 @@ private:
                 // ftxt << "E[exp(t*gain)] ^ n / exp(t) " << std::pow(f, n) / std::exp(m_t) << std::endl;
                 // ftxt << "Calculating prob end <<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
                 // E[exp(t * gain)] ^ n / exp(t)
-                return get_probability(m_t, n);
+                return min_val;
         }
 
         double get_probability(double t, int n) const {

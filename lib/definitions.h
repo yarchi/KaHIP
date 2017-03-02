@@ -146,7 +146,7 @@ typedef enum {
 typedef enum {
         KWAY_SIMPLE_STOP_RULE, 
 	KWAY_ADAPTIVE_STOP_RULE,
-        KWAY_CHEBYSHEV_ADAPTIVE_STOP_RULE
+        KWAY_CHERNOFF_ADAPTIVE_STOP_RULE
 } KWayStopRule;
 
 typedef enum {

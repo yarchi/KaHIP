@@ -125,13 +125,8 @@ public:
                 //return nodes_partitions.find(node) != nodes_partitions.end() ? nodes_partitions[node] : G.getPartitionIndex(node);
         }
 
-        void reset_thread_data() {
-                for (auto node : moved) {
-                        moved_idx[node].store(false, std::memory_order_relaxed);
-                }
+        void partial_reset_thread_data() {
                 m_reset_counter.fetch_add(1, std::memory_order_release);
-
-                moved.clear();
 
                 nodes_partitions.clear();
                 //nodes_partitions.reserve(nodes_partitions_hash_table::get_max_size_to_fit_l1());
@@ -146,6 +141,15 @@ public:
                 time_stamps.clear();
 
                 while (!is_all_data_reseted());
+        }
+
+        void reset_thread_data() {
+                for (auto node : moved) {
+                        moved_idx[node].store(false, std::memory_order_relaxed);
+                }
+                moved.clear();
+
+                partial_reset_thread_data();
         }
 
         inline Gain compute_gain(NodeID node, PartitionID from, PartitionID& to, EdgeWeight& ext_degree) {

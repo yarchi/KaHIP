@@ -83,8 +83,7 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                 case KWAY_ADAPTIVE_STOP_RULE:
                         stopping_rule = std::make_unique<kway_adaptive_stop_rule>(td.config);
                         break;
-                case KWAY_CHEBYSHEV_ADAPTIVE_STOP_RULE:
-                        //stopping_rule = std::make_unique<kway_chebyshev_adaptive_stop_rule>(td.config);
+                case KWAY_CHERNOFF_ADAPTIVE_STOP_RULE:
                         stopping_rule = std::make_unique<kway_chernoff_adaptive_stop_rule>(td.config);
                         break;
         }
@@ -223,8 +222,8 @@ std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::local_search_from_on
                 case KWAY_ADAPTIVE_STOP_RULE:
                         stopping_rule = std::make_unique<kway_adaptive_stop_rule>(td.config);
                         break;
-                case KWAY_CHEBYSHEV_ADAPTIVE_STOP_RULE:
-                        stopping_rule = std::make_unique<kway_chebyshev_adaptive_stop_rule>(td.config);
+                case KWAY_CHERNOFF_ADAPTIVE_STOP_RULE:
+                        stopping_rule = std::make_unique<kway_chernoff_adaptive_stop_rule>(td.config);
                         break;
         }
 
@@ -389,17 +388,12 @@ std::pair<EdgeWeight, uint32_t>
 kway_graph_refinement_core::apply_moves(Cvector <thread_data_refinement_core>& threads_data,
                                         bool compute_touched_partitions,
                                         std::unordered_map<PartitionID, PartitionID>& touched_blocks,
-                                        std::vector<std::future<uint32_t>>& futures,
                                         std::vector<NodeID>& reactivated_vertices) const {
 
         uint32_t overall_moved = 0;
         EdgeWeight overall_gain = 0;
 
         moved_nodes_hash_map moved_nodes(moved_nodes_hash_map::get_max_size_to_fit_l1());
-
-        std::for_each(futures.begin(), futures.end(), [](auto& future) {
-                future.get();
-        });
 
         for (size_t id = 0; id < threads_data.size(); ++id) {
                 overall_gain += apply_moves(threads_data[id].get(), moved_nodes, compute_touched_partitions,
@@ -620,7 +614,7 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
                                 std::tie(gain, movements) = gain_recalculation(td, moved_nodes, best_cut_index + 1,
                                                                                next_index,compute_touched_partitions,
                                                                                touched_blocks);
-                        } else if (td.config.apply_move_strategy == ApplyMoveStrategy::SKIP) {
+                        } else if (td.config.apply_move_strategy == ApplyMoveStrategy::REACTIVE_VERTICES) {
                                 NodeID start_node = td.transpositions[best_cut_index + 1];
                                 reactivated_vertices.push_back(start_node);
                         } else {

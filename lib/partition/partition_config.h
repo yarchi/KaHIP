@@ -387,8 +387,9 @@ struct PartitionConfig
         }
 
         //============================================================
-        //====================MULTITHREADING PARAMETERS===================
+        //====================MULTITHREADING PARAMETERS===============
         //============================================================
+        uint32_t main_core = 0;
         uint32_t num_threads = 1;
         int block_size = 10000;
         BlockSizeUnit block_size_unit = BlockSizeUnit::NODES;
@@ -398,7 +399,13 @@ struct PartitionConfig
         //============================================================
         bool parallel_lp = false;
         bool parallel_multitry_kway = false;
-        ApplyMoveStrategy apply_move_strategy = ApplyMoveStrategy::LOCAL_SEARCH;
+        ApplyMoveStrategy apply_move_strategy = ApplyMoveStrategy::SKIP;
+        double chernoff_stop_probability = 0.1;
+        uint32_t chernoff_gradient_descent_num_steps = 20;
+        double chernoff_gradient_descent_step_size = 1;
+        uint32_t chernoff_min_step_limit = 20;
+        uint32_t chernoff_max_step_limit = 1000;
+
 };
 
 

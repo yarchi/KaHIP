@@ -56,6 +56,10 @@ public:
         }
 
 
+        inline bool is_moved(NodeID node) const {
+                return m_moved_idx[node].load(std::memory_order_relaxed);
+        }
+
         void reset_global_data() {
                 for (uint32_t id = 0; id < m_config.num_threads; ++id) {
                         m_moved_count[id].get().store(0, std::memory_order_relaxed);
@@ -429,6 +433,13 @@ private:
                                              bool compute_touched_blocks,
                                              std::unordered_map<PartitionID, PartitionID>& touched_blocks,
                                              std::vector<NodeID>& todolist);
+
+        int start_more_locallized_search_experimental(PartitionConfig& config, graph_access& G,
+                                                      complete_boundary& boundary,
+                                                      bool init_neighbors,
+                                                      bool compute_touched_blocks,
+                                                      std::unordered_map<PartitionID, PartitionID>& touched_blocks,
+                                                      std::vector<NodeID>& todolist);
 };
 
 }

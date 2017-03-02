@@ -1,5 +1,5 @@
 /******************************************************************************
- * quotient_graph_refinement.cpp 
+ * quotient_graph_refinement.cpp
  *
  * Source of KaHIP -- Karlsruhe High Quality Partitioning.
  *
@@ -48,10 +48,10 @@ quotient_graph_refinement::~quotient_graph_refinement() {
 
 }
 
-void quotient_graph_refinement::setup_start_nodes(graph_access & G, 
-                PartitionID partition, 
-                boundary_pair & bp, 
-                complete_boundary & boundary,  
+void quotient_graph_refinement::setup_start_nodes(graph_access & G,
+                PartitionID partition,
+                boundary_pair & bp,
+                complete_boundary & boundary,
                 boundary_starting_nodes & start_nodes) {
 
         start_nodes.resize(boundary.size(partition, &bp));
@@ -140,15 +140,17 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
 #endif
 
                         PartitionConfig cfg = config;
-                        CLOCK_START;
-                        EdgeWeight improvement = perform_a_two_way_refinement(cfg, G, boundary, bp,
-                                                                              lhs, rhs,
-                                                                              lhs_part_weight, rhs_part_weight,
-                                                                              initial_cut_value, something_changed);
-
-                        time_two_way += CLOCK_END_TIME;
-
-                        overall_improvement += improvement;
+//                        COMMENT OF TWO REFINEMENT BEGIN;
+//                        CLOCK_START;
+//                        EdgeWeight improvement = perform_a_two_way_refinement(cfg, G, boundary, bp,
+//                                                                              lhs, rhs,
+//                                                                              lhs_part_weight, rhs_part_weight,
+//                                                                              initial_cut_value, something_changed);
+//
+//                        time_two_way += CLOCK_END_TIME;
+//
+//                        overall_improvement += improvement;
+//                        COMMENT OF TWO REFINEMENT END;
 
                         EdgeWeight multitry_improvement = 0;
                         if (config.refinement_scheduling_algorithm == REFINEMENT_SCHEDULING_ACTIVE_BLOCKS_REF_KWAY) {
@@ -169,6 +171,15 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
                                 //int cut_diff = old_cut - qm.edge_cut(G);
                                 //std::cout << "Improved:\t" << multitry_improvement << ", expected:\t" << cut_diff << std::endl;
                                 //ALWAYS_ASSERT(cut_diff == multitry_improvement);
+
+
+                                // tmp test
+//                                PartitionConfig cfg_tmp = config;
+//                                graph_access G_tmp;
+//                                G.copy(G_tmp);
+//
+
+                                // tmp test
 
                                 if (multitry_improvement > 0) {
                                         ((active_block_quotient_graph_scheduler*) scheduler)->activate_blocks(
@@ -205,11 +216,11 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
         return overall_improvement;
 }
 
-EdgeWeight quotient_graph_refinement::perform_a_two_way_refinement(PartitionConfig & config, 
+EdgeWeight quotient_graph_refinement::perform_a_two_way_refinement(PartitionConfig & config,
                                                                    graph_access & G,
                                                                    complete_boundary & boundary,
                                                                    boundary_pair & bp,
-                                                                   PartitionID & lhs, 
+                                                                   PartitionID & lhs,
                                                                    PartitionID & rhs,
                                                                    NodeWeight & lhs_part_weight,
                                                                    NodeWeight & rhs_part_weight,
@@ -220,9 +231,9 @@ EdgeWeight quotient_graph_refinement::perform_a_two_way_refinement(PartitionConf
         two_way_flow_refinement pair_wise_flow;
 
         std::vector<NodeID> lhs_bnd_nodes;
-        setup_start_nodes(G, lhs, bp, boundary, lhs_bnd_nodes); 
+        setup_start_nodes(G, lhs, bp, boundary, lhs_bnd_nodes);
 
-        std::vector<NodeID> rhs_bnd_nodes; 
+        std::vector<NodeID> rhs_bnd_nodes;
         setup_start_nodes(G, rhs, bp, boundary, rhs_bnd_nodes);
 
         something_changed      = false;
@@ -230,46 +241,46 @@ EdgeWeight quotient_graph_refinement::perform_a_two_way_refinement(PartitionConf
 
         quality_metrics qm;
         if(config.refinement_type == REFINEMENT_TYPE_FM_FLOW || config.refinement_type == REFINEMENT_TYPE_FM) {
-                improvement = pair_wise_refinement.perform_refinement(config, 
+                improvement = pair_wise_refinement.perform_refinement(config,
                                                                       G,
                                                                       boundary,
                                                                       lhs_bnd_nodes,
-                                                                      rhs_bnd_nodes, 
+                                                                      rhs_bnd_nodes,
                                                                       &bp,
-                                                                      lhs_part_weight, 
+                                                                      lhs_part_weight,
                                                                       rhs_part_weight,
                                                                       initial_cut_value,
-                                                                      something_changed); 
-                ASSERT_TRUE(improvement >= 0 || config.rebalance); 
+                                                                      something_changed);
+                ASSERT_TRUE(improvement >= 0 || config.rebalance);
         }
 
         if(config.refinement_type == REFINEMENT_TYPE_FM_FLOW || config.refinement_type == REFINEMENT_TYPE_FLOW){
                 lhs_bnd_nodes.clear();
-                setup_start_nodes(G, lhs, bp, boundary, lhs_bnd_nodes); 
+                setup_start_nodes(G, lhs, bp, boundary, lhs_bnd_nodes);
 
-                rhs_bnd_nodes.clear(); 
+                rhs_bnd_nodes.clear();
                 setup_start_nodes(G, rhs, bp, boundary, rhs_bnd_nodes);
 
-                EdgeWeight _improvement = pair_wise_flow.perform_refinement(config, 
-                                                                            G, 
+                EdgeWeight _improvement = pair_wise_flow.perform_refinement(config,
+                                                                            G,
                                                                             boundary,
                                                                             lhs_bnd_nodes,
-                                                                            rhs_bnd_nodes, 
+                                                                            rhs_bnd_nodes,
                                                                             &bp,
-                                                                            lhs_part_weight, 
+                                                                            lhs_part_weight,
                                                                             rhs_part_weight,
                                                                             initial_cut_value,
-                                                                            something_changed);  
+                                                                            something_changed);
 
-                ASSERT_TRUE(_improvement >= 0 || config.rebalance); 
+                ASSERT_TRUE(_improvement >= 0 || config.rebalance);
                 improvement += _improvement;
         }
 
         bool only_one_block_is_overloaded = boundary.getBlockWeight(lhs) > config.upper_bound_partition;
-        only_one_block_is_overloaded = only_one_block_is_overloaded 
+        only_one_block_is_overloaded = only_one_block_is_overloaded
                                      || boundary.getBlockWeight(rhs) > config.upper_bound_partition;
-        only_one_block_is_overloaded = only_one_block_is_overloaded && 
-                (boundary.getBlockWeight(lhs) <= config.upper_bound_partition || 
+        only_one_block_is_overloaded = only_one_block_is_overloaded &&
+                (boundary.getBlockWeight(lhs) <= config.upper_bound_partition ||
                  boundary.getBlockWeight(rhs) <= config.upper_bound_partition);
 
         if(only_one_block_is_overloaded) {
@@ -279,30 +290,30 @@ EdgeWeight quotient_graph_refinement::perform_a_two_way_refinement(PartitionConf
                 cfg.rebalance       = false;
 
                 lhs_bnd_nodes.clear();
-                setup_start_nodes(G, lhs, bp, boundary, lhs_bnd_nodes); 
+                setup_start_nodes(G, lhs, bp, boundary, lhs_bnd_nodes);
 
-                rhs_bnd_nodes.clear(); 
+                rhs_bnd_nodes.clear();
                 setup_start_nodes(G, rhs, bp, boundary, rhs_bnd_nodes);
 
-                improvement += pair_wise_refinement.perform_refinement(cfg, 
+                improvement += pair_wise_refinement.perform_refinement(cfg,
                                                                        G,
                                                                        boundary,
                                                                        lhs_bnd_nodes,
-                                                                       rhs_bnd_nodes, 
+                                                                       rhs_bnd_nodes,
                                                                        &bp,
-                                                                       lhs_part_weight, 
+                                                                       lhs_part_weight,
                                                                        rhs_part_weight,
                                                                        initial_cut_value,
-                                                                       something_changed); 
+                                                                       something_changed);
 
-                ASSERT_TRUE(improvement >= 0 || config.rebalance); 
+                ASSERT_TRUE(improvement >= 0 || config.rebalance);
 
                 if(!config.disable_hard_rebalance && !config.kaffpa_perfectly_balanced_refinement && !config.initial_bipartitioning) {
                                 only_one_block_is_overloaded = boundary.getBlockWeight(lhs) > config.upper_bound_partition;
-                                only_one_block_is_overloaded = only_one_block_is_overloaded 
+                                only_one_block_is_overloaded = only_one_block_is_overloaded
                                         || boundary.getBlockWeight(rhs) > config.upper_bound_partition;
-                                only_one_block_is_overloaded = only_one_block_is_overloaded && 
-                                        (boundary.getBlockWeight(lhs) <= config.upper_bound_partition || 
+                                only_one_block_is_overloaded = only_one_block_is_overloaded &&
+                                        (boundary.getBlockWeight(lhs) <= config.upper_bound_partition ||
                                          boundary.getBlockWeight(rhs) <= config.upper_bound_partition);
 
                         if(only_one_block_is_overloaded) {
@@ -310,26 +321,26 @@ EdgeWeight quotient_graph_refinement::perform_a_two_way_refinement(PartitionConf
                                 cfg.rebalance     = true;
 
                                 lhs_bnd_nodes.clear();
-                                setup_start_nodes(G, lhs, bp, boundary, lhs_bnd_nodes); 
+                                setup_start_nodes(G, lhs, bp, boundary, lhs_bnd_nodes);
 
-                                rhs_bnd_nodes.clear(); 
+                                rhs_bnd_nodes.clear();
                                 setup_start_nodes(G, rhs, bp, boundary, rhs_bnd_nodes);
 
-                                improvement += pair_wise_refinement.perform_refinement(cfg, 
+                                improvement += pair_wise_refinement.perform_refinement(cfg,
                                                 G,
                                                 boundary,
                                                 lhs_bnd_nodes,
-                                                rhs_bnd_nodes, 
+                                                rhs_bnd_nodes,
                                                 &bp,
-                                                lhs_part_weight, 
+                                                lhs_part_weight,
                                                 rhs_part_weight,
                                                 initial_cut_value,
-                                                something_changed); 
+                                                something_changed);
 
                         }
                 }
         }
 
-        return improvement;               
+        return improvement;
 }
 

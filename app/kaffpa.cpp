@@ -40,6 +40,7 @@
 #include "quality_metrics.h"
 #include "random_functions.h"
 #include "timer.h"
+#include "uncoarsening/refinement/kway_graph_refinement/kway_stop_rule.h"
 #include "uncoarsening/refinement/kway_graph_refinement/multitry_kway_fm.h"
 #include "uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.h"
 #include "uncoarsening/refinement/quotient_graph_refinement/quotient_graph_refinement.h"
@@ -77,15 +78,33 @@ int main(int argn, char **argv) {
         graph_io::readGraphWeighted(G, graph_filename);
         std::cout << "io time: " << t.elapsed()  << std::endl;
        
-        G.set_partition_count(partition_config.k); 
+        G.set_partition_count(partition_config.k);
  
         balance_configuration bc;
         bc.configurate_balance( partition_config, G);
 
+        std::vector<PartitionID> input_partition;
+        if(partition_config.input_partition != "") {
+                std::cout <<  "reading input partition" << std::endl;
+                graph_io::readPartition(G, partition_config.input_partition);
+                partition_config.graph_allready_partitioned = true;
+                config.only_first_level = true;
+                config.mh_no_mh = false;
+                config.no_change_convergence = false;
+                config.corner_refinement_enabled = false;
+                config.kaffpa_perfectly_balanced_refinement = false;
+
+                input_partition.resize(G.number_of_nodes());
+
+                forall_nodes(G, node) {
+                        input_partition[node] = G.getPartitionIndex(node);
+                } endfor
+        }
+
         srand(partition_config.seed);
         random_functions::setSeed(partition_config.seed);
 
-        parallel::PinToCore(0);
+        parallel::PinToCore(partition_config.main_core);
         parallel::g_thread_pool.Resize(partition_config.num_threads - 1);
 
         std::cout <<  "graph has " <<  G.number_of_nodes() <<  " nodes and " <<  G.number_of_edges() <<  " edges"  << std::endl;
@@ -127,8 +146,13 @@ int main(int argn, char **argv) {
                 case KWayStopRule::KWAY_ADAPTIVE_STOP_RULE:
                         std::cout << "Kway stop rule\tadaptive" << std::endl;
                         break;
-                case KWayStopRule::KWAY_CHEBYSHEV_ADAPTIVE_STOP_RULE:
-                        std::cout << "Kway stop rule\tchebyshev_adaptive" << std::endl;
+                case KWayStopRule::KWAY_CHERNOFF_ADAPTIVE_STOP_RULE:
+                        std::cout << "Kway stop rule\tchernoff_adaptive" << std::endl;
+                        std::cout << "Stop probability\t" << partition_config.chernoff_stop_probability << std::endl;
+                        std::cout << "Num gradient descent step\t" << partition_config.chernoff_gradient_descent_num_steps << std::endl;
+                        std::cout << "Gradient descent step size\t" << partition_config.chernoff_gradient_descent_step_size << std::endl;
+                        std::cout << "Min num step limit\t" << partition_config.chernoff_min_step_limit << std::endl;
+                        std::cout << "Max num step limit\t" << partition_config.chernoff_max_step_limit << std::endl;
                         break;
         }
 

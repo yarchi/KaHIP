@@ -105,8 +105,8 @@ std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::single_kway_refineme
                 case KWAY_ADAPTIVE_STOP_RULE:
                         stopping_rule = new kway_adaptive_stop_rule(config);
                         break;
-                case KWAY_CHEBYSHEV_ADAPTIVE_STOP_RULE:
-                        stopping_rule = new kway_chebyshev_adaptive_stop_rule(config);
+                case KWAY_CHERNOFF_ADAPTIVE_STOP_RULE:
+                        stopping_rule = new kway_chernoff_adaptive_stop_rule(config);
                         break;
         }
 

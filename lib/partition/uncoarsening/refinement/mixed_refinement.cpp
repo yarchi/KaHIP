@@ -26,6 +26,8 @@
 #include "mixed_refinement.h"
 #include "quotient_graph_refinement/quotient_graph_refinement.h"
 
+#include "data_structure/parallel/time.h"
+
 mixed_refinement::mixed_refinement() {
 
 }
@@ -35,6 +37,7 @@ mixed_refinement::~mixed_refinement() {
 }
 
 EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_access & G, complete_boundary & boundary) {
+        //CLOCK_START;
         refinement* refine              = new quotient_graph_refinement();
         refinement* kway                = new kway_graph_refinement();
         multitry_kway_fm* multitry_kway = new multitry_kway_fm();
@@ -60,15 +63,19 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
 
         } else {
                 if(config.corner_refinement_enabled) {
+                        CLOCK_START;
                         overall_improvement += kway->perform_refinement(config, G, boundary);
-                } 
+                        CLOCK_END("Kway refinement");
 
+                }
                 if(!config.quotient_graph_refinement_disabled) {
                         overall_improvement += refine->perform_refinement(config, G, boundary);
                 }
 
                 if(config.kaffpa_perfectly_balanced_refinement) {
+                        CLOCK_START_N;
                         overall_improvement += cycle_refine->perform_refinement(config, G, boundary);
+                        CLOCK_END("Cycle refinement");
                 }
         }
 
@@ -77,6 +84,7 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
         delete multitry_kway;
         delete cycle_refine;
 
+        //CLOCK_END("Mixed refinement time");
         return overall_improvement;
 }
 
