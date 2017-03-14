@@ -44,6 +44,7 @@
 #include "uncoarsening/refinement/kway_graph_refinement/multitry_kway_fm.h"
 #include "uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.h"
 #include "uncoarsening/refinement/quotient_graph_refinement/quotient_graph_refinement.h"
+#include "uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_commons.h"
 
 int main(int argn, char **argv) {
 
@@ -83,8 +84,10 @@ int main(int argn, char **argv) {
         balance_configuration bc;
         bc.configurate_balance( partition_config, G);
 
+        quality_metrics qm;
+        Gain input_partition_cut = 0;
         std::vector<PartitionID> input_partition;
-        if(partition_config.input_partition != "") {
+        if (partition_config.input_partition != "") {
                 std::cout <<  "reading input partition" << std::endl;
                 graph_io::readPartition(G, partition_config.input_partition);
                 partition_config.graph_allready_partitioned = true;
@@ -93,14 +96,16 @@ int main(int argn, char **argv) {
                 partition_config.no_change_convergence = false;
                 partition_config.corner_refinement_enabled = false;
                 partition_config.kaffpa_perfectly_balanced_refinement = false;
+                partition_config.quotient_graph_two_way_refinement = false;
 
                 input_partition.resize(G.number_of_nodes());
 
                 forall_nodes(G, node) {
                         input_partition[node] = G.getPartitionIndex(node);
                 } endfor
+                input_partition_cut = qm.edge_cut(G);
         }
-
+        std::cout << "Seed\t" << partition_config.seed << std::endl;
         srand(partition_config.seed);
         random_functions::setSeed(partition_config.seed);
 
@@ -159,7 +164,6 @@ int main(int argn, char **argv) {
         // ***************************** perform partitioning ***************************************       
         t.restart();
         graph_partitioner partitioner;
-        quality_metrics qm;
 
         std::cout <<  "performing partitioning!"  << std::endl;
         if(partition_config.time_limit == 0) {
@@ -199,8 +203,13 @@ int main(int argn, char **argv) {
         std::cout.rdbuf(backup);
         std::cout <<  "time spent for partitioning " << t.elapsed()  << std::endl;
        
-        // output some information about the partition that we have computed 
-        std::cout << "cut \t\t"         << qm.edge_cut(G)                 << std::endl;
+        // output some information about the partition that we have computed
+        Gain cut = qm.edge_cut(G);
+        std::cout << "cut \t\t"         << cut                            << std::endl;
+        if (partition_config.input_partition != "") {
+                std::cout << "input partition cut\t" << input_partition_cut << std::endl;
+                std::cout << "improvement\t" << input_partition_cut - cut << std::endl;
+        }
         std::cout << "finalobjective  " << qm.edge_cut(G)                 << std::endl;
         std::cout << "bnd \t\t"         << qm.boundary_nodes(G)           << std::endl;
         std::cout << "balance \t"       << qm.balance(G)                  << std::endl;
@@ -214,12 +223,16 @@ int main(int argn, char **argv) {
                 std::cout << "Local search statistics:" << std::endl;
                 if (partition_config.parallel_multitry_kway) {
                         parallel::multitry_kway_fm::print_full_statistics();
+                        ALWAYS_ASSERT(parallel::multitry_kway_fm::get_performed_gain() == input_partition_cut - cut);
                 } else {
                         multitry_kway_fm::print_full_statistics();
                 }
                 std::cout << std::endl;
         }
 
+#ifdef PERFORMANCE_STATISTICS
+        parallel::thread_data_refinement_core::nodes_partitions_hash_table::print_statistics();
+#endif
 
         // write the partition to the disc 
         std::stringstream filename;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-
+#include <map>
 #include "data_structure/graph_access.h"
 #include "data_structure/parallel/algorithm.h"
 #include "data_structure/parallel/atomics.h"
@@ -17,6 +17,8 @@ class thread_data_refinement_core : public parallel::thread_config {
 public:
         using nodes_partitions_hash_table = parallel::hash_map<NodeID, PartitionID>;
         //using nodes_partitions_hash_table = std::unordered_map<NodeID, PartitionID>;
+        //using nodes_partitions_hash_table = std::vector<int>;
+        //using nodes_partitions_hash_table = std::map<NodeID, PartitionID>;
 
         // global data
         PartitionConfig& config;
@@ -53,6 +55,8 @@ public:
         uint32_t transpositions_size;
         int performed_gain;
         int unperformed_gain;
+        double time_compute_gain;
+        size_t num_part_accesses;
 
         // local statistics about stopping reason
         uint32_t stop_empty_queue;
@@ -83,7 +87,8 @@ public:
                 ,       moved_count(_moved_count)
                 ,       upper_bound_gain_improvement(0)
                 ,       time_stamp(_time_stamp)
-                ,       nodes_partitions(131072)
+                ,       nodes_partitions(524288)
+                //,       nodes_partitions(G.number_of_nodes(), -1)
                 ,       total_thread_time(0.0)
                 ,       tried_movements(0)
                 ,       accepted_movements(0)
@@ -94,6 +99,8 @@ public:
                 ,       transpositions_size(0)
                 ,       performed_gain(0)
                 ,       unperformed_gain(0)
+                ,       time_compute_gain(0.0)
+                ,       num_part_accesses(0)
                 ,       stop_empty_queue(0)
                 ,       stop_stopping_rule(0)
                 ,       stop_max_number_of_swaps(0)
@@ -121,16 +128,28 @@ public:
         thread_data_refinement_core& operator=(thread_data_refinement_core&&) = delete;
 
         inline PartitionID get_local_partition(NodeID node) {
-                return nodes_partitions.contains(node) ? nodes_partitions[node] : G.getPartitionIndex(node);
+                //return nodes_partitions.contains(node) ? nodes_partitions[node] : G.getPartitionIndex(node);
+                PartitionID part;
+                if (nodes_partitions.contains(node, part)) {
+                        return part;
+                } else {
+                        return G.getPartitionIndex(node);
+                }
                 //return nodes_partitions.find(node) != nodes_partitions.end() ? nodes_partitions[node] : G.getPartitionIndex(node);
+                //return nodes_partitions[node] != -1 ? nodes_partitions[node] :  G.getPartitionIndex(node);
         }
 
         void partial_reset_thread_data() {
                 m_reset_counter.fetch_add(1, std::memory_order_release);
 
+                // ht
                 nodes_partitions.clear();
-                //nodes_partitions.reserve(nodes_partitions_hash_table::get_max_size_to_fit_l1());
-                nodes_partitions.reserve(131072);
+                //nodes_partitions.reserve(131072);
+
+                // vector
+                //nodes_partitions.assign(G.number_of_nodes(), -1);
+
+                ////////nodes_partitions.reserve(nodes_partitions_hash_table::get_max_size_to_fit_l1());
 
                 min_cut_indices.clear();
                 transpositions.clear();
@@ -162,6 +181,8 @@ public:
                 forall_out_edges(G, e, node) {
                         NodeID target = G.getEdgeTarget(e);
                         PartitionID target_partition = get_local_partition(target);
+                        ++num_part_accesses;
+
 
                         if (m_local_degrees[target_partition].round == m_round) {
                                 m_local_degrees[target_partition].local_degree += G.getEdgeWeight(e);

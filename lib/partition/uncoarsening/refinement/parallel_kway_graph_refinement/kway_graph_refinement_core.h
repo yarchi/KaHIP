@@ -35,8 +35,7 @@ public:
                                                     bool& is_more_that_5percent_moved) const;
 
 private:
-
-        using moved_nodes_hash_map = parallel::hash_map_with_erase<NodeID, uint32_t>;
+        using moved_nodes_hash_map = parallel::hash_map_with_erase<NodeID, std::pair<uint32_t, PartitionID>>;
         using moved_hash_set = parallel::hash_set<NodeID>; // moved by local search
 
         static constexpr unsigned int sentinel = std::numeric_limits<unsigned int>::max();
@@ -60,7 +59,7 @@ private:
                                       std::unique_ptr<refinement_pq>& queue);
 
         inline bool local_move_node(thread_data_refinement_core& config, NodeID node, PartitionID from, PartitionID& to,
-                                    std::unique_ptr<refinement_pq>& queue);
+                                    std::unique_ptr<refinement_pq>& queue, Gain gain);
 
         void unroll_relaxed_moves(thread_data_refinement_core& td, moved_nodes_hash_map& moved_nodes,
                                   int start, int end, int& cut_improvement) const;

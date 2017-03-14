@@ -41,7 +41,7 @@ public:
 
                 for (uint32_t id = 0; id < config.num_threads; ++id) {
                         m_thread_data.emplace_back(id,
-                                                   id,
+                                                   id + config.seed,
                                                    config,
                                                    G,
                                                    boundary,
@@ -116,12 +116,14 @@ public:
                 uint32_t total_tried_movements = 0;
                 uint32_t total_accepted_movements = 0;
                 uint32_t total_scaned_neighbours = 0;
+                size_t total_num_part_accesses = 0;
 
                 // time
                 double total = 0.0;
                 double total_tried = 0.0;
                 double total_accepted = 0.0;
                 double total_unroll = 0.0;
+                double total_time_compute_gain = 0.0;
 
                 // gain
                 int total_performed_gain = 0;
@@ -141,6 +143,8 @@ public:
                                   << "scanned neighbours\t" << m_thread_data[id].get().scaned_neighbours << " | "
                                   << "try moves time\t" << m_thread_data[id].get().total_thread_try_move_time << " s | "
                                   << "accepted moves time\t" << m_thread_data[id].get().total_thread_accepted_move_time << " s | "
+                                  << "compute gain time\t" << m_thread_data[id].get().time_compute_gain << " s | "
+                                  << "total partition accesses\t" << m_thread_data[id].get().num_part_accesses << " | "
                                   << "unroll moves time\t" << m_thread_data[id].get().total_thread_unroll_move_time << " s | "
                                   << "move nodes time\t" << m_thread_data[id].get().time_move_nodes << " s | "
                                   << "transpositions size\t" << m_thread_data[id].get().transpositions_size << " | "
@@ -161,6 +165,8 @@ public:
                         total_stop_stopping_rule += m_thread_data[id].get().stop_stopping_rule;
                         total_stop_max_number_of_swaps += m_thread_data[id].get().stop_max_number_of_swaps;
                         total_stop_faction_of_nodes_moved += m_thread_data[id].get().stop_faction_of_nodes_moved;
+                        total_time_compute_gain += m_thread_data[id].get().time_compute_gain;
+                        total_num_part_accesses += m_thread_data[id].get().num_part_accesses;
 
                         statistics_type::proc_stat proc_stat;
                         proc_stat.proc_id = id;
@@ -170,6 +176,7 @@ public:
                         proc_stat.scaned_neighbours = m_thread_data[id].get().scaned_neighbours;
                         proc_stat.total_thread_try_move_time = m_thread_data[id].get().total_thread_try_move_time;
                         proc_stat.total_thread_accepted_move_time = m_thread_data[id].get().total_thread_accepted_move_time;
+                        proc_stat.total_thread_compute_gain_time = m_thread_data[id].get().time_compute_gain;
                         proc_stat.total_thread_unroll_move_time = m_thread_data[id].get().total_thread_unroll_move_time;
                         proc_stat.performed_gain = m_thread_data[id].get().performed_gain;
                         proc_stat.unperformed_gain = m_thread_data[id].get().unperformed_gain;
@@ -182,6 +189,8 @@ public:
                         total_unroll += m_thread_data[id].get().total_thread_unroll_move_time;
                 }
 
+                stat.total_compute_gain_time = total_time_compute_gain;
+                stat.total_num_part_accesses = total_num_part_accesses;
                 stat.total_tried_movements = total_tried_movements;
                 stat.total_accepted_movements = total_accepted_movements;
                 stat.total_scanned_neighbours = total_scaned_neighbours;
@@ -206,13 +215,30 @@ public:
                 std::cout << "Average TIME tried moves per thread\t" << total_tried / m_config.num_threads << " s" << std::endl;
                 std::cout << "Average TIME accepted moves per thread\t" << total_accepted / m_config.num_threads << " s" << std::endl;
                 std::cout << "Average TIME unroll per thread\t" << total_unroll / m_config.num_threads << " s" << std::endl;
+                std::cout << "Average TIME compute gain\t" << total_time_compute_gain / m_config.num_threads << " s" << std::endl;
 
                 stat.avg_thread_time = total / m_config.num_threads;
                 stat.avg_tried = total_tried / m_config.num_threads;
                 stat.avg_accepted = total_accepted / m_config.num_threads;
                 stat.avg_unroll = total_unroll / m_config.num_threads;
+                stat.avg_compute_gain_time = total_time_compute_gain / m_config.num_threads;
 
                 m_statistics.push_back(stat);
+        }
+
+        static Gain get_performed_gain() {
+                if (m_statistics.empty())
+                        return 0;
+
+                uint32_t num_threads = m_statistics.front().proc_stats.size();
+                statistics_type stat;
+                stat.proc_stats.resize(num_threads);
+
+                for (auto& st : m_statistics) {
+                        stat += st;
+                }
+
+                return stat.total_performed_gain;
         }
 
         static void print_full_statistics() {
@@ -238,6 +264,8 @@ public:
                 std::cout << "Time init\t" << stat.time_init << " s" << std::endl;
                 std::cout << "Time generate moves\t" << stat.time_generate_moves << " s" << std::endl;
                 std::cout << "Time move nodes\t" << stat.time_move_nodes << " s" << std::endl;
+                std::cout << "Time compute gain\t" << stat.total_compute_gain_time << std::endl;
+                std::cout << "Number of partition accesses\t" << stat.total_num_part_accesses << std::endl;
 
                 for (auto& pr : stat.proc_stats) {
                         std::cout << "proc_id\t" << pr.proc_id << " | "
@@ -270,6 +298,7 @@ public:
                 std::cout << "Average TIME tried moves per thread\t" << stat.avg_tried << " s" << std::endl;
                 std::cout << "Average TIME accepted moves per thread\t" << stat.avg_accepted << " s" << std::endl;
                 std::cout << "Average TIME unroll per thread\t" << stat.avg_unroll << " s" << std::endl;
+                std::cout << "Average TIME compute gain\t" << stat.avg_compute_gain_time << " s" << std::endl;
         }
 
         virtual ~thread_data_factory() {
@@ -292,15 +321,18 @@ private:
                 double time_init = 0.0;
                 double time_generate_moves = 0.0;
                 double time_move_nodes = 0.0;
+                double total_compute_gain_time = 0.0;
 
                 double avg_thread_time = 0.0;
                 double avg_tried = 0.0;
                 double avg_accepted = 0.0;
                 double avg_unroll = 0.0;
+                double avg_compute_gain_time = 0.0;
 
                 uint32_t total_tried_movements = 0;
                 uint32_t total_accepted_movements = 0;
                 uint32_t total_scanned_neighbours = 0;
+                size_t total_num_part_accesses = 0;
 
                 int total_performed_gain = 0;
                 int total_unperformed_gain = 0;
@@ -318,6 +350,7 @@ private:
                         uint32_t scaned_neighbours = 0;
                         double total_thread_try_move_time = 0.0;
                         double total_thread_accepted_move_time = 0.0;
+                        double total_thread_compute_gain_time = 0.0;
                         double total_thread_unroll_move_time = 0.0;
                         int performed_gain = 0;
                         int unperformed_gain = 0;
@@ -335,6 +368,7 @@ private:
                                 scaned_neighbours += ps.scaned_neighbours;
                                 total_thread_try_move_time += ps.total_thread_try_move_time;
                                 total_thread_accepted_move_time += ps.total_thread_accepted_move_time;
+                                total_thread_compute_gain_time += ps.total_thread_compute_gain_time;
                                 total_thread_unroll_move_time += ps.total_thread_unroll_move_time;
                                 performed_gain += ps.performed_gain;
                                 unperformed_gain += ps.unperformed_gain;
@@ -355,10 +389,12 @@ private:
                         time_init += stat.time_init;
                         time_generate_moves += stat.time_generate_moves;
                         time_move_nodes += stat.time_move_nodes;
+                        total_compute_gain_time += stat.total_compute_gain_time;
 
                         total_tried_movements += stat.total_tried_movements;
                         total_accepted_movements += stat.total_accepted_movements;
                         total_scanned_neighbours += stat.total_scanned_neighbours;
+                        total_num_part_accesses += stat.total_num_part_accesses;
                         total_performed_gain += stat.total_performed_gain;
                         total_unperformed_gain += stat.total_unperformed_gain;
 
@@ -371,6 +407,7 @@ private:
                         avg_tried += stat.avg_tried;
                         avg_accepted += stat.avg_accepted;
                         avg_unroll += stat.avg_unroll;
+                        avg_compute_gain_time += stat.avg_compute_gain_time;
 
                         ALWAYS_ASSERT(proc_stats.size() == stat.proc_stats.size());
                         for (size_t i = 0; i < proc_stats.size(); ++i) {
@@ -406,6 +443,10 @@ public:
 
         static void print_full_statistics() {
                 thread_data_factory::print_full_statistics();
+        }
+
+        static Gain get_performed_gain() {
+                return thread_data_factory::get_performed_gain();
         }
 
         virtual ~multitry_kway_fm() {

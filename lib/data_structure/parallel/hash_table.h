@@ -27,6 +27,69 @@ struct xxhash {
         }
 };
 
+template <typename Key>
+class MurmurHash {
+public:
+        using hash_type = std::uint64_t;
+
+        explicit MurmurHash(uint32_t seed = 0)
+                :   _seed(seed)
+        {}
+
+        void reset(uint32_t seed) {
+                _seed = seed;
+        }
+
+        inline hash_type operator() (const Key& key) const {
+                return hash(reinterpret_cast<const void*>(&key), sizeof(key), _seed);
+        }
+
+private:
+        uint32_t _seed;
+
+        inline hash_type hash(const void* key, uint32_t len, uint32_t seed) const {
+                const uint64_t m = 0xc6a4a7935bd1e995;
+                const int r = 47;
+
+                uint64_t h = seed ^ (len * m);
+
+                const uint64_t * data = (const uint64_t *)key;
+                const uint64_t * end = data + (len/8);
+
+                while(data != end)
+                {
+                        uint64_t k = *data++;
+
+                        k *= m;
+                        k ^= k >> r;
+                        k *= m;
+
+                        h ^= k;
+                        h *= m;
+                }
+
+                const unsigned char * data2 = (const unsigned char*)data;
+
+                switch(len & 7)
+                {
+                        case 7: h ^= uint64_t(data2[6]) << 48;
+                        case 6: h ^= uint64_t(data2[5]) << 40;
+                        case 5: h ^= uint64_t(data2[4]) << 32;
+                        case 4: h ^= uint64_t(data2[3]) << 24;
+                        case 3: h ^= uint64_t(data2[2]) << 16;
+                        case 2: h ^= uint64_t(data2[1]) << 8;
+                        case 1: h ^= uint64_t(data2[0]);
+                                h *= m;
+                };
+
+                h ^= h >> r;
+                h *= m;
+                h ^= h >> r;
+
+                return h;
+        }
+};
+
 constexpr static uint32_t round_up_to_next_power_2(uint32_t v) {
         v--;
         v |= v >> 1;
@@ -77,6 +140,7 @@ private:
         Position _offset;
 };
 
+#define PERFORMANCE_STATISTICS
 
 template <typename Key, typename Value, typename Hash = xxhash<Key>,
         bool TGrowable = false, bool Cache = true, size_t SizeFactor = 2>
@@ -92,6 +156,14 @@ private:
         using Position = uint32_t;
 
         static constexpr hash_type max_hash_value = std::numeric_limits<hash_type>::max();
+
+#ifdef PERFORMANCE_STATISTICS
+        static size_t num_access;
+        static size_t num_contain;
+        static size_t overall_max_size;
+        static size_t num_probes;
+        static size_t num_find_pos;
+#endif
 public:
         using Iterator = HashTableIterator<TSelf>;
 
@@ -115,6 +187,12 @@ public:
 
         TSelf& operator=(TSelf& other) = default;
         TSelf& operator=(TSelf&& other) = default;
+
+#ifdef PERFORMANCE_STATISTICS
+        ~HashMap() {
+                overall_max_size = std::max<uint32_t>(overall_max_size, size());
+        }
+#endif
 
         static constexpr size_t get_max_size_to_fit_l1() {
                 // (SizeFactor + 1.1) * max_size * sizeof(Element) + sizeof(Position) * max_size Bytes = 16 * 1024 Bytes,
@@ -147,6 +225,9 @@ public:
         }
 
         inline Value& operator[](const Key& key) {
+#ifdef PERFORMANCE_STATISTICS
+                ++num_access;
+#endif
                 if (TGrowable && size() == _max_size / 2)
                         resize();
 
@@ -160,7 +241,24 @@ public:
                 return _ht[pos].second;
         }
 
+        inline bool contains(const Key& key, Value& value) {
+#ifdef PERFORMANCE_STATISTICS
+                ++num_contain;
+#endif
+                size_t pos = findPosition(key);
+                Element& elem = _ht[pos];
+                if (elem.first != _empty_element) {
+                        value = elem.second;
+                        return true;
+                } else {
+                        return false;
+                }
+        }
+
         inline bool contains(const Key& key) {
+#ifdef PERFORMANCE_STATISTICS
+                ++num_contain;
+#endif
                 return _ht[findPosition(key)].first != _empty_element;
         }
 
@@ -173,6 +271,9 @@ public:
         }
 
         inline void clear() {
+#ifdef PERFORMANCE_STATISTICS
+                overall_max_size = std::max<uint32_t>(overall_max_size, size());
+#endif
                 for (auto pos : _poses) {
                         _ht[pos].first = _empty_element;
                 }
@@ -193,6 +294,16 @@ public:
                 std::swap(_empty_element, hash_map._empty_element);
         }
 
+#ifdef PERFORMANCE_STATISTICS
+        static void print_statistics() {
+                std::cout << "Num access\t" << num_access << std::endl;
+                std::cout << "Num contain\t" << num_contain << std::endl;
+                std::cout << "Max size\t" << overall_max_size << std::endl;
+                std::cout << "Num find pos\t" << num_find_pos << std::endl;
+                std::cout << "Num probes\t" << num_probes << std::endl;
+                std::cout << "Average num prob per find pos\t" << (num_probes + 0.0) / num_find_pos << std::endl;
+        }
+#endif
 private:
         void resize() {
                 TSelf new_hash_map(2 * _max_size);
@@ -216,12 +327,18 @@ private:
         }
 
         inline Position findPosition(const Key& key) {
+#ifdef PERFORMANCE_STATISTICS
+                ++num_find_pos;
+#endif
                 if (Cache && key == _last_key) {
                         return _last_position;
                 }
 
                 const Position startPosition = _hash(key) & (_ht_size - 1);
                 for (Position pos = startPosition; pos < _ht.size(); ++pos) {
+#ifdef PERFORMANCE_STATISTICS
+                        ++num_probes;
+#endif
                         if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
                                 if (Cache) {
                                         _last_key = key;
@@ -243,6 +360,23 @@ private:
         Key _last_key;
         Position _last_position;
 };
+
+#ifdef PERFORMANCE_STATISTICS
+template <typename Key, typename Value, typename Hash, bool TGrowable, bool Cache, size_t SizeFactor>
+size_t HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>::num_access(0);
+
+template <typename Key, typename Value, typename Hash, bool TGrowable, bool Cache, size_t SizeFactor>
+size_t HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>::num_contain(0);
+
+template <typename Key, typename Value, typename Hash, bool TGrowable, bool Cache, size_t SizeFactor>
+size_t HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>::overall_max_size(0);
+
+template <typename Key, typename Value, typename Hash, bool TGrowable, bool Cache, size_t SizeFactor>
+size_t HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>::num_probes(0);
+
+template <typename Key, typename Value, typename Hash, bool TGrowable, bool Cache, size_t SizeFactor>
+size_t HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>::num_find_pos(0);
+#endif
 
 template <typename Key, typename Value, typename Hash = xxhash<Key>,
         bool TGrowable = false, bool Cache = true, size_t SizeFactor = 2>
@@ -549,7 +683,8 @@ private:
                         return _last_position;
                 }
 
-                const Position startPosition = _hash(key) & (_ht_size - 1);
+                //const Position startPosition = _hash(key) & (_ht_size - 1);
+                const Position startPosition = _hash(key) % _ht_size;
                 for (Position pos = startPosition; pos < _ht.size(); ++pos) {
                         if (_ht[pos] == _empty_element || _ht[pos] == key) {
                                 if (Cache) {
@@ -573,13 +708,31 @@ private:
         Position _last_position;
 };
 
-template <typename key_type, typename value_type>
-using hash_map = HashMap<key_type, value_type, simple_hash<key_type>, true>;
+//template <typename key_type, typename value_type>
+//using hash_map = HashMap<key_type, value_type, simple_hash<key_type>, true>;
+//
+//template <typename key_type, typename value_type>
+//using hash_map_with_erase = HashMapWithErase<key_type, value_type, simple_hash<key_type>, true>;
+//
+//template <typename key_type>
+//using hash_set = HashSet<key_type, simple_hash<key_type>, true>;
+
+//template <typename key_type, typename value_type>
+//using hash_map = HashMap<key_type, value_type, xxhash<key_type>, true>;
+//
+//template <typename key_type, typename value_type>
+//using hash_map_with_erase = HashMapWithErase<key_type, value_type, xxhash<key_type>, true>;
+//
+//template <typename key_type>
+//using hash_set = HashSet<key_type, xxhash<key_type>, true>;
 
 template <typename key_type, typename value_type>
-using hash_map_with_erase = HashMapWithErase<key_type, value_type, simple_hash<key_type>, true>;
+using hash_map = HashMap<key_type, value_type, MurmurHash<key_type>, true, false>;
+
+template <typename key_type, typename value_type>
+using hash_map_with_erase = HashMapWithErase<key_type, value_type, MurmurHash<key_type>, true>;
 
 template <typename key_type>
-using hash_set = HashSet<key_type, simple_hash<key_type>, true>;
+using hash_set = HashSet<key_type, MurmurHash<key_type>, true>;
 
 }

@@ -405,7 +405,8 @@ struct PartitionConfig
         double chernoff_gradient_descent_step_size = 1;
         uint32_t chernoff_min_step_limit = 20;
         uint32_t chernoff_max_step_limit = 1000;
-
+        // tmp
+        bool quotient_graph_two_way_refinement = true;
 };
 
 

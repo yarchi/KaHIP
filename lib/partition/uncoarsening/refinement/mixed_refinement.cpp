@@ -69,7 +69,9 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
 
                 }
                 if(!config.quotient_graph_refinement_disabled) {
+                        CLOCK_START;
                         overall_improvement += refine->perform_refinement(config, G, boundary);
+                        CLOCK_END("Quotient graph refinement");
                 }
 
                 if(config.kaffpa_perfectly_balanced_refinement) {
