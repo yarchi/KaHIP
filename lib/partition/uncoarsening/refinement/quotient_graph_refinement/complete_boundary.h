@@ -447,31 +447,31 @@ void complete_boundary::setup_start_nodes_around_blocks(graph_access & G,
 
         std::vector<PartitionID> rhs_neighbors;
         getNeighbors(rhs, rhs_neighbors);
-        //std::unordered_map<NodeID, bool> allready_contained;
-        parallel::hash_set<NodeID> allready_contained(128);
 
+        std::unordered_map<NodeID, bool> allready_contained;
+        //parallel::hash_set<NodeID> allready_contained(128);
 
         for( unsigned i = 0; i < lhs_neighbors.size(); i++) {
                 PartitionID neighbor = lhs_neighbors[i];
                 PartialBoundary & partial_boundary_lhs = getDirectedBoundary(lhs, lhs, neighbor);
                 forall_boundary_nodes(partial_boundary_lhs, cur_bnd_node) {
                         ASSERT_EQ(G.getPartitionIndex(cur_bnd_node), lhs);
-                        if (!allready_contained.contains(cur_bnd_node)) {
-                        //if(allready_contained.find(cur_bnd_node) == allready_contained.end()) {
+                        //if (!allready_contained.contains(cur_bnd_node)) {
+                        if(allready_contained.find(cur_bnd_node) == allready_contained.end()) {
                                 start_nodes.push_back(cur_bnd_node);
-                                //allready_contained[cur_bnd_node] = true;
-                                allready_contained.insert(cur_bnd_node);
+                                allready_contained[cur_bnd_node] = true;
+                                //allready_contained.insert(cur_bnd_node);
                         }
                 } endfor
 
                 PartialBoundary & partial_boundary_neighbor = getDirectedBoundary(neighbor, lhs, neighbor);
                 forall_boundary_nodes(partial_boundary_neighbor, cur_bnd_node) {
                         ASSERT_EQ(G.getPartitionIndex(cur_bnd_node), neighbor);
-                        if (!allready_contained.contains(cur_bnd_node)) {
-                        //if(allready_contained.find(cur_bnd_node) == allready_contained.end()) {
+                        //if (!allready_contained.contains(cur_bnd_node)) {
+                        if(allready_contained.find(cur_bnd_node) == allready_contained.end()) {
                                 start_nodes.push_back(cur_bnd_node);
-                                //allready_contained[cur_bnd_node] = true;
-                                allready_contained.insert(cur_bnd_node);
+                                allready_contained[cur_bnd_node] = true;
+                                //allready_contained.insert(cur_bnd_node);
                         }
                 } endfor
         }
@@ -481,22 +481,22 @@ void complete_boundary::setup_start_nodes_around_blocks(graph_access & G,
                 PartialBoundary & partial_boundary_rhs = getDirectedBoundary(rhs, rhs, neighbor);
                 forall_boundary_nodes(partial_boundary_rhs, cur_bnd_node) {
                         ASSERT_EQ(G.getPartitionIndex(cur_bnd_node), rhs);
-                        if (!allready_contained.contains(cur_bnd_node)) {
-                        //if(allready_contained.find(cur_bnd_node) == allready_contained.end()) {
+                        //if (!allready_contained.contains(cur_bnd_node)) {
+                        if(allready_contained.find(cur_bnd_node) == allready_contained.end()) {
                                 start_nodes.push_back(cur_bnd_node);
-                                //allready_contained[cur_bnd_node] = true;
-                                allready_contained.insert(cur_bnd_node);
+                                allready_contained[cur_bnd_node] = true;
+                                //allready_contained.insert(cur_bnd_node);
                         }
                 } endfor
 
                 PartialBoundary & partial_boundary_neighbor = getDirectedBoundary(neighbor, rhs, neighbor);
                 forall_boundary_nodes(partial_boundary_neighbor, cur_bnd_node) {
                         ASSERT_EQ(G.getPartitionIndex(cur_bnd_node), neighbor);
-                        if (!allready_contained.contains(cur_bnd_node)) {
-                        //if(allready_contained.find(cur_bnd_node) == allready_contained.end()) {
+                        //if (!allready_contained.contains(cur_bnd_node)) {
+                        if(allready_contained.find(cur_bnd_node) == allready_contained.end()) {
                                 start_nodes.push_back(cur_bnd_node);
-                                //allready_contained[cur_bnd_node] = true;
-                                allready_contained.insert(cur_bnd_node);
+                                allready_contained[cur_bnd_node] = true;
+                                //allready_contained.insert(cur_bnd_node);
                         }
                 } endfor
         }

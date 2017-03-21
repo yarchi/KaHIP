@@ -104,12 +104,14 @@ public:
 
                 std::cout << "Time init\t" << time_init << " s" << std::endl;
                 std::cout << "Time generate moves\t" << time_generate_moves << " s" << std::endl;
+                std::cout << "Time wait\t" << time_wait << " s" << std::endl;
                 std::cout << "Time move nodes\t" << time_move_nodes << " s" << std::endl;
 
                 stat.time_setup_start_nodes = time_setup_start_nodes;
                 stat.time_local_search = time_local_search;
                 stat.time_init = time_init;
                 stat.time_generate_moves = time_generate_moves;
+                stat.time_wait = time_wait;
                 stat.time_move_nodes = time_move_nodes;
 
                 // vertices and edges
@@ -263,6 +265,7 @@ public:
 
                 std::cout << "Time init\t" << stat.time_init << " s" << std::endl;
                 std::cout << "Time generate moves\t" << stat.time_generate_moves << " s" << std::endl;
+                std::cout << "Time wait\t" << stat.time_wait << " s" << std::endl;
                 std::cout << "Time move nodes\t" << stat.time_move_nodes << " s" << std::endl;
                 std::cout << "Time compute gain\t" << stat.total_compute_gain_time << std::endl;
                 std::cout << "Number of partition accesses\t" << stat.total_num_part_accesses << std::endl;
@@ -312,6 +315,7 @@ public:
 
         double time_init;
         double time_generate_moves;
+        double time_wait;
         double time_move_nodes;
 
 private:
@@ -320,6 +324,7 @@ private:
                 double time_local_search = 0.0;
                 double time_init = 0.0;
                 double time_generate_moves = 0.0;
+                double time_wait = 0.0;
                 double time_move_nodes = 0.0;
                 double total_compute_gain_time = 0.0;
 
@@ -388,6 +393,7 @@ private:
                         time_local_search += stat.time_local_search;
                         time_init += stat.time_init;
                         time_generate_moves += stat.time_generate_moves;
+                        time_wait += stat.time_wait;
                         time_move_nodes += stat.time_move_nodes;
                         total_compute_gain_time += stat.total_compute_gain_time;
 

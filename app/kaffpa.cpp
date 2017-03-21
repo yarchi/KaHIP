@@ -47,6 +47,11 @@
 #include "uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_commons.h"
 
 int main(int argn, char **argv) {
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+        #pragma message("COMPARE WITH SEQUENTIAL MODE IS ON")
+        std::cout << "COMPARE WITH SEQUENTIAL MODE IS ON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
+        std::cout << "THIS SLOWS DOWN THE APP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
+#endif
 
         PartitionConfig partition_config;
         std::string graph_filename;
@@ -234,6 +239,59 @@ int main(int argn, char **argv) {
         parallel::thread_data_refinement_core::nodes_partitions_hash_table::print_statistics();
 #endif
 
+#ifdef OUTPUT_GLOBAL_STAT
+        kway_adaptive_stop_rule::dump_statistics();
+        kway_chernoff_adaptive_stop_rule::dump_statistics();
+
+        uint32_t ca_g_better = 0;
+        int ca_g_better_val = 0;
+
+        uint32_t a_g_better = 0;
+        int a_g_better_val = 0;
+
+        uint32_t ca_m_better = 0;
+        uint32_t ca_m_better_val = 0;
+
+        uint32_t a_m_better = 0;
+        uint32_t a_m_better_val = 0;
+
+        uint32_t equal = 0;
+
+        for (size_t i = 0; i < kway_adaptive_stop_rule::m_stat_movements.size(); ++i) {
+                uint32_t ca_m = kway_chernoff_adaptive_stop_rule::m_stat_movements[i];
+                int ca_g = kway_chernoff_adaptive_stop_rule::m_stat_gains[i];
+
+                uint32_t a_m = kway_adaptive_stop_rule::m_stat_movements[i];
+                int a_g = kway_adaptive_stop_rule::m_stat_gains[i];
+
+                if (a_g > ca_g) {
+                    ++a_g_better;
+                    a_g_better_val += a_g - ca_g;
+                }
+                if (a_g < ca_g) {
+                    ++ca_g_better;
+                    ca_g_better_val += ca_g - a_g;
+                }
+                if (a_g == ca_g) {
+                    if (a_m < ca_m) {
+                        ++a_m_better;
+                        a_m_better_val += ca_m - a_m;
+                    }
+                    if (a_m > ca_m) {
+                        ++ca_m_better;
+                        ca_m_better_val += a_m - ca_m;
+                    }
+                    if (a_m == ca_m)
+                        ++equal;
+                }
+        }
+
+        std::cout << "Chernoff better by gain\t" << ca_g_better << "\ton\t" << ca_g_better_val << std::endl;
+        std::cout << "Adaptive better by gain\t" << a_g_better << "\ton\t" << a_g_better_val << std::endl;
+        std::cout << "Chernoff better by movement\t" << ca_m_better << "\ton\t" << ca_m_better_val << std::endl;
+        std::cout << "Adaptive better by movement\t" << a_m_better << "\ton\t" << a_m_better_val << std::endl;
+        std::cout << "Equal\t" << equal << std::endl;
+#endif
         // write the partition to the disc 
         std::stringstream filename;
         if(!partition_config.filename_output.compare("")) {

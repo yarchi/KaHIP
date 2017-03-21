@@ -29,6 +29,8 @@
 #include <cmath>
 #include <ios>
 #include <fstream>
+#include <deque>
+#include <iterator>
 
 class kway_stop_rule {
 public:
@@ -41,6 +43,10 @@ public:
         virtual bool search_should_stop(unsigned int min_cut_idx, 
                                         unsigned int cur_idx, 
                                         unsigned int search_limit) = 0;
+
+#ifdef OUTPUT_GLOBAL_STAT
+        virtual void add_stat(uint32_t movement, Gain improvement) {}
+#endif
 };
 
 class kway_simple_stop_rule : public kway_stop_rule {
@@ -61,6 +67,7 @@ inline bool kway_simple_stop_rule::search_should_stop(unsigned int min_cut_idx,
         return cur_idx - min_cut_idx > search_limit;
 }
 
+#ifndef TEST_STOPPING_RULE
 class kway_adaptive_stop_rule : public kway_stop_rule {
 public:
         kway_adaptive_stop_rule(PartitionConfig & config) : m_steps(0),
@@ -111,64 +118,95 @@ inline bool kway_adaptive_stop_rule::search_should_stop(unsigned int min_cut_idx
         return m_steps*m_expected_gain*m_expected_gain >
                pconfig->kway_adaptive_limits_alpha * m_expected_variance2 + pconfig->kway_adaptive_limits_beta && (m_steps != 1);
 }
+#else
+class kway_adaptive_stop_rule : public kway_stop_rule {
+public:
+        kway_adaptive_stop_rule(PartitionConfig & config) : m_steps(0),
+                                                            m_expected_gain(0.0),
+                                                            m_sum_squared_gain(0.0),
+                                                            m_expected_variance2(0.0),
+                                                            pconfig(&config) {}
+        virtual ~kway_adaptive_stop_rule() {};
 
-//class kway_adaptive_stop_rule : public kway_stop_rule {
-//public:
-//        kway_adaptive_stop_rule(PartitionConfig & config) : m_steps(0),
-//                                                            m_expected_gain(0.0),
-//                                                            m_sum_squared_gain(0.0),
-//                                                            m_expected_variance2(0.0),
-//                                                            pconfig(&config) {}
-//        virtual ~kway_adaptive_stop_rule() {};
-//
-//        void push_statistics(Gain gain) {
-//                //erwartungstreue schätzer für varianz und erwartungswert
-//                m_expected_gain *= m_steps;
-//                m_expected_gain += gain;
-//
-//                m_sum_squared_gain += gain * gain;
-//
-//                m_steps++;
-//
-//                m_expected_gain /= m_steps;
-//                calc_variance();
-//        };
-//
-//        void reset_statistics() {
-//                m_steps              = 0;
-//                m_expected_gain      = 0.0;
-//                m_sum_squared_gain   = 0.0;
-//                m_expected_variance2 = 0.0;
-//        };
-//
-//        bool search_should_stop(unsigned int min_cut_idx,
-//                                unsigned int cur_idx,
-//                                unsigned int search_limit);
-//private:
-//        unsigned m_steps;
-//        double   m_expected_gain;
-//        Gain   m_sum_squared_gain;
-//        double   m_expected_variance2;
-//        PartitionConfig * pconfig;
-//
-//        void calc_variance() {
-//                if (m_steps > 1) {
-//                        Gain m_sum_gain = m_expected_gain * m_steps;
-//                        m_expected_variance2 = (m_sum_squared_gain - 2 * m_expected_gain * m_sum_gain +
-//                                m_expected_gain * m_expected_gain * m_steps) / (m_steps - 1);
-//                } else {
-//                        m_expected_variance2 = 0.0;
-//                }
-//        }
-//};
-//
-//inline bool kway_adaptive_stop_rule::search_should_stop(unsigned int min_cut_idx,
-//                                                        unsigned int cur_idx,
-//                                                        unsigned int search_limit) {
-//
-//        return m_steps*m_expected_gain*m_expected_gain >
-//                pconfig->kway_adaptive_limits_alpha * m_expected_variance2 + pconfig->kway_adaptive_limits_beta && (m_steps != 1);
-//}
+        void push_statistics(Gain gain) {
+                //erwartungstreue schätzer für varianz und erwartungswert
+                m_expected_gain *= m_steps;
+                m_expected_gain += gain;
+
+                m_sum_squared_gain += gain * gain;
+
+                m_steps++;
+
+                m_expected_gain /= m_steps;
+                calc_variance();
+        };
+
+        void reset_statistics() {
+                m_steps              = 0;
+                m_expected_gain      = 0.0;
+                m_sum_squared_gain   = 0.0;
+                m_expected_variance2 = 0.0;
+        };
+
+        bool search_should_stop(unsigned int min_cut_idx,
+                                unsigned int cur_idx,
+                                unsigned int search_limit);
+
+#ifdef OUTPUT_GLOBAL_STAT
+        static void dump_statistics() {
+                ALWAYS_ASSERT(m_stat_movements.size() == m_stat_gains.size());
+                std::ofstream ftxt("out_a.log");
+                if (m_stat_movements.empty()) {
+                        return;
+                }
+
+                for (size_t i = 0; i < m_stat_movements.size(); ++i) {
+                        ftxt << m_stat_movements[i] << '\n';
+                }
+                ftxt << "end" << std::endl;
+
+                for (size_t i = 0; i < m_stat_gains.size(); ++i) {
+                        ftxt << m_stat_gains[i] << '\n';
+                }
+                ftxt << "end" << std::endl;
+        }
+
+        virtual void add_stat(uint32_t movement, Gain improvement) {
+                m_stat_movements.push_back(movement);
+                m_stat_gains.push_back(improvement);
+        }
+
+public:
+        static std::vector<uint32_t> m_stat_movements;
+        static std::vector<Gain> m_stat_gains;
+
+#endif
+private:
+        unsigned m_steps;
+        double   m_expected_gain;
+        Gain   m_sum_squared_gain;
+        double   m_expected_variance2;
+        PartitionConfig * pconfig;
+
+        void calc_variance() {
+                if (m_steps > 1) {
+                        Gain m_sum_gain = m_expected_gain * m_steps;
+                        m_expected_variance2 = (m_sum_squared_gain - 2 * m_expected_gain * m_sum_gain +
+                                m_expected_gain * m_expected_gain * m_steps) / (m_steps - 1);
+                } else {
+                        m_expected_variance2 = 0.0;
+                }
+        }
+};
+
+inline bool kway_adaptive_stop_rule::search_should_stop(unsigned int min_cut_idx,
+                                                        unsigned int cur_idx,
+                                                        unsigned int search_limit) {
+
+        return m_steps*m_expected_gain*m_expected_gain >
+                pconfig->kway_adaptive_limits_alpha * m_expected_variance2 + pconfig->kway_adaptive_limits_beta && (m_steps != 1);
+}
+#endif
 
 class kway_chebyshev_adaptive_stop_rule : public kway_stop_rule {
 public:
@@ -244,7 +282,7 @@ private:
 
 #undef NON_CONST_PROBABILITY
 #undef DECREASE_N
-#undef USE_EXPECTED_NEGATIVE
+#undef USE_DEQUEUE
 
 #undef OUPUT
 class kway_chernoff_adaptive_stop_rule : public kway_stop_rule {
@@ -262,7 +300,9 @@ public:
                 ,       m_t(1.0)
                 ,       m_first(true)
                 ,       m_positive_gain(0)
-                ,       gains(32)
+#ifndef USE_DEQUEUE
+                ,       m_gains(32)
+#endif
                 ,       m_config(config)
                 ,       m_adaptive_stop_rule(config)
 #ifdef OUPUT
@@ -285,7 +325,14 @@ public:
                 ++m_steps;
                 m_total_gain += gain;
                 m_max_gain = std::max(m_max_gain, gain);
-                ++gains[gain];
+#ifdef USE_DEQUEUE
+                m_gains.push_back(gain);
+                if (m_gains.size() == m_max_step_limit) {
+                        m_gains.pop_front();
+                }
+#else
+                ++m_gains[gain];
+#endif
 
                 if (gain > 0.0) {
                         ++m_positive_gain;
@@ -297,7 +344,6 @@ public:
 
         void reset_statistics() {
                 reset_adaptive_statistics();
-                //reset_chernoff_statistics();
         }
 
         bool search_should_stop(uint32_t min_cut_idx, uint32_t cur_idx, uint32_t search_limit) {
@@ -324,8 +370,8 @@ public:
                              << ", stop_p: " << cur_stop_probability
                              << ", total_gain: " << m_total_gain
                              << "}," << std::endl;
-                        ftxt << "gains = {";
-                        for (const auto& data : gains) {
+                        ftxt << "m_gains = {";
+                        for (const auto& data : m_gains) {
                                 ftxt << data.first << " : " << (data.second + 0.0) / m_steps << ", ";
                         }
                         ftxt << "}" << std::endl;
@@ -357,8 +403,8 @@ public:
                                      << ", stop_p: " << cur_stop_probability
                                      << ", total_gain: " << m_total_gain
                                      << "}," << std::endl;
-                                ftxt << "gains = {";
-                                for (const auto& data : gains) {
+                                ftxt << "m_gains = {";
+                                for (const auto& data : m_gains) {
                                         ftxt << data.first << " : " << (data.second + 0.0) / m_steps << ", ";
                                 }
                                 ftxt << "}" << std::endl;
@@ -369,13 +415,43 @@ public:
                 }
 #endif
 
+#ifndef USE_DEQUEUE
                 if (m_steps == m_max_step_limit) {
                         reset_chernoff_statistics();
                 }
-
+#endif
                 return res;
         }
 
+#ifdef OUTPUT_GLOBAL_STAT
+        static void dump_statistics() {
+                ALWAYS_ASSERT(m_stat_movements.size() == m_stat_gains.size());
+                std::ofstream ftxt("out_a.log");
+                if (m_stat_movements.empty()) {
+                        return;
+                }
+
+                for (size_t i = 0; i < m_stat_movements.size(); ++i) {
+                        ftxt << m_stat_movements[i] << '\n';
+                }
+                ftxt << "end" << std::endl;
+
+                for (size_t i = 0; i < m_stat_gains.size(); ++i) {
+                        ftxt << m_stat_gains[i] << '\n';
+                }
+                ftxt << "end" << std::endl;
+        }
+
+        virtual void add_stat(uint32_t movement, Gain improvement) {
+                m_stat_movements.push_back(movement);
+                m_stat_gains.push_back(improvement);
+        }
+
+public:
+        static std::vector<uint32_t> m_stat_movements;
+        static std::vector<Gain> m_stat_gains;
+
+#endif
 private:
         double m_stop_probability;
         uint32_t m_gradient_descent_num_steps;
@@ -390,10 +466,15 @@ private:
         double m_t;
         bool m_first;
         uint32_t m_positive_gain;
-        parallel::hash_map<Gain, uint32_t> gains;
+#ifdef USE_DEQUEUE
+        std::deque<Gain> m_gains;
+#else
+        parallel::hash_map<Gain, uint32_t> m_gains;
+#endif
 
         const PartitionConfig& m_config;
         kway_adaptive_stop_rule m_adaptive_stop_rule;
+
 #ifdef OUPUT
         mutable std::ofstream ftxt;
 #endif
@@ -410,21 +491,21 @@ private:
                 m_max_gain = 1;
                 m_t = 1.0;
                 m_first = true;
-                gains.clear();
+                m_gains.clear();
                 m_step_limit = 0;
                 m_positive_gain = 0;
-                //ftxt << "RESET STATISTICS" << std::endl;
         }
 
         template <typename function_type>
         double get_expectation(function_type function) const {
                 double expectation = 0;
-                for (const auto& data : gains) {
-                        // ftxt << "gain " << data.first << " freq " << (data.second + 0.0) / m_steps << std::endl;
-                        // ftxt << (data.second + 0.0) / m_steps * function(data.first) << ' ' << expectation << std::endl;
+                for (const auto& data : m_gains) {
+#ifdef USE_DEQUEUE
+                        expectation += (function(data) + 0.0) / m_gains.size();
+#else
                         expectation += (data.second + 0.0) / m_steps * function(data.first);
+#endif
                 }
-                // ftxt << std::endl;
                 return expectation;
         }
 
@@ -433,16 +514,28 @@ private:
                 double expectation = 0;
 
                 uint32_t num_condition_true = 0;
-                for (const auto& data : gains) {
+                for (const auto& data : m_gains) {
+#ifdef USE_DEQUEUE
+                        if (condition(data)) {
+                                ++num_condition_true;
+                        }
+#else
                         if (condition(data.first)) {
                                 num_condition_true += data.second;
                         }
+#endif
                 }
 
-                for (const auto& data : gains) {
+                for (const auto& data : m_gains) {
+#ifdef USE_DEQUEUE
+                        if (condition(data)) {
+                                expectation += (function(data) + 0.0) / num_condition_true;
+                        }
+#else
                         if (condition(data.first)) {
                                 expectation += (data.second + 0.0) / num_condition_true * function(data.first);
                         }
+#endif
                 }
                 return expectation;
         }
@@ -452,7 +545,6 @@ private:
         // then E[exp(tX)] = E[exp(tX_1)*exp(tX_2)*...*exp(tX_n)] = E[exp(t*X_1)] * E[exp(t*X_2)] * ... * E[exp(t*X_n)] =
         //  E[exp(t*X_1)] ^ n
         double get_probability() {
-                // ftxt << "Calculating prob start >>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
 #ifdef ADAPTIVE_IMPROVED
                 int n = 0;
                 if (m_step_limit == 0) {
@@ -462,7 +554,6 @@ private:
                                 // there is no any positive gain
                                 return 0.0;
                         }
-                        //n = std::min<int>(n, m_max_step_limit);
                         m_step_limit = n;
                 }
                 n = m_step_limit;
@@ -480,8 +571,8 @@ private:
                 n = std::min<int>(n / m_steps, 10);
 #else
                 //n = std::min<int>(n, m_max_step_limit);
-                n = std::max<int>(n, 10);
-                //n = n > 0 ? n : 10;
+                //n = std::max<int>(n, 10);
+                n = n > 0 ? n : 10;
 #endif
 
 #endif
@@ -519,12 +610,7 @@ private:
                 }
 
                 m_t = min_t;
-                // ftxt << "t " << m_t << std::endl;
 
-
-                // ftxt << "E[exp(t*gain)] " << f << std::endl;
-                // ftxt << "E[exp(t*gain)] ^ n / exp(t) " << std::pow(f, n) / std::exp(m_t) << std::endl;
-                // ftxt << "Calculating prob end <<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
                 // E[exp(t * gain)] ^ n / exp(t)
                 return min_val;
         }
@@ -537,18 +623,13 @@ private:
         }
 
         double get_derivative(double t, int n) const {
-                // ftxt << "f1 ";
                 double f1 = get_expectation([t](Gain gain) {
                         return std::exp(t * gain);
                 });
 
-                // ftxt << "f2 ";
                 double f2 = get_expectation([t, n](Gain gain) {
                         return std::exp(t * gain) * (n * gain - 1);
                 });
-
-                //ftxt << ", t = " << t << ", f1 = " << f1 << ", f2 = " << f2 << ", res = " << std::pow(f1, n - 1) * f2 / std::exp(t) << ", ";
-
 
                 return std::pow(f1, n - 1) * f2 / std::exp(t);
         }
@@ -561,16 +642,7 @@ private:
                 }, [](Gain gain) {
                         return gain >= 1;
                 });
-#ifdef USE_EXPECTED_NEGATIVE
-                double cond_negative_expect = get_conditional_expectation([](Gain gain) {
-                        return gain;
-                }, [](Gain gain) {
-                        return gain < 1;
-                });
-                return cond_expect > 0.0 ? (1 - cond_negative_expect) / cond_expect : -1;
-#else
                 return cond_expect > 0.0 ? (1 - m_total_gain) / cond_expect : -1;
-#endif
         }
 };
 

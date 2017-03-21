@@ -60,7 +60,7 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
         commons = kway_graph_refinement_commons::getInstance(config);
 
         unsigned tmp_alpha = config.kway_adaptive_limits_alpha;
-        //KWayStopRule tmp_stop = config.kway_stop_rule;
+        KWayStopRule tmp_stop = config.kway_stop_rule;
         config.kway_adaptive_limits_alpha = alpha;
         //config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
 
@@ -91,7 +91,7 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
         ASSERT_TRUE(overall_improvement >= 0);
 
         config.kway_adaptive_limits_alpha = tmp_alpha;
-        //config.kway_stop_rule = tmp_stop;
+        config.kway_stop_rule = tmp_stop;
 
         return (int) overall_improvement;
 
@@ -105,7 +105,7 @@ int multitry_kway_fm::perform_refinement_around_parts(PartitionConfig& config, g
         commons = kway_graph_refinement_commons::getInstance(config);
 
         unsigned tmp_alpha = config.kway_adaptive_limits_alpha;
-        //KWayStopRule tmp_stop = config.kway_stop_rule;
+        KWayStopRule tmp_stop = config.kway_stop_rule;
         config.kway_adaptive_limits_alpha = alpha;
         //config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
         int overall_improvement = 0;
@@ -136,7 +136,7 @@ int multitry_kway_fm::perform_refinement_around_parts(PartitionConfig& config, g
         }
 
         config.kway_adaptive_limits_alpha = tmp_alpha;
-        //config.kway_stop_rule = tmp_stop;
+        config.kway_stop_rule = tmp_stop;
         ASSERT_TRUE(overall_improvement >= 0);
         return (int) overall_improvement;
 }
@@ -146,6 +146,9 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                                    bool compute_touched_blocks,
                                                    std::unordered_map <PartitionID, PartitionID>& touched_blocks,
                                                    std::vector <NodeID>& todolist) {
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+        std::sort(todolist.begin(), todolist.end());
+#endif
 
         random_functions::permutate_vector_good(todolist, false);
         commons = kway_graph_refinement_commons::getInstance(config);

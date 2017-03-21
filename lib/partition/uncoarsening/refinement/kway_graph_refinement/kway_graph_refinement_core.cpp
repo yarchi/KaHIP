@@ -110,10 +110,56 @@ std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::single_kway_refineme
                         break;
         }
 
+#ifdef OUTPUT_GLOBAL_STAT
+        uint32_t this_movements = 0;
+        bool this_finished = false;
+        EdgeWeight this_cut = 0;
+        bool this_stop = false;
+
+        uint32_t other_movements = 0;
+        bool other_finished = false;
+        EdgeWeight other_cut = 0;
+        bool other_stop = false;
+
+        kway_stop_rule* other_stopping_rule = NULL;
+        switch (config.kway_stop_rule) {
+                case KWAY_CHERNOFF_ADAPTIVE_STOP_RULE:
+                        other_stopping_rule = new kway_adaptive_stop_rule(config);
+                        break;
+                case KWAY_ADAPTIVE_STOP_RULE:
+                        other_stopping_rule = new kway_chernoff_adaptive_stop_rule(config);
+                        break;
+        }
+#endif
+
         for(number_of_swaps = 0, movements = 0; movements < max_number_of_swaps; movements++, number_of_swaps++) {
                 if( queue->empty() ) break;
-                if( stopping_rule->search_should_stop(min_cut_index >= 0 ? min_cut_index : 0, number_of_swaps, step_limit) ) break;
 
+#ifdef OUTPUT_GLOBAL_STAT
+
+                if (!this_finished) {
+                        if ((this_stop = stopping_rule->search_should_stop(min_cut_index >= 0 ? min_cut_index : 0, number_of_swaps, step_limit))) {
+                                this_finished = true;
+                                this_movements = movements;
+                                this_cut = initial_cut - best_cut;
+                        }
+                }
+
+                if (!other_finished) {
+                        if ((other_stop = other_stopping_rule->search_should_stop(min_cut_index >= 0 ? min_cut_index : 0, number_of_swaps,
+                                                                    step_limit))) {
+                                other_finished = true;
+                                other_movements = movements;
+                                other_cut = initial_cut - best_cut;
+                        }
+                }
+
+                if (this_stop && other_stop) {
+                        break;
+                }
+#else
+                if( stopping_rule->search_should_stop(min_cut_index >= 0 ? min_cut_index : 0, number_of_swaps, step_limit) ) break;
+#endif
                 Gain gain = queue->maxValue();
                 NodeID node = queue->deleteMax();
 
@@ -131,11 +177,18 @@ std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::single_kway_refineme
                 if(successfull) {
                         cut -= gain;
                         stopping_rule->push_statistics(gain);
+#ifdef OUTPUT_GLOBAL_STAT
+                        other_stopping_rule->push_statistics(gain);
+#endif
 
                         bool accept_equal = random_functions::nextBool();
                         if( cut < best_cut || ( cut == best_cut && accept_equal )) {
-                                if(cut < best_cut)
+                                if(cut < best_cut) {
                                         stopping_rule->reset_statistics();
+#ifdef OUTPUT_GLOBAL_STAT
+                                        other_stopping_rule->reset_statistics();
+#endif
+                                }
                                 best_cut = cut;
                                 min_cut_index = number_of_swaps;
                         }
@@ -179,11 +232,28 @@ std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::single_kway_refineme
                 }
         }
 
+#ifdef OUTPUT_GLOBAL_STAT
+        if (!this_finished) {
+                this_movements = movements;
+                this_cut = initial_cut - best_cut;
+        }
+        if (!other_finished) {
+                other_movements = movements;
+                other_cut = initial_cut - best_cut;
+        }
+
+        stopping_rule->add_stat(this_movements, this_cut);
+        other_stopping_rule->add_stat(other_movements, other_cut);
+#endif
+
         ASSERT_TRUE(boundary.assert_bnodes_in_boundaries());
         ASSERT_TRUE(boundary.assert_boundaries_are_bnodes());
 
         delete queue;
         delete stopping_rule;
+#ifdef OUTPUT_GLOBAL_STAT
+        delete other_stopping_rule;
+#endif
         return std::make_pair(initial_cut - best_cut, movements);
 }
 

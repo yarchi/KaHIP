@@ -9,8 +9,9 @@
 #include <iomanip>
 #include <sstream>
 
-
+#ifdef __gnu_linux__
 #include "ittnotify.h"
+#endif
 
 namespace parallel {
 
@@ -66,13 +67,8 @@ int multitry_kway_fm::perform_refinement_around_parts(PartitionConfig& config, g
                 CLOCK_START;
                 boundary_starting_nodes start_nodes;
 
-//#ifdef __gnu_linux__
-//                __itt_resume();
-//#endif
                 boundary.setup_start_nodes_around_blocks(G, lhs, rhs, start_nodes);
-//#ifdef __gnu_linux__
-//                __itt_pause();
-//#endif
+
                 m_factory.time_setup_start_nodes += CLOCK_END_TIME;
 
                 if (start_nodes.size() == 0) {
@@ -92,7 +88,6 @@ int multitry_kway_fm::perform_refinement_around_parts(PartitionConfig& config, g
 
                 overall_improvement += improvement;
         }
-
         config.kway_adaptive_limits_alpha = tmp_alpha;
         config.kway_stop_rule = tmp_stop;
         ASSERT_TRUE(overall_improvement >= 0);
@@ -105,21 +100,19 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                                    bool compute_touched_blocks,
                                                    std::unordered_map<PartitionID, PartitionID>& touched_blocks,
                                                    std::vector<NodeID>& todolist) {
-        CLOCK_START;
-        random_functions::permutate_vector_good(todolist, false);
         uint32_t num_threads = config.num_threads;
         parallel::kway_graph_refinement_core refinement_core;
         int local_step_limit = 50;
 
+        CLOCK_START;
+        // REMOVE ME!!!!!!
         m_factory.reset_global_data();
-        std::cout << "todolist: ";
-        for (auto v : todolist) {
-                std::cout << v << ", ";
-        }
-        std::cout << std::endl;
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+        std::sort(todolist.begin(), todolist.end());
+        random_functions::permutate_vector_good(todolist, false);
+#else
         while (!todolist.empty()) {
                 size_t random_idx = random_functions::nextInt(0, todolist.size() - 1);
-                std::cout << "random_idx\t" << random_idx << std::endl;
                 NodeID node = todolist[random_idx];
                 m_factory.queue.push(node);
 
@@ -127,12 +120,17 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 todolist.pop_back();
         }
         m_factory.time_init += CLOCK_END_TIME;
+#endif
         int total_gain_improvement = 0;
 
         // we need the external loop for move strategy when conflicted nodes are reactivated for the next
         // parallel phase
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+        while (!todolist.empty()) {
+#else
         while (!m_factory.queue.empty()) {
 //                tbb::concurrent_queue <NodeID> finished_threads;
+#endif
                 auto task = [&](uint32_t id) {
                         CLOCK_START;
                         NodeID node;
@@ -142,8 +140,13 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 
                         td.step_limit = local_step_limit;
                         uint32_t nodes_processed = 0;
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+                        while (!todolist.empty()) {
+                                int random_idx = random_functions::nextInt(0, todolist.size() - 1);
+                                NodeID node = todolist[random_idx];
+#else
                         while (m_factory.queue.try_pop(node)) {
-                                std::cout << "Node\t" << node << std::endl;
+#endif
                                 PartitionID maxgainer;
                                 EdgeWeight extdeg = 0;
                                 PartitionID from = td.get_local_partition(node);
@@ -160,6 +163,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                                         NodeID target = G.getEdgeTarget(e);
                                                         if (!td.moved_idx[target].load(std::memory_order_relaxed)) {
                                                                 extdeg = 0;
+                                                                PartitionID from = td.get_local_partition(target);
                                                                 td.compute_gain(target, from, maxgainer, extdeg);
                                                                 if (extdeg > 0) {
                                                                         td.start_nodes.push_back(target);
@@ -209,6 +213,10 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 //                                        }
                                         return true;
                                 }
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+                                std::swap(todolist[random_idx], todolist[todolist.size() - 1]);
+                                todolist.pop_back();
+#endif
                         }
                         td.total_thread_time += CLOCK_END_TIME;
 //                        if (id > 0) {
@@ -226,11 +234,15 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 }
 
                 bool is_more_that_5percent_moved = task(0);
-                std::for_each(futures.begin(), futures.end(), [&](auto& future) {
-                        if (future.get()) {
-                                is_more_that_5percent_moved = true;
-                        }
-                });
+                {
+                        CLOCK_START;
+                        std::for_each(futures.begin(), futures.end(), [&](auto& future) {
+                                if (future.get()) {
+                                        is_more_that_5percent_moved = true;
+                                }
+                        });
+                        m_factory.time_wait += CLOCK_END_TIME;
+                }
                 m_factory.time_generate_moves += CLOCK_END_TIME;
 
                 std::vector<NodeID> reactivated_vertices;
@@ -337,6 +349,7 @@ int multitry_kway_fm::start_more_locallized_search_experimental(PartitionConfig&
                                                         NodeID target = G.getEdgeTarget(e);
                                                         if (!td.moved_idx[target].load(std::memory_order_relaxed)) {
                                                                 extdeg = 0;
+                                                                PartitionID from = td.get_local_partition(target);
                                                                 td.compute_gain(target, from, maxgainer, extdeg);
                                                                 if (extdeg > 0) {
                                                                         td.start_nodes.push_back(target);

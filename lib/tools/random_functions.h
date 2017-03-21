@@ -162,7 +162,7 @@ class random_functions {
                         rnbr         *= length;
                         rnbr         += lb;
 
-                        return rnbr; 
+                        return rnbr;
                 }
 
                 static void setSeed(int seed) {

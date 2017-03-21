@@ -140,7 +140,7 @@ private:
         Position _offset;
 };
 
-#define PERFORMANCE_STATISTICS
+#undef PERFORMANCE_STATISTICS
 
 template <typename Key, typename Value, typename Hash = xxhash<Key>,
         bool TGrowable = false, bool Cache = true, size_t SizeFactor = 2>
@@ -171,15 +171,15 @@ public:
 
         explicit HashMap(const uint64_t max_size = 0) :
                 _empty_element(std::numeric_limits<Key>::max()),
-                _ht_size(max_size * SizeFactor),
-                _max_size(max_size),
+                _max_size(round_up_to_next_power_2(max_size)),
+                _ht_size(_max_size * SizeFactor),
                 _ht(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value())),
                 _poses(),
                 _hash(),
                 _last_key(_empty_element),
                 _last_position(0) {
                 ALWAYS_ASSERT(is_power_2(_ht_size));
-                _poses.reserve(max_size);
+                _poses.reserve(_max_size);
         }
 
         HashMap(const TSelf&) = default;
@@ -352,8 +352,8 @@ private:
         }
 
         Key _empty_element;
-        uint64_t _ht_size;
         uint64_t _max_size;
+        uint64_t _ht_size;
         std::vector<Element> _ht;
         std::vector<Position> _poses;
         Hash _hash;

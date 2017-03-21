@@ -87,7 +87,7 @@ public:
                 ,       moved_count(_moved_count)
                 ,       upper_bound_gain_improvement(0)
                 ,       time_stamp(_time_stamp)
-                ,       nodes_partitions(524288)
+                ,       nodes_partitions(std::min<int>(131072, _G.number_of_nodes()))
                 //,       nodes_partitions(G.number_of_nodes(), -1)
                 ,       total_thread_time(0.0)
                 ,       tried_movements(0)
@@ -150,7 +150,6 @@ public:
                 //nodes_partitions.assign(G.number_of_nodes(), -1);
 
                 ////////nodes_partitions.reserve(nodes_partitions_hash_table::get_max_size_to_fit_l1());
-
                 min_cut_indices.clear();
                 transpositions.clear();
                 from_partitions.clear();
@@ -172,6 +171,7 @@ public:
         }
 
         inline Gain compute_gain(NodeID node, PartitionID from, PartitionID& to, EdgeWeight& ext_degree) {
+                //ASSERT_TRUE(from == get_local_partition(node));
                 //for all incident partitions compute gain
                 //return max gain and "to" partition
                 EdgeWeight max_degree = 0;
@@ -182,7 +182,6 @@ public:
                         NodeID target = G.getEdgeTarget(e);
                         PartitionID target_partition = get_local_partition(target);
                         ++num_part_accesses;
-
 
                         if (m_local_degrees[target_partition].round == m_round) {
                                 m_local_degrees[target_partition].local_degree += G.getEdgeWeight(e);
@@ -198,7 +197,11 @@ public:
                                         to = target_partition;
                                 } else {
                                         //break ties randomly
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+                                        bool accept = random_functions::nextBool();
+#else
                                         bool accept = rnd.bit();
+#endif
                                         if (accept) {
                                                 max_degree = m_local_degrees[target_partition].local_degree;
                                                 to = target_partition;

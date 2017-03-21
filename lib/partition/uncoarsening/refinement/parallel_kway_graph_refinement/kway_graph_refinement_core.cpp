@@ -128,7 +128,11 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                         cut -= gain;
                         stopping_rule->push_statistics(gain);
 
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+                        bool accept_equal = random_functions::nextBool();
+#else
                         bool accept_equal = td.rnd.bit();
+#endif
                         if (cut < best_cut || (cut == best_cut && accept_equal)) {
                                 if (cut < best_cut)
                                         stopping_rule->reset_statistics();
@@ -648,6 +652,9 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
 
                 // Lambda which applies move strategy for conflict vertices (affected by other moves)
                 auto apply_move_strategy_for_conflict = [&]() -> std::pair<EdgeWeight, uint32_t> {
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+                        ALWAYS_ASSERT(false);
+#endif
                         // add all nodes that were not moved
                         for (int i = index; i <= min_cut_index; ++i) {
                                 not_moved.insert(td.transpositions[i]);
