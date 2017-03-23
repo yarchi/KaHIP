@@ -282,7 +282,7 @@ private:
 
 #undef NON_CONST_PROBABILITY
 #undef DECREASE_N
-#undef USE_DEQUEUE
+#undef USE_DEQUE
 
 #undef OUPUT
 class kway_chernoff_adaptive_stop_rule : public kway_stop_rule {
@@ -300,7 +300,7 @@ public:
                 ,       m_t(1.0)
                 ,       m_first(true)
                 ,       m_positive_gain(0)
-#ifndef USE_DEQUEUE
+#ifndef USE_DEQUE
                 ,       m_gains(32)
 #endif
                 ,       m_config(config)
@@ -317,6 +317,17 @@ public:
         virtual ~kway_chernoff_adaptive_stop_rule() {
         }
 
+        static std::string get_algo_name() {
+                std::string name = "chernoff_adaptive";
+#ifdef ADAPTIVE_IMPROVED
+                name += "_improved";
+#endif
+#ifdef USE_DEQUE
+                name += "_deque";
+#endif
+                return name;
+        }
+        
         void push_statistics(Gain gain) {
 #ifdef OUPUT
                 ftxt << "{gain : " << gain;
@@ -325,7 +336,7 @@ public:
                 ++m_steps;
                 m_total_gain += gain;
                 m_max_gain = std::max(m_max_gain, gain);
-#ifdef USE_DEQUEUE
+#ifdef USE_DEQUE
                 m_gains.push_back(gain);
                 if (m_gains.size() == m_max_step_limit) {
                         m_gains.pop_front();
@@ -415,7 +426,7 @@ public:
                 }
 #endif
 
-#ifndef USE_DEQUEUE
+#ifndef USE_DEQUE
                 if (m_steps == m_max_step_limit) {
                         reset_chernoff_statistics();
                 }
@@ -466,7 +477,7 @@ private:
         double m_t;
         bool m_first;
         uint32_t m_positive_gain;
-#ifdef USE_DEQUEUE
+#ifdef USE_DEQUE
         std::deque<Gain> m_gains;
 #else
         parallel::hash_map<Gain, uint32_t> m_gains;
@@ -500,7 +511,7 @@ private:
         double get_expectation(function_type function) const {
                 double expectation = 0;
                 for (const auto& data : m_gains) {
-#ifdef USE_DEQUEUE
+#ifdef USE_DEQUE
                         expectation += (function(data) + 0.0) / m_gains.size();
 #else
                         expectation += (data.second + 0.0) / m_steps * function(data.first);
@@ -515,7 +526,7 @@ private:
 
                 uint32_t num_condition_true = 0;
                 for (const auto& data : m_gains) {
-#ifdef USE_DEQUEUE
+#ifdef USE_DEQUE
                         if (condition(data)) {
                                 ++num_condition_true;
                         }
@@ -527,7 +538,7 @@ private:
                 }
 
                 for (const auto& data : m_gains) {
-#ifdef USE_DEQUEUE
+#ifdef USE_DEQUE
                         if (condition(data)) {
                                 expectation += (function(data) + 0.0) / num_condition_true;
                         }

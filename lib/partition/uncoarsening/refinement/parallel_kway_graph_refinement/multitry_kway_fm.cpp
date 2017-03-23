@@ -140,6 +140,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 
                         td.step_limit = local_step_limit;
                         uint32_t nodes_processed = 0;
+                        bool res = false;
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
                         while (!todolist.empty()) {
                                 int random_idx = random_functions::nextInt(0, todolist.size() - 1);
@@ -206,23 +207,21 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                 }
 
                                 if (overall_movement > 0.05 * G.number_of_nodes()) {
-                                        td.total_thread_time += CLOCK_END_TIME;
                                         ++td.stop_faction_of_nodes_moved;
-//                                        if (id > 0) {
-//                                                finished_threads.push(id);
-//                                        }
-                                        return true;
+                                        res = true;
+                                        break;
                                 }
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
                                 std::swap(todolist[random_idx], todolist[todolist.size() - 1]);
                                 todolist.pop_back();
 #endif
                         }
+                        td.one_thread_finished.exchange(true, std::memory_order_acq_rel);
                         td.total_thread_time += CLOCK_END_TIME;
 //                        if (id > 0) {
 //                                finished_threads.push(id);
 //                        }
-                        return false;
+                        return res;
                 };
 
                 CLOCK_START_N;

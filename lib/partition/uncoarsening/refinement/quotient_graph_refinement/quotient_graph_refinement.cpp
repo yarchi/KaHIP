@@ -157,7 +157,6 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
                                                                                                  config.local_multitry_fm_alpha,
                                                                                                  lhs, rhs,
                                                                                                  touched_blocks);
-                                //std::cout << "Multiway done" << std::endl;
                                 time += CLOCK_END_TIME;
                                 cut_improvement += multitry_improvement;
                                 //int cut_diff = old_cut - qm.edge_cut(G);

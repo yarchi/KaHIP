@@ -157,7 +157,7 @@ int main(int argn, char **argv) {
                         std::cout << "Kway stop rule\tadaptive" << std::endl;
                         break;
                 case KWayStopRule::KWAY_CHERNOFF_ADAPTIVE_STOP_RULE:
-                        std::cout << "Kway stop rule\tchernoff_adaptive" << std::endl;
+                        std::cout << "Kway stop rule\t" << kway_chernoff_adaptive_stop_rule::get_algo_name() << std::endl;
                         std::cout << "Stop probability\t" << partition_config.chernoff_stop_probability << std::endl;
                         std::cout << "Num gradient descent step\t" << partition_config.chernoff_gradient_descent_num_steps << std::endl;
                         std::cout << "Gradient descent step size\t" << partition_config.chernoff_gradient_descent_step_size << std::endl;

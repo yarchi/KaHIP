@@ -50,6 +50,7 @@ public:
                                                    m_parts_sizes,
                                                    m_moved_count,
                                                    m_reset_counter,
+                                                   main_thread_finished,
                                                    m_time_stamp);
                 }
 
@@ -77,6 +78,7 @@ public:
                 m_reset_counter.store(0, std::memory_order_relaxed);
                 m_time_stamp.store(0, std::memory_order_relaxed);
                 queue.clear();
+                main_thread_finished.store(false, std::memory_order_relaxed);
         }
 
         thread_data_refinement_core& get_thread_data(uint32_t id) {
@@ -309,6 +311,7 @@ public:
         }
 
         tbb::concurrent_queue <NodeID> queue;
+        AtomicWrapper<bool> main_thread_finished;
 
         double time_setup_start_nodes;
         double time_local_search;

@@ -99,6 +99,10 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                         break;
                 }
 
+                if (td.one_thread_finished.load(std::memory_order_relaxed)) {
+                        break;
+                }
+
                 uint32_t local_min_cut_index = (uint32_t) (min_cut_index - previously_moved >= 0 ? min_cut_index -
                                                                                                    previously_moved
                                                                                                  : 0);
