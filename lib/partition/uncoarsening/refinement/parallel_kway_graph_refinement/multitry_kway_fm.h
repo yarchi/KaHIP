@@ -1,7 +1,8 @@
 #pragma once
 
-#include "partition/uncoarsening/refinement/kway_graph_refinement/multitry_kway_fm.h"
 
+#include "data_structure/parallel/task_queue.h"
+#include "partition/uncoarsening/refinement/kway_graph_refinement/multitry_kway_fm.h"
 #include "partition/uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_commons.h"
 
 #include <tbb/concurrent_queue.h>
@@ -17,7 +18,8 @@ public:
         thread_data_factory(PartitionConfig& config,
                             graph_access& G,
                             complete_boundary& boundary)
-                :       time_setup_start_nodes(0.0)
+                :       queue(config.num_threads)
+                ,       time_setup_start_nodes(0.0)
                 ,       time_local_search(0.0)
                 ,       time_init(0.0)
                 ,       time_generate_moves(0.0)
@@ -77,7 +79,7 @@ public:
 
                 m_reset_counter.store(0, std::memory_order_relaxed);
                 m_time_stamp.store(0, std::memory_order_relaxed);
-                queue.clear();
+                //queue.clear();
                 main_thread_finished.store(false, std::memory_order_relaxed);
         }
 
@@ -310,7 +312,7 @@ public:
                 print_iteration_statistics();
         }
 
-        tbb::concurrent_queue <NodeID> queue;
+        task_queue<NodeID> queue;
         AtomicWrapper<bool> main_thread_finished;
 
         double time_setup_start_nodes;
@@ -481,8 +483,7 @@ private:
                                              complete_boundary& boundary,
                                              bool init_neighbors,
                                              bool compute_touched_blocks,
-                                             std::unordered_map<PartitionID, PartitionID>& touched_blocks,
-                                             std::vector<NodeID>& todolist);
+                                             std::unordered_map<PartitionID, PartitionID>& touched_blocks);
 
         int start_more_locallized_search_experimental(PartitionConfig& config, graph_access& G,
                                                       complete_boundary& boundary,

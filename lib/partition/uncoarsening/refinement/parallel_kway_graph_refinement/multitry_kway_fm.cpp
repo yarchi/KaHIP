@@ -20,6 +20,8 @@ std::vector<thread_data_factory::statistics_type> thread_data_factory::m_statist
 int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& G,
                                          complete_boundary& boundary, unsigned rounds,
                                          bool init_neighbors, unsigned alpha) {
+        // not implemented yet
+        ALWAYS_ASSERT(false);
         unsigned tmp_alpha = config.kway_adaptive_limits_alpha;
         KWayStopRule tmp_stop = config.kway_stop_rule;
         config.kway_adaptive_limits_alpha = alpha;
@@ -34,12 +36,12 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
                 }// nothing to refine
 
                 std::unordered_map<PartitionID, PartitionID> touched_blocks;
-                EdgeWeight improvement = start_more_locallized_search(config, G, boundary, init_neighbors, false,
-                                                                      touched_blocks, start_nodes);
-                if (improvement == 0) {
-                        break;
-                }
-                overall_improvement += improvement;
+//                EdgeWeight improvement = start_more_locallized_search(config, G, boundary, init_neighbors, false,
+//                                                                      touched_blocks, start_nodes);
+//                if (improvement == 0) {
+//                        break;
+//                }
+//                overall_improvement += improvement;
 
         }
 
@@ -67,8 +69,11 @@ int multitry_kway_fm::perform_refinement_around_parts(PartitionConfig& config, g
                 CLOCK_START;
                 boundary_starting_nodes start_nodes;
 
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
                 boundary.setup_start_nodes_around_blocks(G, lhs, rhs, start_nodes);
-
+#else
+                boundary.setup_start_nodes_around_blocks(G, lhs, rhs, m_factory.queue);
+#endif
                 m_factory.time_setup_start_nodes += CLOCK_END_TIME;
 
                 if (start_nodes.size() == 0) {
@@ -77,7 +82,7 @@ int multitry_kway_fm::perform_refinement_around_parts(PartitionConfig& config, g
 
                 CLOCK_START_N;
                 EdgeWeight improvement = start_more_locallized_search(config, G, boundary, init_neighbors, true,
-                                                                      touched_blocks, start_nodes);
+                                                                      touched_blocks);
 
 //                EdgeWeight improvement = start_more_locallized_search_experimental(config, G, boundary, init_neighbors,
 //                                                                                   true, touched_blocks, start_nodes);
@@ -98,8 +103,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                                    complete_boundary& boundary,
                                                    bool init_neighbors,
                                                    bool compute_touched_blocks,
-                                                   std::unordered_map<PartitionID, PartitionID>& touched_blocks,
-                                                   std::vector<NodeID>& todolist) {
+                                                   std::unordered_map<PartitionID, PartitionID>& touched_blocks) {
         uint32_t num_threads = config.num_threads;
         parallel::kway_graph_refinement_core refinement_core;
         int local_step_limit = 50;
@@ -109,16 +113,6 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
         std::sort(todolist.begin(), todolist.end());
         random_functions::permutate_vector_good(todolist, false);
-#else
-        while (!todolist.empty()) {
-                size_t random_idx = random_functions::nextInt(0, todolist.size() - 1);
-                NodeID node = todolist[random_idx];
-                m_factory.queue.push(node);
-
-                std::swap(todolist[random_idx], todolist.back());
-                todolist.pop_back();
-        }
-        m_factory.time_init += CLOCK_END_TIME;
 #endif
         int total_gain_improvement = 0;
 

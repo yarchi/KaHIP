@@ -525,7 +525,7 @@ void complete_boundary::setup_start_nodes_around_blocks(graph_access & G,
         }
 }
 
-void complete_boundary::setup_start_nodes_around_blocks(graph_access & G, PartitionID & lhs, PartitionID & rhs,
+void complete_boundary::setup_start_nodes_around_blocks(graph_access& G, PartitionID & lhs, PartitionID & rhs,
                                                         parallel::task_queue<NodeID>& task_queue) {
         std::vector<PartitionID> lhs_neighbors;
         getNeighbors(lhs, lhs_neighbors);
@@ -533,8 +533,8 @@ void complete_boundary::setup_start_nodes_around_blocks(graph_access & G, Partit
         std::vector<PartitionID> rhs_neighbors;
         getNeighbors(rhs, rhs_neighbors);
 
-        auto sub_task = [](uint32_t thread_id, std::atomic<size_t>& counter, PartitionID part,
-                           const std::vector<PartitionID>& neighbour_parts) {
+        auto sub_task = [this, &G, &task_queue](uint32_t thread_id, std::atomic<size_t>& counter, PartitionID part,
+                                                const std::vector<PartitionID>& neighbour_parts) {
                 size_t offset = counter.fetch_add(1, std::memory_order_relaxed);
                 if (offset < neighbour_parts.size()) {
                         PartitionID neighbor_part = neighbour_parts[offset];
@@ -566,13 +566,14 @@ void complete_boundary::setup_start_nodes_around_blocks(graph_access & G, Partit
                 sub_task(thread_id, rhs_counter, rhs, rhs_neighbors);
         };
 
-        std::vector<std::future<bool>> futures;
+        std::vector<std::future<void>> futures;
         futures.reserve(parallel::g_thread_pool.NumThreads());
 
         for (uint32_t id = 0; id < parallel::g_thread_pool.NumThreads(); ++id) {
                 futures.push_back(parallel::g_thread_pool.Submit(task, id + 1));
         }
 
+        task(0);
         std::for_each(futures.begin(), futures.end(), [](auto& future) {
                 future.get();
         });

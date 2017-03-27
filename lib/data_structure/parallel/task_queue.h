@@ -1,14 +1,14 @@
 #pragma once
 
-#inlcude "data_structure/parallel/algorithm.h"
+#include "data_structure/parallel/algorithm.h"
 #include "data_structure/parallel/atomics.h"
 
 namespace parallel {
 
 template <typename T>
-class thread_container<T> {
+class thread_container {
 public:
-        explicit thread_container(size_t size) {
+        explicit thread_container(size_t size = 100) {
                 m_elems.reserve(size);
                 m_counter.store(0, std::memory_order_relaxed);
         }
@@ -24,12 +24,8 @@ public:
                 }
         }
 
-        inline void push(const T& elem) {
-                m_elems.push_back(elem);
-        }
-
         inline void push_back(const T& elem) {
-                push(elem);
+                m_elems.push_back(elem);
         }
 
         inline void clear() {
@@ -42,17 +38,16 @@ private:
 };
 
 template <typename T>
-class task_queue<T> {
+class task_queue {
 public:
         explicit task_queue(size_t size) {
-                m_elems.reserve(size);
+                m_thread_containers.resize(size);
                 m_counter.store(0, std::memory_order_relaxed);
         }
 
         inline bool try_pop(T& elem) {
                 size_t offset = m_counter.load(std::memory_order_relaxed);
 
-                T elem;
                 bool res = false;
                 do {
                         offset = m_counter.load(std::memory_order_relaxed);
@@ -69,23 +64,19 @@ public:
                 return m_counter.load(std::memory_order_relaxed) < m_thread_containers.size();
         }
 
+        inline thread_container<T>& operator[](size_t thread_id) {
+                return m_thread_containers[thread_id].get();
+        }
+
+        inline const thread_container<T>& operator[](size_t thread_id) const {
+                return m_thread_containers[thread_id].get();
+        }
+
         inline void push(const T& elem) {
-                m_elems.push_back(elem);
+                m_thread_containers[0].get().push_back(elem);
         }
 
-        inline void push_back(const T& elem) {
-                push(elem);
-        }
-
-        inline thread_container& operator[](size_t thread_id) {
-                return m_thread_containers[id];
-        }
-
-        inline thread_container& operator[](size_t thread_id) const {
-                return m_thread_containers[id];
-        }
-
-        inline clear() {
+        inline void clear() {
                 for (auto& container : m_thread_containers) {
                         container.get().clear();
                 }
