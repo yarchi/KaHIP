@@ -119,13 +119,24 @@ inline bool kway_adaptive_stop_rule::search_should_stop(unsigned int min_cut_idx
                pconfig->kway_adaptive_limits_alpha * m_expected_variance2 + pconfig->kway_adaptive_limits_beta && (m_steps != 1);
 }
 #else
+#define OUT_ADAPTIVE
 class kway_adaptive_stop_rule : public kway_stop_rule {
 public:
-        kway_adaptive_stop_rule(PartitionConfig & config) : m_steps(0),
-                                                            m_expected_gain(0.0),
-                                                            m_sum_squared_gain(0.0),
-                                                            m_expected_variance2(0.0),
-                                                            pconfig(&config) {}
+        kway_adaptive_stop_rule(PartitionConfig & config)
+                :       m_steps(0)
+                ,       m_expected_gain(0.0)
+                ,       m_sum_squared_gain(0.0)
+                ,       m_expected_variance2(0.0)
+                ,       pconfig(&config)
+#ifdef OUT_ADAPTIVE
+                ,       ftxt("out_a.log", std::ios_base::app | std::ios_base::out)
+#endif
+                {
+#ifdef OUT_ADAPTIVE
+                ftxt << "START" << std::endl;
+#endif
+                }
+
         virtual ~kway_adaptive_stop_rule() {};
 
         void push_statistics(Gain gain) {
@@ -139,6 +150,9 @@ public:
 
                 m_expected_gain /= m_steps;
                 calc_variance();
+#ifdef OUT_ADAPTIVE
+                ftxt << "{ 'gain' : " << gain;
+#endif
         };
 
         void reset_statistics() {
@@ -187,12 +201,15 @@ private:
         Gain   m_sum_squared_gain;
         double   m_expected_variance2;
         PartitionConfig * pconfig;
+#ifdef OUT_ADAPTIVE
+        std::ofstream ftxt;
+#endif
 
         void calc_variance() {
                 if (m_steps > 1) {
                         Gain m_sum_gain = m_expected_gain * m_steps;
                         m_expected_variance2 = (m_sum_squared_gain - 2 * m_expected_gain * m_sum_gain +
-                                m_expected_gain * m_expected_gain * m_steps) / (m_steps - 1);
+                                m_expected_gain * m_expected_gain * m_steps) / (m_steps - 1.0);
                 } else {
                         m_expected_variance2 = 0.0;
                 }
@@ -202,7 +219,15 @@ private:
 inline bool kway_adaptive_stop_rule::search_should_stop(unsigned int min_cut_idx,
                                                         unsigned int cur_idx,
                                                         unsigned int search_limit) {
-
+#ifdef OUT_ADAPTIVE
+        if (m_steps != 1) {
+                ftxt << ", 'E' : " << m_expected_gain
+                     << ", 'Var' : " << m_expected_variance2
+                     << ", 'p * E * E' : " << m_steps*m_expected_gain*m_expected_gain
+                     << ", 'a * Var + b' : " << pconfig->kway_adaptive_limits_alpha * m_expected_variance2 + pconfig->kway_adaptive_limits_beta
+                     << std::endl;
+        }
+#endif
         return m_steps*m_expected_gain*m_expected_gain >
                 pconfig->kway_adaptive_limits_alpha * m_expected_variance2 + pconfig->kway_adaptive_limits_beta && (m_steps != 1);
 }
@@ -280,11 +305,12 @@ private:
 #define START_COMBINED_WITH_ADAPTIVE // best, really helps
 #undef START_DEFAULT
 
+#define IMPROVED_DISTRIBUTION
+
 #undef NON_CONST_PROBABILITY
-#undef DECREASE_N
 #undef USE_DEQUE
 
-#undef OUPUT
+#define OUPUT
 class kway_chernoff_adaptive_stop_rule : public kway_stop_rule {
 public:
         kway_chernoff_adaptive_stop_rule(PartitionConfig& config)
@@ -297,9 +323,10 @@ public:
                 ,       m_steps(0)
                 ,       m_total_gain(0)
                 ,       m_max_gain(1)
+                ,       m_sum_squared_gain(0)
+                ,       m_expected_variance2(0.0)
                 ,       m_t(1.0)
                 ,       m_first(true)
-                ,       m_positive_gain(0)
 #ifndef USE_DEQUE
                 ,       m_gains(32)
 #endif
@@ -325,12 +352,16 @@ public:
 #ifdef USE_DEQUE
                 name += "_deque";
 #endif
+#ifdef IMPROVED_DISTRIBUTION
+                name += "_improved_distr1";
+#endif
                 return name;
         }
         
         void push_statistics(Gain gain) {
 #ifdef OUPUT
-                ftxt << "{gain : " << gain;
+                ftxt << "{'gain' : " << gain
+                     << ", 'steps': " << m_steps;
 #endif
 
                 ++m_steps;
@@ -345,11 +376,11 @@ public:
                 ++m_gains[gain];
 #endif
 
-                if (gain > 0.0) {
-                        ++m_positive_gain;
-                }
 #ifdef START_COMBINED_WITH_ADAPTIVE
                 m_adaptive_stop_rule.push_statistics(gain);
+#endif
+#ifdef IMPROVED_DISTRIBUTION
+                m_sum_squared_gain += gain * gain;
 #endif
         }
 
@@ -365,13 +396,13 @@ public:
                                 m_first = false;
                                 m_t = 1.0 / m_max_gain;
                         }
-
+#ifdef IMPROVED_DISTRIBUTION
+                        calc_variance();
+#endif
                         const double p = get_probability();
 
                         double cur_stop_probability = m_stop_probability;
-#ifdef NON_CONST_PROBABILITY
-                        cur_stop_probability = cur_stop_probability * std::log2(m_steps);
-#endif
+
                         res = p < cur_stop_probability;
 
 #ifdef OUPUT
@@ -399,20 +430,26 @@ public:
                                         m_first = false;
                                         m_t = 1.0 / m_max_gain;
                                 }
-
+#ifdef IMPROVED_DISTRIBUTION
+                                calc_variance();
+#endif
                                 const double p = get_probability();
 
                                 double cur_stop_probability = m_stop_probability;
-#ifdef NON_CONST_PROBABILITY
-                                cur_stop_probability = cur_stop_probability * std::log2(m_steps);
-#endif
+
                                 res = p < cur_stop_probability;
 
 #ifdef OUPUT
-                                ftxt << ", t : " << m_t
-                                     << ", p : " << p
-                                     << ", stop_p: " << cur_stop_probability
-                                     << ", total_gain: " << m_total_gain
+                                double expectation = get_expectation();
+                                double std_dev = sqrt(m_expected_variance2);
+
+                                ftxt << ", 't' : " << m_t
+                                     << ", 'p' : " << p
+                                     << ", 'stop_p': " << cur_stop_probability
+                                     << ", 'total_gain': " << m_total_gain
+                                     << ", 'step': " << m_steps
+                                     << ", 'E' : " << expectation
+                                     << ", 'std': " << std_dev
                                      << "}," << std::endl;
                                 ftxt << "m_gains = {";
                                 for (const auto& data : m_gains) {
@@ -474,9 +511,12 @@ private:
         uint32_t m_steps;
         Gain m_total_gain;
         Gain m_max_gain;
+#ifdef IMPROVED_DISTRIBUTION
+        Gain m_sum_squared_gain;
+        double m_expected_variance2;
+#endif
         double m_t;
         bool m_first;
-        uint32_t m_positive_gain;
 #ifdef USE_DEQUE
         std::deque<Gain> m_gains;
 #else
@@ -504,7 +544,8 @@ private:
                 m_first = true;
                 m_gains.clear();
                 m_step_limit = 0;
-                m_positive_gain = 0;
+                m_sum_squared_gain = 0;
+                m_expected_variance2 = 0.0;
         }
 
         template <typename function_type>
@@ -516,6 +557,17 @@ private:
 #else
                         expectation += (data.second + 0.0) / m_steps * function(data.first);
 #endif
+                }
+                return expectation;
+        }
+
+        template <typename function_type, typename predicate_type>
+        double get_partial_expectation(function_type function, predicate_type condition) const {
+                double expectation = 0;
+                for (const auto& data : m_gains) {
+                        if (condition(data.first)) {
+                                expectation += (data.second + 0.0) / m_steps * function(data.first);
+                        }
                 }
                 return expectation;
         }
@@ -578,27 +630,20 @@ private:
                         return 0.0;
                 }
 
-#ifdef DECREASE_N
-                n = std::min<int>(n / m_steps, 10);
-#else
-                //n = std::min<int>(n, m_max_step_limit);
-                //n = std::max<int>(n, 10);
                 n = n > 0 ? n : 10;
-#endif
 
 #endif
 
 #ifdef OUPUT
-                ftxt << ", n : " << n;
+                ftxt << ", 'n' : " << n;
 #endif
-
                 int a = 1 - m_total_gain;
-                double gradient_step = m_gradient_descent_step_size;
                 double cur_val = get_probability(m_t, n, a);
                 double min_val = cur_val;
                 double min_t = m_t;
                 for (size_t i = 0; i < m_gradient_descent_num_steps; ++i) {
-                        double derivative = get_derivative(m_t, n);
+                        double gradient_step = m_gradient_descent_step_size;
+                        double derivative = get_derivative(m_t, n, a);
                         double new_t = m_t - gradient_step * derivative;
 
                         double new_val = get_probability(new_t, n, a);
@@ -606,10 +651,11 @@ private:
                                 gradient_step *= 0.1;
                                 new_t = m_t - gradient_step * derivative;
                                 new_val = get_probability(new_t, n, a);
+
                                 ++i;
                         }
 
-                        if (new_t > 0.0) {
+                        if (new_t > 0.0 && new_val < cur_val) {
                                 m_t = new_t;
                                 cur_val = new_val;
                         }
@@ -627,25 +673,97 @@ private:
         }
 
         double get_probability(double t, int n, int a) const {
+#ifdef IMPROVED_DISTRIBUTION
+                double expectation = get_expectation();
+                double std_dev = sqrt(m_expected_variance2);
+
+                //n = expectation != 0.0 ? m_expected_variance2 / (4.0 * expectation * expectation) : 10;
+                double f = get_conditional_expectation([t](Gain gain) {
+                        return std::exp(t * gain);
+                }, [=] (Gain gain) {
+                        return exp_cond(gain, expectation, std_dev);
+                }
+                );
+#else
                 double f = get_expectation([t, a](Gain gain) {
                         return std::exp(t * gain);
                 });
+#endif
                 return std::pow(f, n) / std::exp(t * a);
         }
 
-        double get_derivative(double t, int n) const {
+#ifdef IMPROVED_DISTRIBUTION
+
+        inline bool exp_cond(Gain gain, double expectation, double std_dev) const {
+                //return gain >= expectation && gain <= expectation + 3 * std_dev;
+                return gain >= expectation;
+        }
+
+        inline double get_expectation() const {
+                return m_total_gain / (m_steps + 0.0);
+        }
+
+        void calc_variance() {
+                if (m_steps > 1) {
+                        double expected_gain = (m_total_gain + 0.0) / m_steps;
+                        m_expected_variance2 = (m_sum_squared_gain - 2 * expected_gain * m_total_gain +
+                                expected_gain * expected_gain * m_steps) / (m_steps - 1.0);
+                } else {
+                        m_expected_variance2 = 0.0;
+                }
+        }
+#endif
+
+        double get_derivative(double t, int n, int a) const {
+#ifdef IMPROVED_DISTRIBUTION
+                double expectation = get_expectation();
+                double std_dev = sqrt(m_expected_variance2);
+
+                double f1 = get_conditional_expectation([t](Gain gain) {
+                        return std::exp(t * gain);
+                }, [=] (Gain gain) {
+                        return exp_cond(gain, expectation, std_dev);
+                });
+
+                double f2 = get_conditional_expectation([t, n, a](Gain gain) {
+                        return std::exp(t * gain) * (n * gain - a);
+                }, [=] (Gain gain) {
+                        return exp_cond(gain, expectation, std_dev);
+                });
+#else
                 double f1 = get_expectation([t](Gain gain) {
                         return std::exp(t * gain);
                 });
 
-                double f2 = get_expectation([t, n](Gain gain) {
-                        return std::exp(t * gain) * (n * gain - 1);
+                double f2 = get_expectation([t, n, a](Gain gain) {
+                        return std::exp(t * gain) * (n * gain - a);
                 });
-
-                return std::pow(f1, n - 1) * f2 / std::exp(t);
+#endif
+                return std::pow(f1, n - 1) * f2 / std::exp(t * a);
         }
 
         int get_n() const {
+#ifdef IMPROVED_DISTRIBUTION
+                // m_total_gain <= 0
+                // int(1 - m_total_gain) / E[X_1|X_1 >= 1]
+                double expectation = get_expectation();
+                double std_dev = sqrt(m_expected_variance2);
+
+//                double cond_expect = get_conditional_expectation([](Gain gain) {
+//                        return gain;
+//                }, [=](Gain gain) {
+//                        //return exp_cond(gain, expectation, std_dev);
+//                        //return gain >= expectation && gain <= expectation + std_dev;
+//                        return gain >= 1;
+//                });
+                double cond_expect = get_partial_expectation([](Gain gain) {
+                        return gain;
+                }, [=](Gain gain) {
+                        //return exp_cond(gain, expectation, std_dev);
+                        //return gain >= expectation && gain <= expectation + std_dev;
+                        return gain >= 1;
+                });
+#else
                 // m_total_gain <= 0
                 // int(1 - m_total_gain) / E[X_1|X_1 >= 1]
                 double cond_expect = get_conditional_expectation([](Gain gain) {
@@ -653,6 +771,7 @@ private:
                 }, [](Gain gain) {
                         return gain >= 1;
                 });
+#endif
                 return cond_expect > 0.0 ? (1 - m_total_gain) / cond_expect : -1;
         }
 };

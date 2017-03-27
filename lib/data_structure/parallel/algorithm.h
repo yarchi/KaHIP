@@ -210,59 +210,59 @@ public:
         {}
 
 
-        T& get() {
+        inline T& get() {
                 return m_elem;
         }
 
-        const T& get() const {
+        inline const T& get() const {
                 return m_elem;
         }
 
-        bool operator! () const {
+        inline bool operator! () const {
                 return !m_elem;
         }
 
-        CacheAlignedData& operator= (const T& elem) {
+        inline CacheAlignedData& operator= (const T& elem) {
                 m_elem = elem;
                 return *this;
         }
 
-        CacheAlignedData& operator= (const CacheAlignedData& other) {
+        inline CacheAlignedData& operator= (const CacheAlignedData& other) {
                 m_elem = other.m_elem;
                 return *this;
         }
 
-        CacheAlignedData& operator= (CacheAlignedData&& other) {
+        inline CacheAlignedData& operator= (CacheAlignedData&& other) {
                 m_elem = other.m_elem;
                 return *this;
         }
 
-        CacheAlignedData& operator+= (const T& elem) {
+        inline CacheAlignedData& operator+= (const T& elem) {
                 m_elem += elem;
                 return *this;
         }
 
-        CacheAlignedData& operator-= (const T& elem) {
+        inline CacheAlignedData& operator-= (const T& elem) {
                 m_elem -= elem;
                 return *this;
         }
 
-        CacheAlignedData& operator*= (const T& elem) {
+        inline CacheAlignedData& operator*= (const T& elem) {
                 m_elem *= elem;
                 return *this;
         }
 
-        CacheAlignedData& operator/= (const T& elem) {
+        inline CacheAlignedData& operator/= (const T& elem) {
                 m_elem /= elem;
                 return *this;
         }
 
-        T& operator++ () {
+        inline T& operator++ () {
                 ++m_elem;
                 return *this;
         }
 
-        T operator++ (int) {
+        inline T operator++ (int) {
                 T tmp = m_elem;
                 ++m_elem;
                 return tmp;

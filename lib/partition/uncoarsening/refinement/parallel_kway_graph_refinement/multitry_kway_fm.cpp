@@ -105,7 +105,6 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
         int local_step_limit = 50;
 
         CLOCK_START;
-        // REMOVE ME!!!!!!
         m_factory.reset_global_data();
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
         std::sort(todolist.begin(), todolist.end());
@@ -123,11 +122,11 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 #endif
         int total_gain_improvement = 0;
 
-        // we need the external loop for move strategy when conflicted nodes are reactivated for the next
-        // parallel phase
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
         while (!todolist.empty()) {
 #else
+        // we need the external loop for move strategy when conflicted nodes are reactivated for the next
+        // parallel phase
         while (!m_factory.queue.empty()) {
 //                tbb::concurrent_queue <NodeID> finished_threads;
 #endif
