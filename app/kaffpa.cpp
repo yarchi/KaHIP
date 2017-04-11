@@ -52,7 +52,6 @@ int main(int argn, char **argv) {
         std::cout << "COMPARE WITH SEQUENTIAL MODE IS ON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
         std::cout << "THIS SLOWS DOWN THE APP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
 #endif
-
         PartitionConfig partition_config;
         std::string graph_filename;
 
@@ -64,7 +63,7 @@ int main(int argn, char **argv) {
                                         partition_config, 
                                         graph_filename, 
                                         is_graph_weighted, 
-                                        suppress_output, recursive); 
+                                        suppress_output, recursive);
 
         if(ret_code) {
                 return 0;
@@ -83,7 +82,6 @@ int main(int argn, char **argv) {
         timer t;
         graph_io::readGraphWeighted(G, graph_filename);
         std::cout << "io time: " << t.elapsed()  << std::endl;
-       
         G.set_partition_count(partition_config.k);
  
         balance_configuration bc;
@@ -133,6 +131,19 @@ int main(int argn, char **argv) {
                 }
         }
         std::cout << "Num threads\t" << partition_config.num_threads << std::endl;
+        std::cout << "Max number of moves\t" << partition_config.max_number_of_moves << std::endl;
+
+        if (partition_config.kway_all_boundary_nodes_refinement) {
+                std::cout << "Refinement boundary\tall" << std::endl;
+        } else {
+                std::cout << "Refinement boundary\tpair" << std::endl;
+        }
+
+        if (partition_config.quotient_graph_two_way_refinement) {
+                std::cout << "Two way refinement\ttrue" << std::endl;
+        } else {
+                std::cout << "Two way refinement\tfalse" << std::endl;
+        }
 
         switch (partition_config.apply_move_strategy) {
                 case ApplyMoveStrategy::LOCAL_SEARCH:
@@ -228,7 +239,10 @@ int main(int argn, char **argv) {
                 std::cout << "Local search statistics:" << std::endl;
                 if (partition_config.parallel_multitry_kway) {
                         parallel::multitry_kway_fm::print_full_statistics();
-                        ALWAYS_ASSERT(parallel::multitry_kway_fm::get_performed_gain() == input_partition_cut - cut);
+                        if (partition_config.input_partition != "") {
+                                ALWAYS_ASSERT(
+                                        parallel::multitry_kway_fm::get_performed_gain() == input_partition_cut - cut);
+                        }
                 } else {
                         multitry_kway_fm::print_full_statistics();
                 }

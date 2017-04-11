@@ -36,6 +36,7 @@
 #include "uncoarsening/refinement/label_propagation_refinement/label_propagation_refinement.h"
 #include "uncoarsening/refinement/refinement.h"
 #include "wcycle_partitioner.h"
+#include "data_structure/parallel/time.h"
 
 int wcycle_partitioner::perform_partitioning(const PartitionConfig & config, graph_access & G) {
         PartitionConfig  cfg = config; 
@@ -80,6 +81,7 @@ int wcycle_partitioner::perform_partitioning_recursive( PartitionConfig & partit
         Matching edge_matching;
         NodePermutationMap permutation;
 
+        CLOCK_START;
         coarsening_configurator coarsening_config;
         coarsening_config.configure_coarsening(partition_config, &edge_matcher, m_level);
         
@@ -99,6 +101,7 @@ int wcycle_partitioner::perform_partitioning_recursive( PartitionConfig & partit
                                      *coarse_mapping, no_of_coarser_vertices, 
                                      permutation);
         }
+        CLOCK_END("Contraction");
 
         coarser->set_partition_count(partition_config.k);
         complete_boundary* coarser_boundary =  NULL;
@@ -118,8 +121,10 @@ int wcycle_partitioner::perform_partitioning_recursive( PartitionConfig & partit
                 double factor = partition_config.balance_factor;
                 cfg.upper_bound_partition = (factor +1.0)*partition_config.upper_bound_partition;
 
+                CLOCK_START;
 	        initial_partitioning init_part;
 		init_part.perform_initial_partitioning(cfg, *coarser);
+                CLOCK_END("Initial partitioning");
 
                 if(!partition_config.label_propagation_refinement) coarser_boundary->build();
 
@@ -192,8 +197,8 @@ int wcycle_partitioner::perform_partitioning_recursive( PartitionConfig & partit
         } else {
                 cfg.upper_bound_partition = partition_config.upper_bound_partition;
         }
-
         //PRINT(std::cout <<  "upper bound " <<  cfg.upper_bound_partition  << std::endl;)
+
         improvement += refine->perform_refinement(cfg, *finer, *current_boundary);
 
         if(c_boundary != NULL) {

@@ -29,6 +29,9 @@
 #include "uncoarsening/uncoarsening.h"
 #include "uncoarsening/refinement/mixed_refinement.h"
 #include "w_cycles/wcycle_partitioner.h"
+#include "uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.h"
+
+#include "data_structure/parallel/time.h"
 
 graph_partitioner::graph_partitioner() {
 
@@ -201,9 +204,17 @@ void graph_partitioner::single_run( PartitionConfig & config, graph_access & G) 
                                                 config.edge_rating = SEPARATOR_LOG;
                                         } 
                                 }
+                                CLOCK_START;
                                 coarsen.perform_coarsening(config, G, hierarchy);
+                                CLOCK_END("Coarsening");
+
+                                CLOCK_START_N;
                                 init_part.perform_initial_partitioning(config, hierarchy);
+                                CLOCK_END("Initial partitioning");
+
+                                CLOCK_START_N;
                                 uncoarsen.perform_uncoarsening(config, hierarchy);
+                                CLOCK_END("Uncoarsening");
                                 if( config.mode_node_separators ) {
                                         quality_metrics qm;
                                         std::cout <<  "vcycle result " << qm.separator_weight(G)  << std::endl;

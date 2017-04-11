@@ -175,6 +175,9 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *chernoff_min_step_limit              = arg_int0(NULL, "chernoff_min_step_limit", NULL, "Min step limit for Chernoff stopping rule");
         struct arg_int *chernoff_max_step_limit              = arg_int0(NULL, "chernoff_max_step_limit", NULL, "Max step limit for Chernoff stopping rule");
         struct arg_int *main_core                            = arg_int0(NULL, "main_core", NULL, "Sets to which core to pin main threads");
+        struct arg_int *max_number_of_moves                  = arg_int0(NULL, "max_number_of_moves", NULL, "Sets max number of moves for local search");
+        struct arg_lit *kway_all_boundary_nodes_refinement   = arg_lit0(NULL, "kway_all_boundary_nodes_refinement",  "(Default: disabled)");
+        struct arg_lit *no_quotient_graph_two_way_refinement = arg_lit0(NULL, "no_quotient_graph_two_way_refinement", "(Default: disabled)");
         struct arg_end *end                                  = arg_end(100);
 
         // Define argtable.
@@ -228,6 +231,10 @@ int parse_parameters(int argn, char **argv,
                 main_core,
                 only_first_level,
                 input_partition,
+                max_number_of_moves,
+                kway_all_boundary_nodes_refinement,
+                local_multitry_rounds,
+                no_quotient_graph_two_way_refinement,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -1094,6 +1101,18 @@ int parse_parameters(int argn, char **argv,
 
         if (main_core->count > 0) {
                 partition_config.main_core = main_core->ival[0];
+        }
+
+        if (max_number_of_moves->count > 0) {
+                partition_config.max_number_of_moves = max_number_of_moves->ival[0];
+        }
+
+        if (kway_all_boundary_nodes_refinement->count > 0) {
+                partition_config.kway_all_boundary_nodes_refinement = true;
+        }
+
+        if (no_quotient_graph_two_way_refinement->count > 0) {
+                partition_config.quotient_graph_two_way_refinement = false;
         }
 
         return 0;

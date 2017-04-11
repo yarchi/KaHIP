@@ -30,7 +30,7 @@ public:
         Cvector <AtomicWrapper<NodeWeight>>& parts_sizes;
         Cvector <AtomicWrapper<int>>& moved_count;
         int upper_bound_gain_improvement;
-        AtomicWrapper<bool>& one_thread_finished;
+        AtomicWrapper<uint32_t>& num_threads_finished;
         AtomicWrapper<uint32_t>& time_stamp;
 
         // local thread data
@@ -43,6 +43,7 @@ public:
         std::vector<EdgeWeight> gains;
         std::vector<NodeID> moved;
         std::vector<uint32_t> time_stamps;
+        std::vector<uint32_t> tried_moves;
 
         // local statistics about time in all iterations
         double total_thread_time;
@@ -76,7 +77,7 @@ public:
                                     Cvector <AtomicWrapper<NodeWeight>>& _parts_sizes,
                                     Cvector <AtomicWrapper<int>>& _moved_count,
                                     AtomicWrapper<uint32_t>& _reset_counter,
-                                    AtomicWrapper<bool>& _one_thread_finished,
+                                    AtomicWrapper<uint32_t>& _num_threads_finished,
                                     AtomicWrapper<uint32_t>& _time_stamp)
                 :       parallel::thread_config(_id, _seed)
                 ,       config(_config)
@@ -88,7 +89,7 @@ public:
                 ,       parts_sizes(_parts_sizes)
                 ,       moved_count(_moved_count)
                 ,       upper_bound_gain_improvement(0)
-                ,       one_thread_finished(_one_thread_finished)
+                ,       num_threads_finished(_num_threads_finished)
                 ,       time_stamp(_time_stamp)
                 ,       nodes_partitions(std::min<int>(131072, _G.number_of_nodes()))
                 //,       nodes_partitions(G.number_of_nodes(), -1)

@@ -63,10 +63,11 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                 td.from_partitions.push_back(sentinel);
                 td.to_partitions.push_back(sentinel);
                 td.gains.push_back(signed_sentinel);
+                //td.tried_moves.push_back(0);
                 return std::make_tuple(0, -1, 0);
         }
 
-        int max_number_of_swaps = td.G.number_of_nodes();
+        int max_number_of_swaps = td.config.max_number_of_moves != -1 ? td.config.max_number_of_moves : td.G.number_of_nodes();
 
         EdgeWeight cut = std::numeric_limits<int>::max() / 2; // so we dont need to compute the edge cut
         EdgeWeight initial_cut = cut;
@@ -99,13 +100,13 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                         break;
                 }
 
-                if (td.one_thread_finished.load(std::memory_order_relaxed)) {
+                if (td.num_threads_finished.load(std::memory_order_relaxed) > 0) {
                         break;
                 }
 
                 uint32_t local_min_cut_index = (uint32_t) (min_cut_index - previously_moved >= 0 ? min_cut_index -
                                                                                                    previously_moved
-                                                                                                 : 0);
+                                                                                                : 0);
                 if (stopping_rule->search_should_stop(local_min_cut_index, (uint32_t) number_of_swaps,
                                                       (uint32_t) td.step_limit)) {
                         ++td.stop_stopping_rule;
@@ -171,7 +172,7 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
         td.to_partitions.push_back(sentinel);
         td.gains.push_back(signed_sentinel);
         //td.time_stamps.push_back(sentinel);
-
+        //td.tried_moves.push_back(movements);
         return std::make_tuple(initial_cut - best_cut, min_cut_index, movements);
 }
 
@@ -366,7 +367,7 @@ std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::gain_recalculation(t
         }
 
         ALWAYS_ASSERT(transpositions.size() == from_partitions.size());
-        for (size_t i = 0; transpositions.size(); ++i) {
+        for (size_t i = 0; i < transpositions.size(); ++i) {
                 // node will be considered as moved by all threads
                 NodeID node = transpositions[i];
                 moved_nodes[node] = std::make_pair(std::numeric_limits<uint32_t>::max(), from_partitions[i]);
@@ -684,18 +685,16 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
                         } else if (td.config.apply_move_strategy == ApplyMoveStrategy::REACTIVE_VERTICES) {
                                 NodeID start_node = td.transpositions[best_cut_index + 1];
                                 reactivated_vertices.push_back(start_node);
+
+                                forall_out_edges(td.G, e, start_node){
+                                        NodeID target = td.G.getEdgeTarget(e);
+                                        reactivated_vertices.push_back(target);
+                                } endfor
                         } else {
                                // skip strategy, do nothing
                         }
                         return std::make_pair(gain, movements);
                 };
-
-                // possible slow down ????????????????????????????????
-//                int expected_gain = 0;
-//                for (int i = start_index; i <= min_cut_index; ++i) {
-//                        expected_gain += td.gains[i];
-//                }
-//                total_expected_gain += expected_gain;
 
                 while (index <= min_cut_index) {
                         NodeID node = td.transpositions[index];
@@ -781,6 +780,16 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
                                         touched_blocks[to] = to;
                                 }
 
+                                if (td.config.apply_move_strategy == ApplyMoveStrategy::REACTIVE_VERTICES
+                                    && td.config.kway_all_boundary_nodes_refinement) {
+                                        reactivated_vertices.push_back(node);
+
+                                        forall_out_edges(td.G, e, node){
+                                                NodeID target = td.G.getEdgeTarget(e);
+                                                reactivated_vertices.push_back(target);
+                                        } endfor
+                                }
+
                                 cut_improvement += gain;
                                 total_gain += gain;
 
@@ -801,6 +810,18 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
                         }
                         ++index;
                 }
+//                if (td.config.apply_move_strategy == ApplyMoveStrategy::REACTIVE_VERTICES
+//                    && index == min_cut_index) {
+//                        NodeID node = td.transpositions[index];
+//                        PartitionID from = td.from_partitions[index];
+//                        PartitionID to = td.to_partitions[index];
+//
+//                        reactivated_vertices.push_back(node);
+//                        forall_out_edges(td.G, e, node){
+//                                NodeID target = td.G.getEdgeTarget(e);
+//                                reactivated_vertices.push_back(target);
+//                        } endfor
+//                }
 
                 index = next_index;
         }

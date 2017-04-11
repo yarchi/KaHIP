@@ -65,9 +65,22 @@ void quotient_graph_refinement::setup_start_nodes(graph_access & G,
         } endfor
 }
 
+EdgeWeight quotient_graph_refinement::perform_refinement_all(PartitionConfig& config, graph_access& G, complete_boundary& boundary) {
+        CLOCK_START;
+        EdgeWeight overall_improvement = 0;
+        if (config.refinement_scheduling_algorithm == REFINEMENT_SCHEDULING_ACTIVE_BLOCKS_REF_KWAY) {
+                std::cout << "START KWAY" << std::endl;
+                auto kway_ref = get_multitry_kway_fm_instance(config, G, boundary);
+                overall_improvement = kway_ref->perform_refinement_all(config, G, boundary, true,
+                                                                                  config.local_multitry_fm_alpha);
+
+                std::cout << "Cut improvement time\t" << CLOCK_END_TIME << std::endl;
+                std::cout << "Cut improvement\t" << overall_improvement << std::endl;
+        }
+        return overall_improvement;
+}
 
 EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & config, graph_access & G, complete_boundary & boundary) {
-
         EdgeWeight overall_improvement = 0;
         {
                 ASSERT_TRUE(boundary.assert_bnodes_in_boundaries());
@@ -135,10 +148,13 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
                         CLOCK_START;
                         EdgeWeight improvement = 0;
                         if (cfg.quotient_graph_two_way_refinement) {
+                                CLOCK_START;
                                 improvement = perform_a_two_way_refinement(cfg, G, boundary, bp,
                                                                            lhs, rhs,
                                                                            lhs_part_weight, rhs_part_weight,
                                                                            initial_cut_value, something_changed);
+                                std::string mes = std::to_string(lhs) + ' ' + std::to_string(rhs);
+                                CLOCK_END(mes);
                         }
 
                         time_two_way += CLOCK_END_TIME;

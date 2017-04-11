@@ -405,6 +405,8 @@ struct PartitionConfig
         double chernoff_gradient_descent_step_size = 1;
         uint32_t chernoff_min_step_limit = 20;
         uint32_t chernoff_max_step_limit = 1000;
+        int max_number_of_moves = -1;
+        bool kway_all_boundary_nodes_refinement = false;
         // tmp
         bool quotient_graph_two_way_refinement = true;
 };

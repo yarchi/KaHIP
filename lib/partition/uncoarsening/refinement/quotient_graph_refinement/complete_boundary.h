@@ -71,17 +71,14 @@ class complete_boundary {
 
                 inline void getQuotientGraphEdges(QuotientGraphEdges & qgraph_edges);
                 inline PartialBoundary&  getDirectedBoundary(PartitionID partition, PartitionID lhs, PartitionID rhs);
-                inline PartialBoundary& getDirectedBoundaryThreadSafe(PartitionID partition, PartitionID lhs,
-                                                                      PartitionID rhs);
+                inline const PartialBoundary& getDirectedBoundaryThreadSafe(PartitionID partition, PartitionID lhs,
+                                                                            PartitionID rhs);
 
                 inline void setup_start_nodes(graph_access & G, PartitionID partition, 
                                               boundary_pair & bp, boundary_starting_nodes & start_nodes); 
 
                 inline void setup_start_nodes_around_blocks(graph_access & G, PartitionID & lhs, PartitionID & rhs,
                                                             boundary_starting_nodes & start_nodes);
-
-                inline void setup_start_nodes_around_blocks(graph_access & G, PartitionID & lhs, PartitionID & rhs,
-                                                            parallel::task_queue<NodeID>& task_queue);
 
                 inline void setup_start_nodes_all(graph_access & G, boundary_starting_nodes & start_nodes);
 
@@ -337,14 +334,17 @@ inline PartialBoundary& complete_boundary::getDirectedBoundary(PartitionID parti
         }    
 }
 
-inline PartialBoundary& complete_boundary::getDirectedBoundaryThreadSafe(PartitionID partition, PartitionID lhs,
-                                                                         PartitionID rhs) {
+inline const PartialBoundary& complete_boundary::getDirectedBoundaryThreadSafe(PartitionID partition, PartitionID lhs,
+                                                                               PartitionID rhs) {
+        ALWAYS_ASSERT(lhs != rhs);
         boundary_pair bp;
         bp.k   = m_graph_ref->get_partition_count();
         bp.lhs = lhs;
         bp.rhs = rhs;
 
-        data_boundary_pair & dbp = m_pairs[bp];
+        const block_pairs& m_pairs_ref = m_pairs;
+
+        const data_boundary_pair& dbp = m_pairs_ref.at(bp);
 
         if(partition == dbp.lhs) {
                 return dbp.pb_lhs;
@@ -374,7 +374,8 @@ inline void complete_boundary::update_lazy_values(boundary_pair * pair) {
                 m_last_key    = key;
         }
 }
-void complete_boundary::setup_start_nodes(graph_access & G, 
+
+void complete_boundary::setup_start_nodes(graph_access & G,
                 PartitionID partition, 
                 boundary_pair & bp, 
                 boundary_starting_nodes & start_nodes) {
@@ -523,60 +524,6 @@ void complete_boundary::setup_start_nodes_around_blocks(graph_access & G,
                         }
                 } endfor
         }
-}
-
-void complete_boundary::setup_start_nodes_around_blocks(graph_access& G, PartitionID & lhs, PartitionID & rhs,
-                                                        parallel::task_queue<NodeID>& task_queue) {
-        std::vector<PartitionID> lhs_neighbors;
-        getNeighbors(lhs, lhs_neighbors);
-
-        std::vector<PartitionID> rhs_neighbors;
-        getNeighbors(rhs, rhs_neighbors);
-
-        auto sub_task = [this, &G, &task_queue](uint32_t thread_id, std::atomic<size_t>& counter, PartitionID part,
-                                                const std::vector<PartitionID>& neighbour_parts) {
-                size_t offset = counter.fetch_add(1, std::memory_order_relaxed);
-                if (offset < neighbour_parts.size()) {
-                        PartitionID neighbor_part = neighbour_parts[offset];
-
-                        PartialBoundary& partial_boundary_part = getDirectedBoundaryThreadSafe(part, part,
-                                                                                               neighbor_part);
-                        for (const auto& elem : partial_boundary_part.internal_boundary) {
-                                NodeID cur_bnd_node = elem.first;
-                                ALWAYS_ASSERT(G.getPartitionIndex(cur_bnd_node) == part);
-                                task_queue[thread_id].push_back(cur_bnd_node);
-                        }
-
-                        PartialBoundary& partial_boundary_neighbor_part = getDirectedBoundaryThreadSafe(neighbor_part,
-                                                                                                        part,
-                                                                                                        neighbor_part);
-
-                        for (const auto& elem : partial_boundary_neighbor_part.internal_boundary) {
-                                NodeID cur_bnd_node = elem.first;
-                                ALWAYS_ASSERT(G.getPartitionIndex(cur_bnd_node) == neighbor_part);
-                                task_queue[thread_id].push_back(cur_bnd_node);
-                        }
-                }
-        };
-
-        std::atomic<size_t> lhs_counter(0);
-        std::atomic<size_t> rhs_counter(0);
-        auto task = [&](uint32_t thread_id) {
-                sub_task(thread_id, lhs_counter, lhs, lhs_neighbors);
-                sub_task(thread_id, rhs_counter, rhs, rhs_neighbors);
-        };
-
-        std::vector<std::future<void>> futures;
-        futures.reserve(parallel::g_thread_pool.NumThreads());
-
-        for (uint32_t id = 0; id < parallel::g_thread_pool.NumThreads(); ++id) {
-                futures.push_back(parallel::g_thread_pool.Submit(task, id + 1));
-        }
-
-        task(0);
-        std::for_each(futures.begin(), futures.end(), [](auto& future) {
-                future.get();
-        });
 }
 
 void complete_boundary::setup_start_nodes_all(graph_access & G, boundary_starting_nodes & start_nodes) {

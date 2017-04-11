@@ -35,6 +35,12 @@ public:
         virtual EdgeWeight perform_refinement(PartitionConfig & config, 
                                               graph_access & G, 
                                               complete_boundary & boundary) = 0;
+
+        virtual EdgeWeight perform_refinement_all(PartitionConfig& config, graph_access& G,
+                                                  complete_boundary& boundary) {
+                ALWAYS_ASSERT(false);
+                return 0;
+        }
 };
 
 

@@ -7,6 +7,8 @@
 
 #include <tbb/concurrent_queue.h>
 
+#include <fstream>
+
 class multitry_kway_fm;
 
 namespace parallel {
@@ -52,7 +54,7 @@ public:
                                                    m_parts_sizes,
                                                    m_moved_count,
                                                    m_reset_counter,
-                                                   main_thread_finished,
+                                                   num_threads_finished,
                                                    m_time_stamp);
                 }
 
@@ -79,8 +81,8 @@ public:
 
                 m_reset_counter.store(0, std::memory_order_relaxed);
                 m_time_stamp.store(0, std::memory_order_relaxed);
-                //queue.clear();
-                main_thread_finished.store(false, std::memory_order_relaxed);
+                queue.clear();
+                num_threads_finished.store(0, std::memory_order_relaxed);
         }
 
         thread_data_refinement_core& get_thread_data(uint32_t id) {
@@ -145,21 +147,21 @@ public:
                         std::cout << "proc_id\t" << id << " | "
                                   << "time\t" << m_thread_data[id].get().total_thread_time << " s | "
                                   << "tried moves\t" << m_thread_data[id].get().tried_movements << " | "
-                                  << "accepted moves\t" << m_thread_data[id].get().accepted_movements << " | "
-                                  << "scanned neighbours\t" << m_thread_data[id].get().scaned_neighbours << " | "
-                                  << "try moves time\t" << m_thread_data[id].get().total_thread_try_move_time << " s | "
-                                  << "accepted moves time\t" << m_thread_data[id].get().total_thread_accepted_move_time << " s | "
-                                  << "compute gain time\t" << m_thread_data[id].get().time_compute_gain << " s | "
-                                  << "total partition accesses\t" << m_thread_data[id].get().num_part_accesses << " | "
-                                  << "unroll moves time\t" << m_thread_data[id].get().total_thread_unroll_move_time << " s | "
-                                  << "move nodes time\t" << m_thread_data[id].get().time_move_nodes << " s | "
-                                  << "transpositions size\t" << m_thread_data[id].get().transpositions_size << " | "
-                                  << "performed gain\t" << m_thread_data[id].get().performed_gain << " | "
-                                  << "unperformed gain\t" << m_thread_data[id].get().unperformed_gain << " | "
-                                  << "stop empty queue\t" << m_thread_data[id].get().stop_empty_queue << " | "
-                                  << "stop stopping rule\t" << m_thread_data[id].get().stop_stopping_rule << " | "
-                                  << "stop max number of swaps\t" << m_thread_data[id].get().stop_max_number_of_swaps << " | "
-                                  << "stop faction of nodes moved\t" << m_thread_data[id].get().stop_faction_of_nodes_moved
+//                                  << "accepted moves\t" << m_thread_data[id].get().accepted_movements << " | "
+//                                  << "scanned neighbours\t" << m_thread_data[id].get().scaned_neighbours << " | "
+//                                  << "try moves time\t" << m_thread_data[id].get().total_thread_try_move_time << " s | "
+//                                  << "accepted moves time\t" << m_thread_data[id].get().total_thread_accepted_move_time << " s | "
+//                                  << "compute gain time\t" << m_thread_data[id].get().time_compute_gain << " s | "
+//                                  << "total partition accesses\t" << m_thread_data[id].get().num_part_accesses << " | "
+//                                  << "unroll moves time\t" << m_thread_data[id].get().total_thread_unroll_move_time << " s | "
+//                                  << "move nodes time\t" << m_thread_data[id].get().time_move_nodes << " s | "
+//                                  << "transpositions size\t" << m_thread_data[id].get().transpositions_size << " | "
+//                                  << "performed gain\t" << m_thread_data[id].get().performed_gain << " | "
+//                                  << "unperformed gain\t" << m_thread_data[id].get().unperformed_gain << " | "
+//                                  << "stop empty queue\t" << m_thread_data[id].get().stop_empty_queue << " | "
+//                                  << "stop stopping rule\t" << m_thread_data[id].get().stop_stopping_rule << " | "
+//                                  << "stop max number of swaps\t" << m_thread_data[id].get().stop_max_number_of_swaps << " | "
+//                                  << "stop faction of nodes moved\t" << m_thread_data[id].get().stop_faction_of_nodes_moved
                                   << std::endl;
 
                         total_tried_movements += m_thread_data[id].get().tried_movements;
@@ -254,7 +256,6 @@ public:
                 uint32_t num_threads = m_statistics.front().proc_stats.size();
                 statistics_type stat;
                 stat.proc_stats.resize(num_threads);
-
                 for (auto& st : m_statistics) {
                         stat += st;
                 }
@@ -278,17 +279,17 @@ public:
                         std::cout << "proc_id\t" << pr.proc_id << " | "
                                   << "time\t" << pr.total_thread_time << " s | "
                                   << "tried moves\t" << pr.tried_movements << " | "
-                                  << "accepted moves\t" << pr.accepted_movements << " | "
-                                  << "scanned neighbours\t" << pr.scaned_neighbours << " | "
-                                  << "try moves time\t" << pr.total_thread_try_move_time << " s | "
-                                  << "accepted moves time\t" << pr.total_thread_accepted_move_time << " s | "
-                                  << "unroll moves time\t" << pr.total_thread_unroll_move_time << " s | "
-                                  << "performed gain\t" << pr.performed_gain << " | "
-                                  << "unperformed gain\t" << pr.unperformed_gain << " | "
-                                  << "stop empty queue\t" << pr.stop_empty_queue << " | "
-                                  << "stop stopping rule\t" << pr.stop_stopping_rule << " | "
-                                  << "stop max number of swaps\t" << pr.stop_max_number_of_swaps << " | "
-                                  << "stop faction of nodes moved\t" << pr.stop_faction_of_nodes_moved
+//                                  << "accepted moves\t" << pr.accepted_movements << " | "
+//                                  << "scanned neighbours\t" << pr.scaned_neighbours << " | "
+//                                  << "try moves time\t" << pr.total_thread_try_move_time << " s | "
+//                                  << "accepted moves time\t" << pr.total_thread_accepted_move_time << " s | "
+//                                  << "unroll moves time\t" << pr.total_thread_unroll_move_time << " s | "
+//                                  << "performed gain\t" << pr.performed_gain << " | "
+//                                  << "unperformed gain\t" << pr.unperformed_gain << " | "
+//                                  << "stop empty queue\t" << pr.stop_empty_queue << " | "
+//                                  << "stop stopping rule\t" << pr.stop_stopping_rule << " | "
+//                                  << "stop max number of swaps\t" << pr.stop_max_number_of_swaps << " | "
+//                                  << "stop faction of nodes moved\t" << pr.stop_faction_of_nodes_moved
                                   << std::endl;
                 }
 
@@ -310,10 +311,33 @@ public:
 
         virtual ~thread_data_factory() {
                 print_iteration_statistics();
+
+//                std::ofstream ftxt("out_moves_stat.log");
+//                size_t size = get_thread_data(0).tried_moves.size();
+//
+//                std::vector<uint32_t> data;
+//                data.reserve(m_config.num_threads);
+//                for (size_t i = 0; i < size; ++i) {
+//                        data.clear();
+//                        for (size_t id = 0; id < m_config.num_threads; ++id) {
+//                                auto& td = get_thread_data(id);
+//                                data.push_back(td.tried_moves[i]);
+//                        }
+//                        std::sort(data.begin(), data.end());
+//                        uint32_t min = data[0];
+//                        uint32_t max = data.back();
+//                        uint32_t median = data[data.size() / 2];
+//
+//                        ftxt << min << ' ' << median << ' ' << max << std::endl;
+//                }
+//                ftxt << std::endl;
         }
 
         task_queue<NodeID> queue;
-        AtomicWrapper<bool> main_thread_finished;
+        AtomicWrapper<uint32_t> num_threads_finished;
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+        PartitionConfig& m_config;
+#endif
 
         double time_setup_start_nodes;
         double time_local_search;
@@ -323,7 +347,7 @@ public:
         double time_wait;
         double time_move_nodes;
 
-private:
+public:
         struct statistics_type {
                 double time_setup_start_nodes = 0.0;
                 double time_local_search = 0.0;
@@ -427,11 +451,13 @@ private:
                         return *this;
                 }
         };
-        
+
         static std::vector<statistics_type> m_statistics;
         Cvector<thread_data_refinement_core> m_thread_data;
 
+#ifndef COMPARE_WITH_SEQUENTIAL_KAHIP
         PartitionConfig& m_config;
+#endif
         graph_access& m_G;
         complete_boundary& m_boundary;
 
@@ -468,6 +494,9 @@ public:
                                        complete_boundary& boundary, unsigned rounds,
                                        bool init_neighbors, unsigned alpha) override;
 
+        int perform_refinement_all(PartitionConfig& config, graph_access& G, complete_boundary& boundary,
+                                   bool init_neighbors, unsigned alpha) override;
+
         virtual int perform_refinement_around_parts(PartitionConfig& config,
                                             graph_access& G,
                                             complete_boundary& boundary,
@@ -475,6 +504,8 @@ public:
                                             unsigned alpha,
                                             PartitionID& lhs, PartitionID& rhs,
                                             std::unordered_map <PartitionID, PartitionID>& touched_blocks) override;
+
+        void shuffle_task_queue();
 
 private:
         thread_data_factory m_factory;
@@ -491,6 +522,11 @@ private:
                                                       bool compute_touched_blocks,
                                                       std::unordered_map<PartitionID, PartitionID>& touched_blocks,
                                                       std::vector<NodeID>& todolist);
+
+        void setup_start_nodes_around_blocks(graph_access& G, complete_boundary& boundary, PartitionID & lhs,
+                                             PartitionID & rhs);
+
+        void setup_start_nodes_all(graph_access& G, complete_boundary& boundary);
 };
 
 }

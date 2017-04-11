@@ -31,7 +31,11 @@ class quotient_graph_refinement : public refinement {
                 quotient_graph_refinement( );
                 virtual ~quotient_graph_refinement();
 
-                EdgeWeight perform_refinement(PartitionConfig & config, graph_access & G, complete_boundary & boundary);
+                EdgeWeight perform_refinement(PartitionConfig & config, graph_access & G,
+                                              complete_boundary & boundary) override;
+
+                EdgeWeight perform_refinement_all(PartitionConfig& config, graph_access& G,
+                                                  complete_boundary& boundary) override;
 
                 void setup_start_nodes(graph_access & G, 
                                        PartitionID partition, 

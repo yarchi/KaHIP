@@ -119,7 +119,7 @@ inline bool kway_adaptive_stop_rule::search_should_stop(unsigned int min_cut_idx
                pconfig->kway_adaptive_limits_alpha * m_expected_variance2 + pconfig->kway_adaptive_limits_beta && (m_steps != 1);
 }
 #else
-#define OUT_ADAPTIVE
+#undef OUT_ADAPTIVE
 class kway_adaptive_stop_rule : public kway_stop_rule {
 public:
         kway_adaptive_stop_rule(PartitionConfig & config)

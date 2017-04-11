@@ -43,6 +43,12 @@ public:
                                complete_boundary& boundary, unsigned rounds,
                                bool init_neighbors, unsigned alpha);
 
+        virtual int perform_refinement_all(PartitionConfig& config, graph_access& G, complete_boundary& boundary,
+                                           bool init_neighbors, unsigned alpha) {
+                ALWAYS_ASSERT(false);
+                return 0;
+        }
+
         virtual int perform_refinement_around_parts(PartitionConfig& config, graph_access& G,
                                             complete_boundary& boundary, bool init_neighbors,
                                             unsigned alpha,

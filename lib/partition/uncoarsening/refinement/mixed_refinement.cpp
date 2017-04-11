@@ -37,7 +37,7 @@ mixed_refinement::~mixed_refinement() {
 }
 
 EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_access & G, complete_boundary & boundary) {
-        //CLOCK_START;
+        CLOCK_START;
         refinement* refine              = new quotient_graph_refinement();
         refinement* kway                = new kway_graph_refinement();
         multitry_kway_fm* multitry_kway = new multitry_kway_fm();
@@ -70,7 +70,11 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
                 }
                 if(!config.quotient_graph_refinement_disabled) {
                         CLOCK_START;
-                        overall_improvement += refine->perform_refinement(config, G, boundary);
+                        if (!config.kway_all_boundary_nodes_refinement) {
+                                overall_improvement += refine->perform_refinement(config, G, boundary);
+                        } else {
+                                overall_improvement += refine->perform_refinement_all(config, G, boundary);
+                        }
                         CLOCK_END("Quotient graph refinement");
                 }
 
@@ -86,7 +90,7 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
         delete multitry_kway;
         delete cycle_refine;
 
-        //CLOCK_END("Mixed refinement time");
+        CLOCK_END("Uncoarsening");
         return overall_improvement;
 }
 
