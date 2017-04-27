@@ -327,7 +327,13 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 
                 m_factory.partial_reset_global_data();
 
+                if (config.kway_all_boundary_nodes_refinement && real_gain_improvement == 0) {
+                        break;
+                }
+
                 m_factory.get_thread_data(0).rnd.shuffle(reactivated_vertices);
+                //std::cout << "Size\t" << reactivated_vertices.size() << std::endl;
+                //std::cout << "imr\t" << real_gain_improvement << std::endl;
                 for (auto vertex : reactivated_vertices) {
                         m_factory.queue.push(vertex);
                 }

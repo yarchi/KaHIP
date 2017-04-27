@@ -148,13 +148,10 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
                         CLOCK_START;
                         EdgeWeight improvement = 0;
                         if (cfg.quotient_graph_two_way_refinement) {
-                                CLOCK_START;
                                 improvement = perform_a_two_way_refinement(cfg, G, boundary, bp,
                                                                            lhs, rhs,
                                                                            lhs_part_weight, rhs_part_weight,
                                                                            initial_cut_value, something_changed);
-                                std::string mes = std::to_string(lhs) + ' ' + std::to_string(rhs);
-                                CLOCK_END(mes);
                         }
 
                         time_two_way += CLOCK_END_TIME;

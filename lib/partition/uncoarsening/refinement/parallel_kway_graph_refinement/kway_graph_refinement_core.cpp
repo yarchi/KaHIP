@@ -139,8 +139,9 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                         bool accept_equal = td.rnd.bit();
 #endif
                         if (cut < best_cut || (cut == best_cut && accept_equal)) {
-                                if (cut < best_cut)
+                                if (cut < best_cut) {
                                         stopping_rule->reset_statistics();
+                                }
                                 best_cut = cut;
                                 min_cut_index = previously_moved + number_of_swaps;
                         }
@@ -411,8 +412,10 @@ kway_graph_refinement_core::apply_moves(Cvector <thread_data_refinement_core>& t
 //        ftxt << "";
 //        ftxt.close();
         for (size_t id = 0; id < threads_data.size(); ++id) {
+                //std::cout << "Moved ";
                 overall_gain += apply_moves(threads_data[id].get(), moved_nodes, compute_touched_partitions,
                                             touched_blocks, reactivated_vertices);
+                //std::cout << std::endl;
         }
         overall_moved = moved_nodes.size();
         return std::make_pair(overall_gain, overall_moved);
@@ -773,7 +776,7 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
 //                                        }
 //                                        ALWAYS_ASSERT(gain == gain_);
 //                                }
-
+                                //std::cout << node << ' ';
                                 moved_nodes[node] = std::make_pair(td.id, from);
                                 if (compute_touched_partitions) {
                                         touched_blocks[from] = from;

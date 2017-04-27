@@ -84,12 +84,17 @@ int wcycle_partitioner::perform_partitioning_recursive( PartitionConfig & partit
         CLOCK_START;
         coarsening_configurator coarsening_config;
         coarsening_config.configure_coarsening(partition_config, &edge_matcher, m_level);
-        
-        rating.rate(*finer, m_level);
 
+        auto b = CLOCK;
+        rating.rate(*finer, m_level);
+        std::cout << "Contraction: edge rating\t" << std::chrono::duration<double>(CLOCK - b).count() << std::endl;
+
+        b = CLOCK;
         edge_matcher->match(partition_config, *finer, edge_matching, *coarse_mapping, no_of_coarser_vertices, permutation);
+        std::cout << "Contraction: matching\t" << std::chrono::duration<double>(CLOCK - b).count() << std::endl;
         delete edge_matcher; 
 
+        b = CLOCK;
         if(partition_config.graph_allready_partitioned) {
                 contracter->contract_partitioned(partition_config, *finer, 
                                                  *coarser, edge_matching, 
@@ -101,6 +106,7 @@ int wcycle_partitioner::perform_partitioning_recursive( PartitionConfig & partit
                                      *coarse_mapping, no_of_coarser_vertices, 
                                      permutation);
         }
+        std::cout << "Contraction: contraction\t" << std::chrono::duration<double>(CLOCK - b).count() << std::endl;
         CLOCK_END("Contraction");
 
         coarser->set_partition_count(partition_config.k);

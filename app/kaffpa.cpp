@@ -108,6 +108,7 @@ int main(int argn, char **argv) {
                 } endfor
                 input_partition_cut = qm.edge_cut(G);
         }
+        std::cout << "Blocks\t" << partition_config.k << std::endl;
         std::cout << "Seed\t" << partition_config.seed << std::endl;
         srand(partition_config.seed);
         random_functions::setSeed(partition_config.seed);

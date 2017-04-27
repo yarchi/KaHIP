@@ -171,7 +171,7 @@ public:
 
         explicit HashMap(const uint64_t max_size = 0) :
                 _empty_element(std::numeric_limits<Key>::max()),
-                _max_size(round_up_to_next_power_2(max_size)),
+                _max_size(std::max<uint32_t>(round_up_to_next_power_2(max_size), 16)),
                 _ht_size(_max_size * SizeFactor),
                 _ht(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value())),
                 _poses(),
