@@ -63,6 +63,10 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
                         overall_improvement += kway->perform_refinement(config, G, boundary);
                 } 
 
+                if(config.fastmultitry) {
+                        overall_improvement += multitry_kway->perform_refinement(config, G, boundary, 10, true, config.kway_adaptive_limits_alpha);
+                }
+
                 if(!config.quotient_graph_refinement_disabled) {
                         overall_improvement += refine->perform_refinement(config, G, boundary);
                 }

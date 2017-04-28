@@ -34,6 +34,7 @@ class configuration {
                 void strong( PartitionConfig & config );
                 void eco( PartitionConfig & config );
                 void fast( PartitionConfig & config );
+                void fastmultitry( PartitionConfig & config );
 
                 void strong_separator( PartitionConfig & config );
                 void eco_separator( PartitionConfig & config );
@@ -119,6 +120,36 @@ inline void configuration::eco( PartitionConfig & partition_config ) {
         partition_config.minipreps                              = 4;
         partition_config.initial_partitioning_repetitions       = 16;
 }
+
+inline void configuration::fastmultitry( PartitionConfig & partition_config ) {
+        standard(partition_config);
+
+        partition_config.fast = true;
+        partition_config.fastmultitry = true;
+        //if(partition_config.k > 8) {
+        partition_config.quotient_graph_refinement_disabled     = true;
+        partition_config.kway_fm_search_limit                   = 0; 
+        partition_config.kway_stop_rule                         = KWAY_SIMPLE_STOP_RULE; 
+        partition_config.corner_refinement_enabled              = true; 
+        //} else {
+                //partition_config.corner_refinement_enabled              = false; 
+        //}
+        partition_config.permutation_quality                    = PERMUTATION_QUALITY_FAST;
+        partition_config.permutation_during_refinement          = PERMUTATION_QUALITY_NONE;
+        partition_config.matching_type                          = MATCHING_RANDOM_GPA;
+        partition_config.aggressive_random_levels               = 4;
+        partition_config.refinement_scheduling_algorithm        = REFINEMENT_SCHEDULING_FAST;
+        partition_config.edge_rating                            = EXPANSIONSTAR2;
+        partition_config.fm_search_limit                        = 0;
+        partition_config.bank_account_factor                    = 1;
+
+        partition_config.initial_partitioning_type              = INITIAL_PARTITIONING_RECPARTITION;
+        partition_config.bipartition_tries                      = 4;
+        partition_config.minipreps                              = 1;
+        partition_config.initial_partitioning_repetitions       = 0;
+
+}
+
 
 inline void configuration::fast( PartitionConfig & partition_config ) {
         standard(partition_config);
@@ -281,6 +312,7 @@ inline void configuration::standard( PartitionConfig & partition_config ) {
         partition_config.seed                                   = 0;
         partition_config.fast                                   = false;
         partition_config.mode_node_separators                   = false;
+        partition_config.fastmultitry                           = false;
         partition_config.eco                                    = false;
         partition_config.strong                                 = false;
         partition_config.first_level_random_matching            = false;
@@ -295,6 +327,7 @@ inline void configuration::standard( PartitionConfig & partition_config ) {
         partition_config.minipreps                              = 10;
         partition_config.enable_omp                             = false;
         partition_config.combine                                = false;
+        partition_config.global_multitry_rounds                 = 10;
 #ifndef MODE_NODESEP
         partition_config.epsilon                                = 3; 
         partition_config.imbalance                              = 3;
