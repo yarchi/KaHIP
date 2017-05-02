@@ -276,9 +276,13 @@ struct PartitionConfig
 
         bool strong;
 
+        bool fastmultitry;
+
         bool kaffpaE;
 
 	bool balance_edges;
+
+        int global_multitry_rounds;
 
         // number of blocks the graph should be partitioned in
         PartitionID k;

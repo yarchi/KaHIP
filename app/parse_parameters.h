@@ -114,8 +114,13 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *initial_partition_optimize_multitry_fm_alpha = arg_int0(NULL, "initial_partition_optimize_multitry_fm_limits", NULL, "Initial Partition Optimize Multitry FM limits. (Default: 20)");
         struct arg_int *initial_partition_optimize_multitry_rounds   = arg_int0(NULL, "initial_partition_optimize_multitry_rounds", NULL, "(Default: 100)");
 
+<<<<<<< HEAD
 #ifdef MODE_KAFFPAs
         struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallels)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: eco) [strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel]." );
+=======
+#ifdef MODE_KAFFPA
+        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|fastmultitry)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: eco) [strong|eco|fast|fastsocial|ecosocial|strongsocial|fastmultitry]." );
+>>>>>>> configuration
 #else
         struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: strong) [strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel]." );
 #endif
@@ -133,6 +138,7 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *kaba_internal_no_aug_steps_aug       = arg_int0(NULL, "kaba_internal_no_aug_steps_aug", NULL, "Internal number of steps in the augmented models of negative cycle detection.");
         struct arg_int *kaba_packing_iterations              = arg_int0(NULL, "kaba_packing_iterations", NULL, "Number of packing iterations.");
         struct arg_int *kaba_unsucc_iterations               = arg_int0(NULL, "kaba_unsucc_iterations", NULL, "Number of unsucc iterations until a rebalancing step is performed.");
+        struct arg_int *global_multitry_rounds               = arg_int0(NULL, "global_multitry_rounds", NULL, "");
         struct arg_lit *kaba_flip_packings                   = arg_lit0(NULL, "kaba_flip_packings", "Enable flip packing mode (if ultramodelplus is used).");
         struct arg_rex *kaba_lsearch_p                       = arg_rex0(NULL, "kaba_lsearch_p", "^(coindiff|coinrnd|nocoindiff|nocoinrnd)$", "VARIANT", REG_EXTENDED, "Make more localized search in ultraplus model.");
         struct arg_lit *kaffpa_perfectly_balanced_refinement = arg_lit0(NULL, "kaffpa_perfectly_balanced_refinement", "Enable perfectly balanced refinement during ML KaFFPa.");
@@ -216,6 +222,7 @@ int parse_parameters(int argn, char **argv,
                 time_limit, 
                 enforce_balance, 
 		balance_edges,
+<<<<<<< HEAD
                 filename_output,
                 num_threads,
                 block_size_unit,
@@ -235,6 +242,10 @@ int parse_parameters(int argn, char **argv,
                 kway_all_boundary_nodes_refinement,
                 local_multitry_rounds,
                 no_quotient_graph_two_way_refinement,
+=======
+                global_multitry_rounds,
+                filename_output, 
+>>>>>>> configuration
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -372,6 +383,8 @@ int parse_parameters(int argn, char **argv,
                         cfg.strongsocial_parallel(partition_config);
                 } else if (strcmp("fastsocial_parallel", preconfiguration->sval[0]) == 0) {
                         cfg.fastsocial_parallel(partition_config);
+                } else if (strcmp("fastmultitry", preconfiguration->sval[0]) == 0) {
+                        cfg.fastmultitry(partition_config);
                 } else {
                         fprintf(stderr, "Invalid preconfiguration variant: \"%s\"\n", preconfiguration->sval[0]);
                         exit(0);
@@ -417,6 +430,10 @@ int parse_parameters(int argn, char **argv,
 
         if(mh_enable_tournament_selection->count > 0) {
                 partition_config.mh_enable_tournament_selection = true;
+        }
+
+        if(global_multitry_rounds->count > 0) {
+                partition_config.global_multitry_rounds = global_multitry_rounds->ival[0];
         }
 
         if(amg_iterations->count > 0) {
