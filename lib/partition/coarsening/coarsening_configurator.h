@@ -29,6 +29,7 @@
 #include "edge_rating/edge_ratings.h"
 #include "matching/gpa/gpa_matching.h"
 #include "matching/random_matching.h"
+#include "partition/coarsening/matching/local_max.h"
 #include "clustering/size_constraint_label_propagation.h"
 #include "stop_rules/stop_rules.h"
 
@@ -61,6 +62,12 @@ inline void coarsening_configurator::configure_coarsening( const PartitionConfig
                case CLUSTER_COARSENING:
                         PRINT(std::cout <<  "cluster_coarsening"  << std::endl;)
                         *edge_matcher = new size_constraint_label_propagation();
+                        break;
+                case MATCHING_SEQUENTIAL_LOCAL_MAX:
+                        *edge_matcher = new local_max_matching();
+                        break;
+                case MATCHING_PARALLEL_LOCAL_MAX:
+                        *edge_matcher = new local_max_matching();
                         break;
 
         }
