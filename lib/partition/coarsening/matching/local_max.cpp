@@ -20,7 +20,10 @@ void local_max_matching::match(const PartitionConfig& partition_config,
                 case MATCHING_PARALLEL_LOCAL_MAX:
                         parallel_match(partition_config, G, edge_matching, mapping, no_of_coarse_vertices, permutation);
                         break;
-
+                default:
+                        std::cout << "Incorrect matching type expected sequential local max or parallel local max"
+                                  << std::endl;
+                        abort();
         }
 }
 
@@ -159,7 +162,7 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
                 block_type next_block;
                 next_block.reserve(block_size);
 
-                auto& rnd = randoms[id];
+                auto& rnd = randoms[id].get();
 
                 while (node_queue.try_pop(block)) {
                         for (NodeID node : block) {
@@ -273,7 +276,7 @@ local_max_matching::find_max_neighbour_sequential(NodeID node, graph_access& G, 
                 EdgeWeight edge_weight = G.getEdgeWeight(e);
                 NodeWeight coarser_weight = G.getNodeWeight(target) + node_weight;
 
-                if ((edge_weight > max_weight || edge_weight == max_weight && rnd.bit()) &&
+                if ((edge_weight > max_weight || (edge_weight == max_weight && rnd.bit())) &&
                     edge_matching[target] == target &&
                     coarser_weight <= partition_config.max_vertex_weight) {
 
@@ -305,7 +308,7 @@ local_max_matching::find_max_neighbour_parallel(NodeID node, graph_access& G, co
                 EdgeWeight edge_weight = G.getEdgeWeight(e);
                 NodeWeight coarser_weight = G.getNodeWeight(target) + node_weight;
 
-                if ((edge_weight > max_weight || edge_weight == max_weight && rnd.bit()) &&
+                if ((edge_weight > max_weight || (edge_weight == max_weight && rnd.bit())) &&
                     vertex_mark[target].load(std::memory_order_relaxed) != MatchingPhases::MATCHED &&
                     coarser_weight <= partition_config.max_vertex_weight) {
 

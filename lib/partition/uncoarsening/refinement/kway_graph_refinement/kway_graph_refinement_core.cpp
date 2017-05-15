@@ -158,7 +158,10 @@ std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::single_kway_refineme
                         break;
                 }
 #else
-                if( stopping_rule->search_should_stop(min_cut_index >= 0 ? min_cut_index : 0, number_of_swaps, step_limit) ) break;
+                if( stopping_rule->search_should_stop(min_cut_index >= 0 ? min_cut_index : 0,
+                                                      number_of_swaps, step_limit) ) {
+                        break;
+                }
 #endif
                 Gain gain = queue->maxValue();
                 NodeID node = queue->deleteMax();
@@ -221,6 +224,17 @@ std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::single_kway_refineme
 
                 move_node_back(config, G, node, to,  moved_idx, queue, boundary);
         }
+
+//        if (config.kway_all_boundary_nodes_refinement) {
+//                for (auto node : transpositions) {
+//                        reactivated_vertices.push_back(node);
+//
+//                        forall_out_edges(G, e, node){
+//                                NodeID target = G.getEdgeTarget(e);
+//                                reactivated_vertices.push_back(target);
+//                        } endfor
+//                }
+//        }
 
 
         //reconstruct the touched partitions

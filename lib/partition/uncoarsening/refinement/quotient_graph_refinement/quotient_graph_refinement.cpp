@@ -71,8 +71,8 @@ EdgeWeight quotient_graph_refinement::perform_refinement_all(PartitionConfig& co
         if (config.refinement_scheduling_algorithm == REFINEMENT_SCHEDULING_ACTIVE_BLOCKS_REF_KWAY) {
                 std::cout << "START KWAY" << std::endl;
                 auto kway_ref = get_multitry_kway_fm_instance(config, G, boundary);
-                overall_improvement = kway_ref->perform_refinement_all(config, G, boundary, true,
-                                                                                  config.local_multitry_fm_alpha);
+                overall_improvement = kway_ref->perform_refinement(config, G, boundary, config.global_multitry_rounds,
+                                                                   true, config.kway_adaptive_limits_alpha);
 
                 std::cout << "Cut improvement time\t" << CLOCK_END_TIME << std::endl;
                 std::cout << "Cut improvement\t" << overall_improvement << std::endl;
@@ -173,7 +173,7 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
                                 time += CLOCK_END_TIME;
                                 cut_improvement += multitry_improvement;
                                 //int cut_diff = old_cut - qm.edge_cut(G);
-                                //std::cout << "Improved:\t" << multitry_improvement << ", expected:\t" << cut_diff << std::endl;
+                                //std::cout << "Improved multitry:\t" << multitry_improvement << ", expected:\t" << cut_diff << std::endl;
                                 //ALWAYS_ASSERT(cut_diff == multitry_improvement);
 
                                 if (multitry_improvement > 0) {

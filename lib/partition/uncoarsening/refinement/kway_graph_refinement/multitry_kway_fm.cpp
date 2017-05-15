@@ -36,6 +36,7 @@ double multitry_kway_fm::time_setup_start_nodes(0);
 double multitry_kway_fm::time_local_search(0);
 double multitry_kway_fm::time_generate_moves(0);
 uint32_t multitry_kway_fm::tried_movements(0);
+uint32_t multitry_kway_fm::scaned_movements(0);
 
 std::unique_ptr<multitry_kway_fm> get_multitry_kway_fm_instance(PartitionConfig& config,
                                                                 graph_access& G, complete_boundary& boundary) {
@@ -62,12 +63,16 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
         unsigned tmp_alpha = config.kway_adaptive_limits_alpha;
         KWayStopRule tmp_stop = config.kway_stop_rule;
         config.kway_adaptive_limits_alpha = alpha;
-        //config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
+        config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
 
         int overall_improvement = 0;
-        for (unsigned i = 0; i < rounds; i++) {
+        while (true) {
+        //for (unsigned i = 0; i < rounds; i++) {
+                CLOCK_START;
                 boundary_starting_nodes start_nodes;
                 boundary.setup_start_nodes_all(G, start_nodes);
+                time_setup_start_nodes += CLOCK_END_TIME;
+
                 if (start_nodes.size() == 0) {
                         return 0;
                 }// nothing to refine
@@ -79,11 +84,15 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
                         todolist.push_back(start_nodes[i]);
                 }
 
-                std::unordered_map <PartitionID, PartitionID> touched_blocks;
-                EdgeWeight improvement = start_more_locallized_search(config, G, boundary,
-                                                                      init_neighbors, false, touched_blocks,
-                                                                      todolist);
-                if (improvement == 0) break;
+                CLOCK_START_N;
+                std::unordered_map<PartitionID, PartitionID> touched_blocks;
+                EdgeWeight improvement = start_more_locallized_search(config, G, boundary, init_neighbors, false,
+                                                                      touched_blocks, todolist);
+                time_local_search += CLOCK_END_TIME;
+
+                if (improvement == 0) {
+                        break;
+                }
                 overall_improvement += improvement;
 
         }
@@ -116,7 +125,9 @@ int multitry_kway_fm::perform_refinement_around_parts(PartitionConfig& config, g
                 boundary.setup_start_nodes_around_blocks(G, lhs, rhs, start_nodes);
                 time_setup_start_nodes += CLOCK_END_TIME;
 
-                if (start_nodes.size() == 0) { return 0; }// nothing to refine
+                if (start_nodes.size() == 0) {
+                        return 0;
+                }// nothing to refine
 
                 //now we do something with the start nodes
                 std::vector <NodeID> todolist;
@@ -176,6 +187,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                         if (init_neighbors) {
                                 forall_out_edges(G, e, node)
                                 {
+                                        ++scaned_movements;
                                         NodeID target = G.getEdgeTarget(e);
                                         if (moved_idx.find(target) == moved_idx.end()) {
                                                 extdeg = 0;
@@ -208,10 +220,9 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 
                         overall_improvement += improvement;
                         this->tried_movements += tried_movements;
-
                 }
 
-                if (moved_idx.size() > 0.05 * G.number_of_nodes()) break;
+                if (!config.kway_all_boundary_nodes_refinement && moved_idx.size() > 0.05 * G.number_of_nodes()) break;
                 std::swap(todolist[random_idx], todolist[idx--]);
                 todolist.pop_back();
         }

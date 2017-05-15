@@ -105,12 +105,12 @@ class random_functions {
                                 for( unsigned int i = 0; i < size; i++) {
                                         unsigned int posA = A(m_mt);
                                         unsigned int posB = B(m_mt);
-                                        std::swap(vec[posA], vec[posB]); 
+                                        std::swap(vec[posA], vec[posB]);
                                         std::swap(vec[posA+1], vec[posB+1]); 
                                         std::swap(vec[posA+2], vec[posB+2]); 
                                         std::swap(vec[posA+3], vec[posB+3]); 
 
-                                } 
+                                }
                         }
 
                 template<typename sometype>
@@ -147,7 +147,7 @@ class random_functions {
 
                 static bool nextBool() {
                         std::uniform_int_distribution<unsigned int> A(0,1);
-                        return (bool) A(m_mt); 
+                        return (bool) A(m_mt);
                 }
 
                 //including lb and rb

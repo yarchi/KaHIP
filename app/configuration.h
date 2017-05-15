@@ -35,6 +35,7 @@ class configuration {
                 void eco( PartitionConfig & config );
                 void fast( PartitionConfig & config );
                 void fastmultitry( PartitionConfig & config );
+                void fastmultitry_parallel( PartitionConfig & config );
 
                 void strong_separator( PartitionConfig & config );
                 void eco_separator( PartitionConfig & config );
@@ -150,8 +151,14 @@ inline void configuration::fastmultitry( PartitionConfig & partition_config ) {
         partition_config.minipreps                              = 1;
         partition_config.initial_partitioning_repetitions       = 0;
 
+        partition_config.kway_all_boundary_nodes_refinement = true;
+
 }
 
+inline void configuration::fastmultitry_parallel( PartitionConfig & partition_config ) {
+        fastmultitry(partition_config);
+        partition_config.parallel_multitry_kway = true;
+}
 
 inline void configuration::fast( PartitionConfig & partition_config ) {
         standard(partition_config);

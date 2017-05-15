@@ -32,7 +32,8 @@
 #include "tools/random_functions.h"
 #include "uncoarsening/refinement/quotient_graph_refinement/2way_fm_refinement/vertex_moved_hashtable.h"
 #include "uncoarsening/refinement/refinement.h"
-
+#include "uncoarsening/refinement/kway_graph_refinement/kway_graph_refinement_core.h"
+#include "multitry_kway_fm.h"
 
 
 class kway_graph_refinement_core {
@@ -136,6 +137,7 @@ inline bool kway_graph_refinement_core::move_node(PartitionConfig & config,
 
         //update gain of neighbors / the boundaries have allready been updated
         forall_out_edges(G, e, node) {
+                ++multitry_kway_fm::scaned_movements;
                 NodeID target = G.getEdgeTarget(e);
                 PartitionID targets_max_gainer;
                 EdgeWeight ext_degree; // the local external degree

@@ -64,10 +64,10 @@ inline void coarsening_configurator::configure_coarsening( const PartitionConfig
                         *edge_matcher = new size_constraint_label_propagation();
                         break;
                 case MATCHING_SEQUENTIAL_LOCAL_MAX:
-                        *edge_matcher = new local_max_matching();
+                        *edge_matcher = new parallel::local_max_matching();
                         break;
                 case MATCHING_PARALLEL_LOCAL_MAX:
-                        *edge_matcher = new local_max_matching();
+                        *edge_matcher = new parallel::local_max_matching();
                         break;
 
         }

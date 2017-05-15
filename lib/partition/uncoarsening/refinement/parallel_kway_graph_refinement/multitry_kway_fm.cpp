@@ -20,42 +20,6 @@ std::vector<thread_data_factory::statistics_type> thread_data_factory::m_statist
 int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& G,
                                          complete_boundary& boundary, unsigned rounds,
                                          bool init_neighbors, unsigned alpha) {
-        // not implemented yet
-        ALWAYS_ASSERT(false);
-        unsigned tmp_alpha = config.kway_adaptive_limits_alpha;
-        KWayStopRule tmp_stop = config.kway_stop_rule;
-        config.kway_adaptive_limits_alpha = alpha;
-        config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
-
-        int overall_improvement = 0;
-        for (unsigned i = 0; i < rounds; i++) {
-                boundary_starting_nodes start_nodes;
-                boundary.setup_start_nodes_all(G, start_nodes);
-                if (start_nodes.size() == 0) {
-                        break;
-                }// nothing to refine
-
-                std::unordered_map<PartitionID, PartitionID> touched_blocks;
-//                EdgeWeight improvement = start_more_locallized_search(config, G, boundary, init_neighbors, false,
-//                                                                      touched_blocks, start_nodes);
-//                if (improvement == 0) {
-//                        break;
-//                }
-//                overall_improvement += improvement;
-
-        }
-
-        ASSERT_TRUE(overall_improvement >= 0);
-
-        config.kway_adaptive_limits_alpha = tmp_alpha;
-        config.kway_stop_rule = tmp_stop;
-
-        return (int) overall_improvement;
-}
-
-int multitry_kway_fm::perform_refinement_all(PartitionConfig& config, graph_access& G,
-                                                      complete_boundary& boundary, bool init_neighbors,
-                                                      unsigned alpha) {
         unsigned tmp_alpha = config.kway_adaptive_limits_alpha;
         KWayStopRule tmp_stop = config.kway_stop_rule;
         config.kway_adaptive_limits_alpha = alpha;
@@ -255,6 +219,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 
                                         if (improvement < 0) {
                                                 std::cout << "buf error improvement < 0" << std::endl;
+                                                abort();
                                         }
 
                                         td.upper_bound_gain_improvement += improvement;

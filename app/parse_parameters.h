@@ -114,15 +114,10 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *initial_partition_optimize_multitry_fm_alpha = arg_int0(NULL, "initial_partition_optimize_multitry_fm_limits", NULL, "Initial Partition Optimize Multitry FM limits. (Default: 20)");
         struct arg_int *initial_partition_optimize_multitry_rounds   = arg_int0(NULL, "initial_partition_optimize_multitry_rounds", NULL, "(Default: 100)");
 
-<<<<<<< HEAD
 #ifdef MODE_KAFFPAs
-        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallels)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: eco) [strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel]." );
-=======
-#ifdef MODE_KAFFPA
-        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|fastmultitry)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: eco) [strong|eco|fast|fastsocial|ecosocial|strongsocial|fastmultitry]." );
->>>>>>> configuration
+        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: eco) [strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel]." );
 #else
-        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: strong) [strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel]." );
+        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: strong) [strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel]." );
 #endif
 
         struct arg_dbl *time_limit                           = arg_dbl0(NULL, "time_limit", NULL, "Time limit in s. Default 0s .");
@@ -222,7 +217,6 @@ int parse_parameters(int argn, char **argv,
                 time_limit, 
                 enforce_balance, 
 		balance_edges,
-<<<<<<< HEAD
                 filename_output,
                 num_threads,
                 block_size_unit,
@@ -242,10 +236,7 @@ int parse_parameters(int argn, char **argv,
                 kway_all_boundary_nodes_refinement,
                 local_multitry_rounds,
                 no_quotient_graph_two_way_refinement,
-=======
                 global_multitry_rounds,
-                filename_output, 
->>>>>>> configuration
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -385,6 +376,8 @@ int parse_parameters(int argn, char **argv,
                         cfg.fastsocial_parallel(partition_config);
                 } else if (strcmp("fastmultitry", preconfiguration->sval[0]) == 0) {
                         cfg.fastmultitry(partition_config);
+                } else if (strcmp("fastmultitry_parallel", preconfiguration->sval[0]) == 0) {
+                        cfg.fastmultitry_parallel(partition_config);
                 } else {
                         fprintf(stderr, "Invalid preconfiguration variant: \"%s\"\n", preconfiguration->sval[0]);
                         exit(0);

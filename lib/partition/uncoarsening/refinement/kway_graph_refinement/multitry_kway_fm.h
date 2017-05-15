@@ -23,7 +23,7 @@
 #ifndef MULTITRY_KWAYFM_PVGY97EW
 #define MULTITRY_KWAYFM_PVGY97EW
 
-#include <vector>
+#include  <vector>
 
 #include "data_structure/parallel/algorithm.h"
 #include "definitions.h"
@@ -43,12 +43,6 @@ public:
                                complete_boundary& boundary, unsigned rounds,
                                bool init_neighbors, unsigned alpha);
 
-        virtual int perform_refinement_all(PartitionConfig& config, graph_access& G, complete_boundary& boundary,
-                                           bool init_neighbors, unsigned alpha) {
-                ALWAYS_ASSERT(false);
-                return 0;
-        }
-
         virtual int perform_refinement_around_parts(PartitionConfig& config, graph_access& G,
                                             complete_boundary& boundary, bool init_neighbors,
                                             unsigned alpha,
@@ -60,13 +54,15 @@ public:
                 std::cout << "Time local search\t" << time_local_search << " s" << std::endl;
                 std::cout << "Time generate moves\t" << time_generate_moves << " s" << std::endl;
                 std::cout << "Total tried moves\t" << tried_movements << std::endl;
+                std::cout << "Total scanned neighbours\t" << scaned_movements << std::endl;
         }
 
-private:
         static double time_setup_start_nodes;
         static double time_local_search;
         static double time_generate_moves;
         static uint32_t tried_movements;
+        static uint32_t scaned_movements;
+private:
 
         int start_more_locallized_search(PartitionConfig& config, graph_access& G,
                                          complete_boundary& boundary,
