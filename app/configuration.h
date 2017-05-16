@@ -44,6 +44,7 @@ class configuration {
                 void standardsnw( PartitionConfig & config );
 
                 void fastsocial( PartitionConfig & config );
+                void fastsocialmultitry( PartitionConfig & config );
                 void ecosocial( PartitionConfig & config );
                 void strongsocial( PartitionConfig & config ); 
 
@@ -569,7 +570,14 @@ inline void configuration::standardsnw( PartitionConfig & partition_config ) {
         //partition_config.global_cycle_iterations = 3;
 //}
 
-
+inline void configuration::fastsocialmultitry( PartitionConfig & partition_config ) {
+        eco(partition_config);
+        standardsnw(partition_config);
+        partition_config.label_propagation_refinement = true;
+        partition_config.cluster_coarsening_during_ip = true;
+        partition_config.balance_factor               = 0;
+        partition_config.fastmultitry = true;
+}
 inline void configuration::fastsocial( PartitionConfig & partition_config ) {
         eco(partition_config);
         standardsnw(partition_config);

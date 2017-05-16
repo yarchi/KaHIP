@@ -115,7 +115,7 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *initial_partition_optimize_multitry_rounds   = arg_int0(NULL, "initial_partition_optimize_multitry_rounds", NULL, "(Default: 100)");
 
 #ifdef MODE_KAFFPA
-        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|fastmultitry)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: eco) [strong|eco|fast|fastsocial|ecosocial|strongsocial|fastmultitry]." );
+        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|fastsocialmultitry|ecosocial|strongsocial|fastmultitry)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: eco) [strong|eco|fast|fastsocial|ecosocial|strongsocial|fastmultitry]." );
 #else
         struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: strong) [strong|eco|fast|fastsocial|ecosocial|strongsocial]." );
 #endif
@@ -334,6 +334,8 @@ int parse_parameters(int argn, char **argv,
                         cfg.fast(partition_config);
                 } else if (strcmp("fastsocial", preconfiguration->sval[0]) == 0) {
                         cfg.fastsocial(partition_config);
+                } else if (strcmp("fastsocialmultitry", preconfiguration->sval[0]) == 0) {
+                        cfg.fastsocialmultitry(partition_config);
                 } else if (strcmp("ecosocial", preconfiguration->sval[0]) == 0) {
                         cfg.ecosocial(partition_config);
                 } else if (strcmp("strongsocial", preconfiguration->sval[0]) == 0) {
