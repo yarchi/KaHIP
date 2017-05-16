@@ -218,6 +218,7 @@ int main(int argn, char **argv) {
         // ******************************* done partitioning *****************************************       
         ofs.close();
         std::cout.rdbuf(backup);
+        std::cout << "imbalance\t" << partition_config.imbalance / 100.0 << std::endl;
         std::cout <<  "time spent for partitioning " << t.elapsed()  << std::endl;
        
         // output some information about the partition that we have computed
