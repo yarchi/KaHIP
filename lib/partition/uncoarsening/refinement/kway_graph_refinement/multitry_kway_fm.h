@@ -49,19 +49,28 @@ public:
                                             PartitionID& lhs, PartitionID& rhs,
                                             std::unordered_map <PartitionID, PartitionID>& touched_blocks);
 
+        static void reset_statistics() {
+                time_setup_start_nodes = 0.0;
+                time_local_search = 0.0;
+                time_generate_moves = 0.0;
+                tried_movements = 0;
+                kway_graph_refinement_commons::scaned_movements = 0;
+                kway_graph_refinement_commons::num_part_accesses = 0;
+        }
+
         static void print_full_statistics() {
                 std::cout << "Time setup start nodes\t" << time_setup_start_nodes << " s" << std::endl;
                 std::cout << "Time local search\t" << time_local_search << " s" << std::endl;
                 std::cout << "Time generate moves\t" << time_generate_moves << " s" << std::endl;
                 std::cout << "Total tried moves\t" << tried_movements << std::endl;
-                std::cout << "Total scanned neighbours\t" << scaned_movements << std::endl;
+                std::cout << "Total scanned neighbours\t" << kway_graph_refinement_commons::scaned_movements << std::endl;
+                std::cout << "Number of partition accesses\t" << kway_graph_refinement_commons::num_part_accesses << std::endl;
         }
 
         static double time_setup_start_nodes;
         static double time_local_search;
         static double time_generate_moves;
         static uint32_t tried_movements;
-        static uint32_t scaned_movements;
 private:
 
         int start_more_locallized_search(PartitionConfig& config, graph_access& G,

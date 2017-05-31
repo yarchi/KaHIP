@@ -140,8 +140,6 @@ private:
         Position _offset;
 };
 
-#undef PERFORMANCE_STATISTICS
-
 template <typename Key, typename Value, typename Hash = xxhash<Key>,
         bool TGrowable = false, bool Cache = true, size_t SizeFactor = 2>
 class HashMap {
@@ -150,10 +148,10 @@ public:
         using key_type = Key;
         using mapped_type = Value;
         using hash_type = typename Hash::hash_type;
+        using Position = uint32_t;
 
 private:
         using TSelf = HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>;
-        using Position = uint32_t;
 
         static constexpr hash_type max_hash_value = std::numeric_limits<hash_type>::max();
 
@@ -169,6 +167,8 @@ public:
 
         friend Iterator;
 
+        static constexpr size_t size_factor = SizeFactor;
+
         explicit HashMap(const uint64_t max_size = 0) :
                 _empty_element(std::numeric_limits<Key>::max()),
                 _max_size(std::max<uint32_t>(round_up_to_next_power_2(max_size), 16)),
@@ -182,6 +182,10 @@ public:
                 _poses.reserve(_max_size);
         }
 
+        inline constexpr size_t ht_memory_size() const {
+                return _ht.size() * sizeof(Element);
+        }
+
         HashMap(const TSelf&) = default;
         HashMap(TSelf&&) = default;
 
@@ -193,13 +197,6 @@ public:
                 overall_max_size = std::max<uint32_t>(overall_max_size, size());
         }
 #endif
-
-        static constexpr size_t get_max_size_to_fit_l1() {
-                // (SizeFactor + 1.1) * max_size * sizeof(Element) + sizeof(Position) * max_size Bytes = 16 * 1024 Bytes,
-                // where 16 * 1024 Bytes is half of L1 cache and (2 + 1.1) * max_size * 8 + 4 * max_size Bytes
-                // is the size of a hash table. We calculate that max_size ~ 560.
-                return round_up_to_next_power_2(16 * 1024 / (sizeof(Element) * (SizeFactor + 1.1) + sizeof(Position)) - sizeof(TSelf)) / SizeFactor;
-        }
 
         Iterator begin() const {
                 return Iterator(*this, 0);
@@ -295,10 +292,29 @@ public:
         }
 
 #ifdef PERFORMANCE_STATISTICS
+        static void reset_statistics() {
+                num_access = 0;
+                num_contain = 0;
+                overall_max_size = 0;
+                num_find_pos = 0;
+                num_probes = 0;
+        }
+
         static void print_statistics() {
                 std::cout << "Num access\t" << num_access << std::endl;
                 std::cout << "Num contain\t" << num_contain << std::endl;
-                std::cout << "Max size\t" << overall_max_size << std::endl;
+                std::cout << "Max overall max size\t" << overall_max_size << std::endl;
+                std::cout << "Num find pos\t" << num_find_pos << std::endl;
+                std::cout << "Num probes\t" << num_probes << std::endl;
+                std::cout << "Average num prob per find pos\t" << (num_probes + 0.0) / num_find_pos << std::endl;
+        }
+
+        void print_full_statistics() const {
+                std::cout << "Num access\t" << num_access << std::endl;
+                std::cout << "Num contain\t" << num_contain << std::endl;
+                std::cout << "Max overall max size\t" << overall_max_size << std::endl;
+                std::cout << "Size\t" << size() << std::endl;
+                std::cout << "Mem (table onle)\t" << _ht.size() * sizeof(Element) << std::endl;
                 std::cout << "Num find pos\t" << num_find_pos << std::endl;
                 std::cout << "Num probes\t" << num_probes << std::endl;
                 std::cout << "Average num prob per find pos\t" << (num_probes + 0.0) / num_find_pos << std::endl;

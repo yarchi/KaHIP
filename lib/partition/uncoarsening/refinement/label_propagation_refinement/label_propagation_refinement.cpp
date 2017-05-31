@@ -40,19 +40,21 @@ using namespace parallel;
 
 label_propagation_refinement::label_propagation_refinement()
         :       m_block_allocator(2)
-{}
+{
+}
 
 label_propagation_refinement::~label_propagation_refinement() {
 
 }
 
 EdgeWeight label_propagation_refinement::perform_refinement(PartitionConfig& config, graph_access& G,
-                                                            complete_boundary& boundary) {
+                                                            complete_boundary&) {
 
         //if (!config.parallel_lp || G.number_of_nodes() < 10000000) {
+        std::cout << "LP for graph with " << G.number_of_nodes() << " nodes and " << G.number_of_edges() << " edges" << std::endl;
         if (!config.parallel_lp) {
                 auto begin = std::chrono::high_resolution_clock::now();
-                auto res = sequential_label_propagation(config, G, boundary);
+                auto res = sequential_label_propagation(config, G);
                 auto end = std::chrono::high_resolution_clock::now();
 
                 std::cout << "Sequential lp:\t" << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
@@ -65,7 +67,7 @@ EdgeWeight label_propagation_refinement::perform_refinement(PartitionConfig& con
                 m_block_allocator.init((2 * std::ceil(size / config.block_size) + config.num_threads) * config.block_size * sizeof(NodeID));
 
                 auto begin = std::chrono::high_resolution_clock::now();
-                auto res = parallel_label_propagation(config, G, boundary);
+                auto res = parallel_label_propagation(config, G);
                 auto end = std::chrono::high_resolution_clock::now();
 
                 std::cout << "Parallel lp:\t" << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
@@ -76,8 +78,7 @@ EdgeWeight label_propagation_refinement::perform_refinement(PartitionConfig& con
 }
 
 EdgeWeight label_propagation_refinement::sequential_label_propagation(PartitionConfig & partition_config,
-                                                                      graph_access & G,
-                                                                      complete_boundary & boundary) {
+                                                                      graph_access & G) {
         auto begin = std::chrono::high_resolution_clock::now();
         //__itt_resume();
         NodeWeight block_upperbound = partition_config.upper_bound_partition;
@@ -266,7 +267,7 @@ EdgeWeight label_propagation_refinement::sequential_label_propagation(PartitionC
 
 }
 
-void label_propagation_refinement::init_for_node_unit(graph_access& G, const size_t block_size, TThreadPool& pool,
+void label_propagation_refinement::init_for_node_unit(graph_access& G, const size_t block_size,
                                                       std::vector<Pair>& permutation,
                                                       std::vector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                       std::unique_ptr<ConcurrentQueue>& queue) {
@@ -289,7 +290,7 @@ void label_propagation_refinement::init_for_node_unit(graph_access& G, const siz
         }
 }
 
-void label_propagation_refinement::seq_init_for_edge_unit(graph_access& G, const size_t block_size, TThreadPool& pool,
+void label_propagation_refinement::seq_init_for_edge_unit(graph_access& G, const size_t block_size,
                                                       std::vector<Pair>& permutation,
                                                       std::vector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                       std::unique_ptr<ConcurrentQueue>& queue) {
@@ -314,7 +315,7 @@ void label_propagation_refinement::seq_init_for_edge_unit(graph_access& G, const
         }
 }
 
-void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const size_t block_size, TThreadPool& pool,
+void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const size_t block_size,
                                                       std::vector<Pair>& permutation,
                                                       std::vector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                       std::unique_ptr<ConcurrentQueue>& queue) {
@@ -324,7 +325,7 @@ void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const
                                                                    std::memory_order_relaxed);
         } endfor
 
-        apply_to_range_sync(NodeID(0), G.number_of_nodes(), pool, [&](auto begin, auto end) {
+        apply_to_range_sync(NodeID(0), G.number_of_nodes(), parallel::g_thread_pool, [&](auto begin, auto end) {
                 Block block(m_block_allocator);
                 block.reserve(100);
                 size_t cur_block_size = 0;
@@ -349,7 +350,6 @@ void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const
 
 EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(graph_access& G,
                                                                                PartitionConfig& config,
-                                                                               TThreadPool& pool,
                                                                                Cvector<AtomicWrapper<NodeWeight>>& cluster_sizes1,
                                                                                std::vector<std::vector<PartitionID>>& hash_maps,
                                                                                std::vector<Pair>& permutation) {
@@ -379,12 +379,12 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
 
         if (use_edge_unit) {
                 if (G.number_of_nodes() < 10000000) {
-                        seq_init_for_edge_unit(G, block_size, pool, permutation, cluster_sizes, queue);
+                        seq_init_for_edge_unit(G, block_size, permutation, cluster_sizes, queue);
                 } else {
-                        par_init_for_edge_unit(G, block_size, pool, permutation, cluster_sizes, queue);
+                        par_init_for_edge_unit(G, block_size, permutation, cluster_sizes, queue);
                 }
         } else {
-                init_for_node_unit(G, block_size, pool, permutation, cluster_sizes, queue);
+                init_for_node_unit(G, block_size, permutation, cluster_sizes, queue);
         }
 
         auto e = std::chrono::high_resolution_clock::now();
@@ -392,7 +392,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                   << std::endl;
 
         std::vector<std::future<NodeWeight>> futures;
-        futures.reserve(pool.NumThreads());
+        futures.reserve(parallel::g_thread_pool.NumThreads());
         NodeWeight num_changed_label = 0;
 
         end = std::chrono::high_resolution_clock::now();
@@ -571,8 +571,8 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                 };
 
 
-                for (size_t i = 0; i < pool.NumThreads(); ++i) {
-                        futures.push_back(pool.Submit(process, i + 1));
+                for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
+                        futures.push_back(parallel::g_thread_pool.Submit(process, i + 1));
                 }
 
                 num_changed_label += process(0);
@@ -595,13 +595,12 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
 
 EdgeWeight label_propagation_refinement::parallel_label_propagation(graph_access& G,
                                                                     PartitionConfig& config,
-                                                                    TThreadPool& pool,
                                                                     Cvector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                                     std::vector<std::vector<PartitionID>>& hash_maps,
                                                                     std::vector<Pair>& permutation) {
         NodeWeight block_upperbound = config.upper_bound_partition;
         std::vector<std::future<NodeWeight>> futures;
-        futures.reserve(pool.NumThreads());
+        futures.reserve(parallel::g_thread_pool.NumThreads());
         NodeWeight num_changed_label = 0;
 
         end = std::chrono::high_resolution_clock::now();
@@ -675,10 +674,11 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(graph_access
                         return num_changed_label;
                 };
 
-                size_t work_per_thread = G.number_of_nodes() / (pool.NumThreads() + 1);
+                size_t work_per_thread = G.number_of_nodes() / (parallel::g_thread_pool.NumThreads() + 1);
                 NodeID first = 0;
-                for (size_t i = 0; i < pool.NumThreads(); ++i) {
-                        futures.push_back(pool.Submit(process, i + 1, first, first + work_per_thread));
+                for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
+                        futures.push_back(parallel::g_thread_pool.Submit(process, i + 1, first,
+                                                                         first + work_per_thread));
                         first += work_per_thread;
                 }
 
@@ -695,9 +695,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(graph_access
         return num_changed_label;
 }
 
-EdgeWeight label_propagation_refinement::parallel_label_propagation(PartitionConfig& config, graph_access& G,
-                                                                    complete_boundary& boundary) {
-        // TODO: pool should be passed to all functions
+EdgeWeight label_propagation_refinement::parallel_label_propagation(PartitionConfig& config, graph_access& G) {
         begin = std::chrono::high_resolution_clock::now();
         auto b = std::chrono::high_resolution_clock::now();
         std::vector <std::vector<PartitionID>> hash_maps(config.num_threads, std::vector<PartitionID>(config.k));
@@ -728,11 +726,10 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(PartitionCon
                   << std::chrono::duration_cast<std::chrono::microseconds>(e - b).count()
                   << std::endl;
 
-        TThreadPool pool(config.num_threads - 1);
         if (config.parallel_lp_type == ParallelLPType::NO_QUEUE) {
-                return parallel_label_propagation(G, config, pool, cluster_sizes, hash_maps, permutation);
+                return parallel_label_propagation(G, config, cluster_sizes, hash_maps, permutation);
         } else if (config.parallel_lp_type == ParallelLPType::QUEUE) {
-                return parallel_label_propagation_with_queue(G, config, pool, cluster_sizes, hash_maps, permutation);
+                return parallel_label_propagation_with_queue(G, config, cluster_sizes, hash_maps, permutation);
         } else {
                 return 0;
         }

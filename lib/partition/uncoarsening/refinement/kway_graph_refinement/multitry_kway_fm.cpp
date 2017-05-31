@@ -36,7 +36,6 @@ double multitry_kway_fm::time_setup_start_nodes(0);
 double multitry_kway_fm::time_local_search(0);
 double multitry_kway_fm::time_generate_moves(0);
 uint32_t multitry_kway_fm::tried_movements(0);
-uint32_t multitry_kway_fm::scaned_movements(0);
 
 std::unique_ptr<multitry_kway_fm> get_multitry_kway_fm_instance(PartitionConfig& config,
                                                                 graph_access& G, complete_boundary& boundary) {
@@ -66,6 +65,7 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
         config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
 
         int overall_improvement = 0;
+        size_t old = kway_graph_refinement_commons::num_part_accesses;
         while (true) {
         //for (unsigned i = 0; i < rounds; i++) {
                 CLOCK_START;
@@ -96,7 +96,7 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
                 overall_improvement += improvement;
 
         }
-
+        std::cout << "num part accesses\t" << kway_graph_refinement_commons::num_part_accesses - old << std::endl;
         ASSERT_TRUE(overall_improvement >= 0);
 
         config.kway_adaptive_limits_alpha = tmp_alpha;
@@ -172,6 +172,9 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
         int overall_improvement = 0;
 
         CLOCK_START;
+        //std::cout << "Size\t" << todolist.size() << std::endl;
+        size_t s = 0;
+        size_t old = kway_graph_refinement_commons::num_part_accesses;
         while (!todolist.empty()) {
                 int random_idx = random_functions::nextInt(0, idx);
                 NodeID node = todolist[random_idx];
@@ -187,7 +190,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                         if (init_neighbors) {
                                 forall_out_edges(G, e, node)
                                 {
-                                        ++scaned_movements;
+                                        ++kway_graph_refinement_commons::scaned_movements;
                                         NodeID target = G.getEdgeTarget(e);
                                         if (moved_idx.find(target) == moved_idx.end()) {
                                                 extdeg = 0;
@@ -220,13 +223,17 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 
                         overall_improvement += improvement;
                         this->tried_movements += tried_movements;
+                        s += tried_movements;
                 }
 
                 if (!config.kway_all_boundary_nodes_refinement && moved_idx.size() > 0.05 * G.number_of_nodes()) break;
                 std::swap(todolist[random_idx], todolist[idx--]);
                 todolist.pop_back();
         }
-        time_generate_moves += CLOCK_END_TIME;
+        //std::cout << "tried moves\t" << s << std::endl;
+        auto t = CLOCK_END_TIME;
+        //std::cout << "LS time\t" << t << std::endl;
+        time_generate_moves += t;
 
         //std::cout << "Cut improvement\t" << overall_improvement << std::endl;
         //std::cout << "Number of nodes moved\t" << moved_idx.size() << std::endl;

@@ -399,7 +399,8 @@ void kway_graph_refinement_core::unroll_moves(thread_data_refinement_core& td, i
 }
 
 std::pair<EdgeWeight, uint32_t>
-kway_graph_refinement_core::apply_moves(Cvector <thread_data_refinement_core>& threads_data,
+kway_graph_refinement_core::apply_moves(uint32_t num_threads,
+                                        Cvector <thread_data_refinement_core>& threads_data,
                                         bool compute_touched_partitions,
                                         std::unordered_map<PartitionID, PartitionID>& touched_blocks,
                                         std::vector<NodeID>& reactivated_vertices) const {
@@ -411,7 +412,7 @@ kway_graph_refinement_core::apply_moves(Cvector <thread_data_refinement_core>& t
 //        std::ofstream ftxt("moved_nodes_tmp.log");
 //        ftxt << "";
 //        ftxt.close();
-        for (size_t id = 0; id < threads_data.size(); ++id) {
+        for (size_t id = 0; id < num_threads; ++id) {
                 //std::cout << "Moved ";
                 overall_gain += apply_moves(threads_data[id].get(), moved_nodes, compute_touched_partitions,
                                             touched_blocks, reactivated_vertices);
@@ -717,7 +718,7 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
                         }
 
                         bool no_move = false;
-                        // check if any nodes where moved by other threads,
+                        // check if any neighbours were moved by other threads or were NOT moved by this thread
                         // if yes then stop moving
                         forall_out_edges(td.G, e, node) {
                                 NodeID target = td.G.getEdgeTarget(e);
@@ -844,9 +845,7 @@ void kway_graph_refinement_core::init_queue_with_boundary(thread_data_refinement
                 random_functions::permutate_vector_good(td.start_nodes, false);
         }
 
-        for (unsigned int i = 0; i < td.start_nodes.size(); i++) {
-                NodeID node = td.start_nodes[i];
-
+        for (NodeID node : td.start_nodes) {
                 bool expected = false;
                 if (td.moved_idx[node].compare_exchange_strong(expected, true, std::memory_order_relaxed)) {
                         PartitionID max_gainer;

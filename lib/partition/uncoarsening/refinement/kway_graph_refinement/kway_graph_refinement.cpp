@@ -60,9 +60,16 @@ EdgeWeight kway_graph_refinement::perform_refinement(PartitionConfig & config, g
 
                 vertex_moved_hashtable moved_idx;
                 uint32_t tried_movements;
+
+                size_t old_part_access = kway_graph_refinement_commons::num_part_accesses;
+                size_t old_scaned_movements = kway_graph_refinement_commons::scaned_movements;
+
                 std::tie(improvement, tried_movements) = refinement_core.single_kway_refinement_round(config, G, boundary,
                                                                             start_nodes, step_limit, 
                                                                             moved_idx);
+
+                kway_graph_refinement_commons::scaned_movements = old_scaned_movements;
+                kway_graph_refinement_commons::num_part_accesses = old_part_access;
 
                 sth_changed = improvement != 0 && config.no_change_convergence;
                 if(improvement == 0) break;

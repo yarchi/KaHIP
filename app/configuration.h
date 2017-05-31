@@ -46,6 +46,8 @@ class configuration {
 
                 void fastsocial( PartitionConfig & config );
                 void fastsocial_parallel( PartitionConfig & config );
+                void fastsocialmultitry( PartitionConfig & config );
+                void fastsocialmultitry_parallel( PartitionConfig & config );
                 void ecosocial( PartitionConfig & config );
                 void strongsocial( PartitionConfig & config );
                 void strongsocial_parallel( PartitionConfig& config);
@@ -129,6 +131,7 @@ inline void configuration::fastmultitry( PartitionConfig & partition_config ) {
 
         partition_config.fast = true;
         partition_config.fastmultitry = true;
+        partition_config.kway_all_boundary_nodes_refinement = true;
         //if(partition_config.k > 8) {
         partition_config.quotient_graph_refinement_disabled     = true;
         partition_config.kway_fm_search_limit                   = 0; 
@@ -151,8 +154,9 @@ inline void configuration::fastmultitry( PartitionConfig & partition_config ) {
         partition_config.minipreps                              = 1;
         partition_config.initial_partitioning_repetitions       = 0;
 
-        partition_config.kway_all_boundary_nodes_refinement = true;
-
+        // experiment:
+        //partition_config.label_propagation_refinement = true;
+        partition_config.parallel_lp = false;
 }
 
 inline void configuration::fastmultitry_parallel( PartitionConfig & partition_config ) {
@@ -578,6 +582,23 @@ inline void configuration::standardsnw( PartitionConfig & partition_config ) {
         //partition_config.global_cycle_iterations = 3;
 //}
 
+inline void configuration::fastsocialmultitry( PartitionConfig & partition_config ) {
+        eco(partition_config);
+        standardsnw(partition_config);
+//        partition_config.label_propagation_refinement = true;
+//        partition_config.cluster_coarsening_during_ip = true;
+//        partition_config.balance_factor               = 0;
+
+        partition_config.fastmultitry = true;
+        partition_config.kway_all_boundary_nodes_refinement = true;
+        //if(partition_config.k > 8) {
+        partition_config.quotient_graph_refinement_disabled     = true;
+}
+
+inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partition_config) {
+        fastsocialmultitry(partition_config);
+        partition_config.parallel_multitry_kway = true;
+}
 
 inline void configuration::fastsocial( PartitionConfig & partition_config ) {
         eco(partition_config);

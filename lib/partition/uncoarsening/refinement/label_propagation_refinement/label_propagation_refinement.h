@@ -44,7 +44,7 @@ public:
 
         virtual EdgeWeight perform_refinement(PartitionConfig & config, 
                                               graph_access & G, 
-                                              complete_boundary & boundary);
+                                              complete_boundary&);
 
 private:
         using Allocator = growt::PoolAllocator<NodeID>;
@@ -56,38 +56,34 @@ private:
 
         std::chrono::system_clock::time_point begin, end;
         EdgeWeight sequential_label_propagation(PartitionConfig & config,
-                                                graph_access & G,
-                                                complete_boundary & boundary);
+                                                graph_access & G);
 
         EdgeWeight parallel_label_propagation(PartitionConfig & config,
-                                              graph_access & G,
-                                              complete_boundary & boundary);
+                                              graph_access & G);
 
         EdgeWeight parallel_label_propagation_with_queue(graph_access& G,
                                                          PartitionConfig& config,
-                                                         parallel::TThreadPool& pool,
                                                          parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                          std::vector<std::vector<PartitionID>>& hash_maps,
                                                          std::vector<Pair>& permutation);
 
         EdgeWeight parallel_label_propagation(graph_access& G,
                                               PartitionConfig& config,
-                                              parallel::TThreadPool& pool,
                                               parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                               std::vector<std::vector<PartitionID>>& hash_maps,
                                               std::vector<Pair>& permutation);
 
-        void seq_init_for_edge_unit(graph_access& G, const size_t block_size, parallel::TThreadPool& pool,
+        void seq_init_for_edge_unit(graph_access& G, const size_t block_size,
                                 std::vector<Pair>& permutation,
                                 std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                 std::unique_ptr<ConcurrentQueue>& queue);
 
-        void par_init_for_edge_unit(graph_access& G, const size_t block_size, parallel::TThreadPool& pool,
+        void par_init_for_edge_unit(graph_access& G, const size_t block_size,
                                     std::vector<Pair>& permutation,
                                     std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                     std::unique_ptr<ConcurrentQueue>& queue);
 
-        void init_for_node_unit(graph_access& G, const size_t block_size, parallel::TThreadPool& pool,
+        void init_for_node_unit(graph_access& G, const size_t block_size,
                                 std::vector<Pair>& permutation,
                                 std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                 std::unique_ptr<ConcurrentQueue>& queue);

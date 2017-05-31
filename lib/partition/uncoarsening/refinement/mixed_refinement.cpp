@@ -23,13 +23,14 @@
 #include "cycle_improvements/cycle_refinement.h"
 #include "kway_graph_refinement/kway_graph_refinement.h"
 #include "kway_graph_refinement/multitry_kway_fm.h"
+#include "label_propagation_refinement/label_propagation_refinement.h"
 #include "mixed_refinement.h"
 #include "quotient_graph_refinement/quotient_graph_refinement.h"
 
 #include "data_structure/parallel/time.h"
 
 mixed_refinement::mixed_refinement() {
-
+        multitry_kway_fm::reset_statistics();
 }
 
 mixed_refinement::~mixed_refinement() {

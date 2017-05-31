@@ -5,6 +5,7 @@
 #include "data_structure/graph_access.h"
 #include "data_structure/parallel/algorithm.h"
 #include "data_structure/parallel/atomics.h"
+#include "data_structure/parallel/cache_aware_map.h"
 #include "data_structure/parallel/hash_table.h"
 #include "data_structure/parallel/spin_lock.h"
 #include "data_structure/parallel/thread_config.h"
@@ -15,7 +16,8 @@
 namespace parallel {
 class thread_data_refinement_core : public parallel::thread_config {
 public:
-        using nodes_partitions_hash_table = parallel::hash_map<NodeID, PartitionID>;
+        //using nodes_partitions_hash_table = parallel::hash_map<NodeID, PartitionID>;
+        using nodes_partitions_hash_table = parallel::cache_aware_map<NodeID, PartitionID>;
         //using nodes_partitions_hash_table = std::unordered_map<NodeID, PartitionID>;
         //using nodes_partitions_hash_table = std::vector<int>;
         //using nodes_partitions_hash_table = std::map<NodeID, PartitionID>;
@@ -91,7 +93,8 @@ public:
                 ,       upper_bound_gain_improvement(0)
                 ,       num_threads_finished(_num_threads_finished)
                 ,       time_stamp(_time_stamp)
-                ,       nodes_partitions(std::min<int>(131072, _G.number_of_nodes()))
+                ,       nodes_partitions(_G.number_of_nodes())
+                //,       nodes_partitions(std::min<int>(131072, _G.number_of_nodes()))
                 //,       nodes_partitions(G.number_of_nodes(), -1)
                 ,       total_thread_time(0.0)
                 ,       tried_movements(0)
@@ -132,14 +135,18 @@ public:
         thread_data_refinement_core& operator=(thread_data_refinement_core&&) = delete;
 
         inline PartitionID get_local_partition(NodeID node) {
-                //return nodes_partitions.contains(node) ? nodes_partitions[node] : G.getPartitionIndex(node);
+                // ht
                 PartitionID part;
                 if (nodes_partitions.contains(node, part)) {
                         return part;
                 } else {
                         return G.getPartitionIndex(node);
                 }
+
+                // unordered_map
                 //return nodes_partitions.find(node) != nodes_partitions.end() ? nodes_partitions[node] : G.getPartitionIndex(node);
+
+                // vector
                 //return nodes_partitions[node] != -1 ? nodes_partitions[node] :  G.getPartitionIndex(node);
         }
 
@@ -148,6 +155,7 @@ public:
 
                 // ht
                 nodes_partitions.clear();
+
                 //nodes_partitions.reserve(131072);
 
                 // vector

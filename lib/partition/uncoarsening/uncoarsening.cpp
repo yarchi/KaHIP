@@ -20,6 +20,7 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include "data_structure/parallel/time.h"
 #include "graph_partition_assertions.h"
 #include "misc.h"
 #include "quality_metrics.h"
@@ -65,9 +66,16 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
         } else {
                 refine      = new mixed_refinement();
         }
-
         graph_access * coarsest = hierarchy.get_coarsest();
         PRINT(std::cout << "log>" << "unrolling graph with " << coarsest->number_of_nodes() << std::endl;)
+
+        if (config.lp_before_local_search) {
+                CLOCK_START;
+                label_propagation_refinement* lp_refinement = new label_propagation_refinement();
+                complete_boundary boundary(coarsest);
+                improvement += lp_refinement->perform_refinement(cfg, *coarsest, boundary);
+                CLOCK_END("Label propagation");
+        }
 
         complete_boundary* finer_boundary   = NULL;
         complete_boundary* coarser_boundary = NULL;
@@ -88,7 +96,16 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
                 graph_access* G = hierarchy.pop_finer_and_project();
 
                 PRINT(std::cout << "log>" << "unrolling graph with " << G->number_of_nodes()<<  std::endl;)
-                
+
+                if (config.lp_before_local_search) {
+                        CLOCK_START;
+                        label_propagation_refinement* lp_refinement = new label_propagation_refinement();
+                        complete_boundary boundary(coarsest);
+                        // boundary is not used in lp
+                        improvement += lp_refinement->perform_refinement(cfg, *G, boundary);
+                        CLOCK_END("Label propagation");
+                }
+
                 if(!config.label_propagation_refinement) {
                         finer_boundary = new complete_boundary(G); 
                         finer_boundary->build_from_coarser(coarser_boundary, coarser_no_nodes, hierarchy.get_mapping_of_current_finer());

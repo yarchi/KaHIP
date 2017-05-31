@@ -21,10 +21,11 @@ public:
 
         std::tuple<EdgeWeight, int, uint32_t> single_kway_refinement_round(thread_data_refinement_core& td);
 
-        std::pair<EdgeWeight, uint32_t> apply_moves(Cvector <thread_data_refinement_core>& threads_data,
-                                                            bool compute_touched_partitions,
-                                                            std::unordered_map<PartitionID, PartitionID>& touched_blocks,
-                                                            std::vector<NodeID>& reactivated_vertices) const;
+        std::pair<EdgeWeight, uint32_t> apply_moves(uint32_t num_threads,
+                                                    Cvector <thread_data_refinement_core>& threads_data,
+                                                    bool compute_touched_partitions,
+                                                    std::unordered_map<PartitionID, PartitionID>& touched_blocks,
+                                                    std::vector<NodeID>& reactivated_vertices) const;
 
         std::pair<EdgeWeight, uint32_t> apply_moves(Cvector <thread_data_refinement_core>& threads_data,
                                                     bool compute_touched_partitions,

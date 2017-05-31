@@ -413,6 +413,8 @@ struct PartitionConfig
         bool kway_all_boundary_nodes_refinement = false;
         // tmp
         bool quotient_graph_two_way_refinement = true;
+        std::string configuration;
+        bool lp_before_local_search = false;
 };
 
 

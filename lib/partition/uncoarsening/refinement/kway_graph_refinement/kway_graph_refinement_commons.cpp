@@ -26,6 +26,9 @@
 
 std::vector<kway_graph_refinement_commons*>* kway_graph_refinement_commons::m_instances = NULL;
 
+size_t kway_graph_refinement_commons::num_part_accesses(0);
+size_t kway_graph_refinement_commons::scaned_movements(0);
+
 kway_graph_refinement_commons::kway_graph_refinement_commons() {
 
 }

@@ -52,6 +52,7 @@ int main(int argn, char **argv) {
         std::cout << "COMPARE WITH SEQUENTIAL MODE IS ON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
         std::cout << "THIS SLOWS DOWN THE APP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
 #endif
+        std::cout << "Git revision\t" << GIT_DESC << std::endl;
         PartitionConfig partition_config;
         std::string graph_filename;
 
@@ -125,11 +126,12 @@ int main(int argn, char **argv) {
                 }
                 std::cout << "Block size\t" << partition_config.block_size << std::endl;
         } else {
-                if (partition_config.parallel_multitry_kway) {
-                        std::cout << "Algorithm\tparallel multitry kway" << std::endl;
-                } else {
-                        std::cout << "Algorithm\tsequential multitry kway" << std::endl;
-                }
+//                if (partition_config.parallel_multitry_kway) {
+//                        std::cout << "Algorithm\tparallel multitry kway" << std::endl;
+//                } else {
+//                        std::cout << "Algorithm\tsequential multitry kway" << std::endl;
+//                }
+                std::cout << "Algorithm\t" << partition_config.configuration + (partition_config.lp_before_local_search ? "_lp" : "") << std::endl;
         }
         std::cout << "Num threads\t" << partition_config.num_threads << std::endl;
         std::cout << "Max number of moves\t" << partition_config.max_number_of_moves << std::endl;
