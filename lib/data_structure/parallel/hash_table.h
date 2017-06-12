@@ -101,8 +101,25 @@ constexpr static uint32_t round_up_to_next_power_2(uint32_t v) {
         return v;
 }
 
+constexpr static uint32_t round_up_to_previous_power_2(uint32_t x) {
+        x = x | (x >> 1);
+        x = x | (x >> 2);
+        x = x | (x >> 4);
+        x = x | (x >> 8);
+        x = x | (x >> 16);
+        return x - (x >> 1);
+}
+
 constexpr static bool is_power_2(uint64_t x) {
         return ((x != 0) && !(x & (x - 1)));
+}
+
+template <typename hash_table_type>
+static constexpr size_t get_max_size_to_fit_l1() {
+        // (SizeFactor + 1.1) * max_size * sizeof(Element) Bytes = 16 * 1024 Bytes,
+        // where 16 * 1024 Bytes is half of L1 cache and (2 + 1.1) * max_size * 8
+        // is the size of a hash table. We calculate that max_size ~ 512.
+        return round_up_to_previous_power_2(16 * 1024 / (sizeof(typename hash_table_type::Element) * (hash_table_type::size_factor + 1.1)));
 }
 
 template <typename HashTable>
@@ -140,6 +157,8 @@ private:
         Position _offset;
 };
 
+#undef PERFORMANCE_STATISTICS
+
 template <typename Key, typename Value, typename Hash = xxhash<Key>,
         bool TGrowable = false, bool Cache = true, size_t SizeFactor = 2>
 class HashMap {
@@ -156,6 +175,7 @@ private:
         static constexpr hash_type max_hash_value = std::numeric_limits<hash_type>::max();
 
 #ifdef PERFORMANCE_STATISTICS
+        #pragma message("PERFORMANCE_STATISTICS FOR HASH TABLE IS ON")
         static size_t num_access;
         static size_t num_contain;
         static size_t overall_max_size;
@@ -171,9 +191,10 @@ public:
 
         explicit HashMap(const uint64_t max_size = 0) :
                 _empty_element(std::numeric_limits<Key>::max()),
-                _max_size(std::max<uint32_t>(round_up_to_next_power_2(max_size), 16)),
+                _max_size(std::max(round_up_to_next_power_2(max_size), 16u)),
                 _ht_size(_max_size * SizeFactor),
-                _ht(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value())),
+                //_ht(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value())),
+                _ht(_ht_size, std::make_pair(_empty_element, Value())),
                 _poses(),
                 _hash(),
                 _last_key(_empty_element),
@@ -208,8 +229,10 @@ public:
 
         void reserve(const uint32_t max_size) {
                 _ht_size = max_size * SizeFactor;
+                ALWAYS_ASSERT(is_power_2(_ht_size));
                 _max_size = max_size;
-                _ht.resize(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value()));
+                //_ht.resize(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value()));
+                _ht.resize(_ht_size, std::make_pair(_empty_element, Value()));
                 _poses.reserve(_max_size);
         }
 
@@ -225,7 +248,7 @@ public:
 #ifdef PERFORMANCE_STATISTICS
                 ++num_access;
 #endif
-                if (TGrowable && size() == _max_size / 2)
+                if (TGrowable && size() == _max_size)
                         resize();
 
                 const Position pos = findPosition(key);
@@ -331,7 +354,7 @@ private:
         }
 
         inline void insertImpl(const Key& key, const Value& value) {
-                if (TGrowable && size() == _max_size / 2)
+                if (TGrowable && size() == _max_size)
                         resize();
 
                 const Position pos = findPosition(key);
@@ -355,6 +378,16 @@ private:
 #ifdef PERFORMANCE_STATISTICS
                         ++num_probes;
 #endif
+                        if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
+                                if (Cache) {
+                                        _last_key = key;
+                                        _last_position = pos;
+                                }
+                                return pos;
+                        }
+                }
+
+                for (Position pos = 0; pos < startPosition; ++pos) {
                         if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
                                 if (Cache) {
                                         _last_key = key;
@@ -415,7 +448,6 @@ public:
                 _max_size(max_size),
                 _ht(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value())),
                 _poses(),
-                _pos_in_position(_ht_size + _max_size * 1.1),
                 _hash(),
                 _last_key(_empty_element),
                 _last_position(0) {
@@ -423,25 +455,18 @@ public:
                 _poses.reserve(max_size);
         }
 
+        static constexpr size_t size_factor = SizeFactor;
+
         HashMapWithErase(const TSelf&) = default;
         HashMapWithErase(TSelf&&) = default;
 
         TSelf& operator=(TSelf& other) = default;
         TSelf& operator=(TSelf&& other) = default;
 
-        static constexpr size_t get_max_size_to_fit_l1() {
-                // (SizeFactor + 1.1) * max_size * sizeof(Element) + (sizeof(Position) + sizeof(uint32_t)) * max_size Bytes = 16 * 1024 Bytes,
-                // where 16 * 1024 Bytes is half of L1 cache and (2 + 1.1) * max_size * 8 + 4 * max_size Bytes
-                // is the size of a hash table. We calculate that max_size ~ 560.
-                return round_up_to_next_power_2(16 * 1024 / (sizeof(Element) * (SizeFactor + 1.1) + sizeof(Position) +
-                        sizeof(uint32_t)) - sizeof(TSelf)) / SizeFactor;
-        }
-
         void reserve(const uint32_t max_size) {
                 _ht_size = max_size * SizeFactor;
                 _max_size = max_size;
                 _ht.resize(_ht_size + _max_size * 1.1, std::make_pair(_empty_element.first, Value()));
-                _pos_in_position.resize(_ht_size + _max_size * 1.1);
                 _poses.reserve(_max_size);
         }
 
@@ -457,10 +482,6 @@ public:
                 const Position pos = findPosition(key);
                 if (_ht[pos].first != _empty_element && _ht[pos].first != _deleted_element) {
                         _ht[pos].first = _deleted_element;
-                        const uint32_t pos_of_deleted = _pos_in_position[pos];
-                        _pos_in_position[_poses.back()] = pos_of_deleted;
-                        std::swap(_poses[pos_of_deleted], _poses.back());
-                        _poses.resize(_poses.size() - 1);
                 }
         }
 
@@ -473,7 +494,6 @@ public:
                         _ht[pos].first = key;
                         _ht[pos].second = Value();
                         _poses.push_back(pos);
-                        _pos_in_position[pos] = _poses.size() - 1;
                 }
 
                 return _ht[pos].second;
@@ -517,7 +537,6 @@ public:
                 _poses.swap(hash_map._poses);
                 std::swap(_last_key, hash_map._last_key);
                 std::swap(_last_position, hash_map._last_position);
-                _pos_in_position.swap(hash_map._pos_in_position);
                 std::swap(_empty_element, hash_map._empty_element);
                 std::swap(_deleted_element, hash_map._deleted_element);
         }
@@ -541,7 +560,6 @@ private:
                         _ht[pos].first = key;
                         _ht[pos].second = value;
                         _poses.push_back(pos);
-                        _pos_in_position[pos] = _poses.size() - 1;
                 }
         }
 
@@ -551,26 +569,34 @@ private:
                 }
 
                 const Position startPosition = _hash(key) & (_ht_size - 1);
-                Position lastDeleted = std::numeric_limits<Position>::max();
+                Position firstDeleted = std::numeric_limits<Position>::max();
                 for (Position pos = startPosition; pos < _ht.size(); ++pos) {
                         if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
+                                if (firstDeleted != std::numeric_limits<Position>::max() && _ht[pos].first == key) {
+                                        std::swap(_ht[firstDeleted], _ht[pos]);
+
+                                        pos = firstDeleted;
+                                }
+
                                 if (Cache) {
                                         _last_key = key;
                                         _last_position = pos;
                                 }
+
                                 return pos;
                         }
-                        if (_ht[pos].first == _deleted_element) {
-                                lastDeleted = pos;
+                        if (firstDeleted == std::numeric_limits<Position>::max() &&
+                            _ht[pos].first == _deleted_element) {
+                                firstDeleted = pos;
                         }
                 }
 
-                if (lastDeleted != std::numeric_limits<Position>::max()) {
+                if (firstDeleted != std::numeric_limits<Position>::max()) {
                         if (Cache) {
                                 _last_key = key;
-                                _last_position = lastDeleted;
+                                _last_position = firstDeleted;
                         }
-                        return lastDeleted;
+                        return firstDeleted;
                 }
 
                 std::cerr << "hash table overflowed" << std::endl;
@@ -583,7 +609,6 @@ private:
         uint64_t _max_size;
         std::vector<Element> _ht;
         std::vector<Position> _poses;
-        std::vector<uint32_t> _pos_in_position;
         Hash _hash;
         Key _last_key;
         Position _last_position;
@@ -601,6 +626,8 @@ private:
 
         static constexpr hash_type max_hash_value = std::numeric_limits<hash_type>::max();
 public:
+        static constexpr size_t size_factor = SizeFactor;
+
         explicit HashSet(const uint64_t max_size = 0) :
                 _empty_element(std::numeric_limits<Key>::max()),
                 _ht_size(max_size * SizeFactor),
@@ -619,13 +646,6 @@ public:
 
         TSelf& operator= (TSelf& other) = default;
         TSelf& operator= (TSelf&& other) = default;
-
-        static constexpr size_t get_max_size_to_fit_l1() {
-                // (SizeFactor + 1.1) * max_size * sizeof(Element) + sizeof(Position) * max_size Bytes = 16 * 1024 Bytes,
-                // where 16 * 1024 Bytes is half of L1 cache and (2 + 1.1) * max_size * 8 + 4 * max_size Bytes
-                // is the size of a hash table. We calculate that max_size ~ 560.
-                return round_up_to_next_power_2(16 * 1024 / (sizeof(Element) * (SizeFactor + 1.1) + sizeof(Position)) - sizeof(TSelf)) / SizeFactor;
-        }
 
         void reserve(const uint32_t max_size) {
                 _ht_size = max_size * SizeFactor;
@@ -726,7 +746,7 @@ private:
 
 //template <typename key_type, typename value_type>
 //using hash_map = HashMap<key_type, value_type, simple_hash<key_type>, true>;
-//
+
 //template <typename key_type, typename value_type>
 //using hash_map_with_erase = HashMapWithErase<key_type, value_type, simple_hash<key_type>, true>;
 //

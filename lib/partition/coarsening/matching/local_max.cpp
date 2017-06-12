@@ -252,7 +252,8 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
         futures.reserve(num_threads);
 
         for (uint32_t id = 1; id < num_threads; ++id) {
-                futures.push_back(g_thread_pool.Submit(task, id));
+                futures.push_back(g_thread_pool.Submit(id - 1, task, id));
+                //futures.push_back(g_thread_pool.Submit(task, id));
         }
 
         task(0);

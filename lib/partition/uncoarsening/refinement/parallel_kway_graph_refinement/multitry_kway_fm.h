@@ -20,7 +20,8 @@ public:
         thread_data_factory(PartitionConfig& config,
                             graph_access& G,
                             complete_boundary& boundary)
-                :       queue(config.num_threads)
+                :       num_threads_finished(0)
+                ,       queue(config.num_threads)
                 ,       time_setup_start_nodes(0.0)
                 ,       time_local_search(0.0)
                 ,       time_init(0.0)
@@ -34,7 +35,6 @@ public:
                 ,       m_parts_sizes(config.k)
                 ,       m_moved_count(config.num_threads)
                 ,       m_reset_counter(0)
-                ,       m_time_stamp(0)
         {
                 for (PartitionID block = 0; block < G.get_partition_count(); ++block) {
                         m_parts_weights[block].get().store(boundary.getBlockWeight(block), std::memory_order_relaxed);
@@ -54,8 +54,7 @@ public:
                                                    m_parts_sizes,
                                                    m_moved_count,
                                                    m_reset_counter,
-                                                   num_threads_finished,
-                                                   m_time_stamp);
+                                                   num_threads_finished);
                 }
 
         }
@@ -80,7 +79,6 @@ public:
                 }
 
                 m_reset_counter.store(0, std::memory_order_relaxed);
-                m_time_stamp.store(0, std::memory_order_relaxed);
                 queue.clear();
                 num_threads_finished.store(0, std::memory_order_relaxed);
         }
@@ -121,10 +119,10 @@ public:
                 stat.time_move_nodes = time_move_nodes;
 
                 // vertices and edges
+                size_t total_num_part_accesses = 0;
                 uint32_t total_tried_movements = 0;
                 uint32_t total_accepted_movements = 0;
                 uint32_t total_scaned_neighbours = 0;
-                size_t total_num_part_accesses = 0;
 
                 // time
                 double total = 0.0;
@@ -146,7 +144,8 @@ public:
                 for (uint32_t id = 0; id < m_config.num_threads; ++id) {
                         std::cout << "proc_id\t" << id << " | "
                                   << "time\t" << m_thread_data[id].get().total_thread_time << " s | "
-                                  << "tried moves\t" << m_thread_data[id].get().tried_movements << " | "
+                                  << "num part accesses\t" << m_thread_data[id].get().num_part_accesses
+//                                  << "tried moves\t" << m_thread_data[id].get().tried_movements << " | "
 //                                  << "accepted moves\t" << m_thread_data[id].get().accepted_movements << " | "
 //                                  << "scanned neighbours\t" << m_thread_data[id].get().scaned_neighbours << " | "
 //                                  << "try moves time\t" << m_thread_data[id].get().total_thread_try_move_time << " s | "
@@ -164,6 +163,7 @@ public:
 //                                  << "stop faction of nodes moved\t" << m_thread_data[id].get().stop_faction_of_nodes_moved
                                   << std::endl;
 
+                        total_num_part_accesses += m_thread_data[id].get().num_part_accesses;
                         total_tried_movements += m_thread_data[id].get().tried_movements;
                         total_accepted_movements += m_thread_data[id].get().accepted_movements;
                         total_scaned_neighbours += m_thread_data[id].get().scaned_neighbours;
@@ -174,11 +174,11 @@ public:
                         total_stop_max_number_of_swaps += m_thread_data[id].get().stop_max_number_of_swaps;
                         total_stop_faction_of_nodes_moved += m_thread_data[id].get().stop_faction_of_nodes_moved;
                         total_time_compute_gain += m_thread_data[id].get().time_compute_gain;
-                        total_num_part_accesses += m_thread_data[id].get().num_part_accesses;
 
                         statistics_type::proc_stat proc_stat;
                         proc_stat.proc_id = id;
                         proc_stat.total_thread_time = m_thread_data[id].get().total_thread_time;
+                        proc_stat.num_part_accesses = m_thread_data[id].get().num_part_accesses;
                         proc_stat.tried_movements = m_thread_data[id].get().tried_movements;
                         proc_stat.accepted_movements = m_thread_data[id].get().accepted_movements;
                         proc_stat.scaned_neighbours = m_thread_data[id].get().scaned_neighbours;
@@ -209,6 +209,7 @@ public:
                 stat.total_stop_max_number_of_swaps = total_stop_max_number_of_swaps;
                 stat.total_stop_faction_of_nodes_moved = total_stop_faction_of_nodes_moved;
 
+                std::cout << "Total num part accesses\t" << total_num_part_accesses << std::endl;
                 std::cout << "Total tried moves\t" << total_tried_movements << std::endl;
                 std::cout << "Total accepted moves\t" << total_accepted_movements << std::endl;
                 std::cout << "Total scanned neighbours\t" << total_scaned_neighbours << std::endl;
@@ -278,7 +279,7 @@ public:
                 for (auto& pr : stat.proc_stats) {
                         std::cout << "proc_id\t" << pr.proc_id << " | "
                                   << "time\t" << pr.total_thread_time << " s | "
-                                  << "tried moves\t" << pr.tried_movements << " | "
+                                  << "num part accesses\t" << pr.num_part_accesses << " | "
 //                                  << "accepted moves\t" << pr.accepted_movements << " | "
 //                                  << "scanned neighbours\t" << pr.scaned_neighbours << " | "
 //                                  << "try moves time\t" << pr.total_thread_try_move_time << " s | "
@@ -311,29 +312,10 @@ public:
 
         virtual ~thread_data_factory() {
                 print_iteration_statistics();
-
-//                std::ofstream ftxt("out_moves_stat.log");
-//                size_t size = get_thread_data(0).tried_moves.size();
-//
-//                std::vector<uint32_t> data;
-//                data.reserve(m_config.num_threads);
-//                for (size_t i = 0; i < size; ++i) {
-//                        data.clear();
-//                        for (size_t id = 0; id < m_config.num_threads; ++id) {
-//                                auto& td = get_thread_data(id);
-//                                data.push_back(td.tried_moves[i]);
-//                        }
-//                        std::sort(data.begin(), data.end());
-//                        uint32_t min = data[0];
-//                        uint32_t max = data.back();
-//                        uint32_t median = data[data.size() / 2];
-//
-//                        ftxt << min << ' ' << median << ' ' << max << std::endl;
-//                }
-//                ftxt << std::endl;
         }
 
-        task_queue<NodeID> queue;
+        //task_queue<NodeID> queue;
+        circular_task_queue<NodeID> queue;
         AtomicWrapper<uint32_t> num_threads_finished;
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
         PartitionConfig& m_config;
@@ -363,10 +345,10 @@ public:
                 double avg_unroll = 0.0;
                 double avg_compute_gain_time = 0.0;
 
+                uint64_t total_num_part_accesses = 0;
                 uint32_t total_tried_movements = 0;
                 uint32_t total_accepted_movements = 0;
                 uint32_t total_scanned_neighbours = 0;
-                size_t total_num_part_accesses = 0;
 
                 int total_performed_gain = 0;
                 int total_unperformed_gain = 0;
@@ -379,9 +361,12 @@ public:
                 struct proc_stat {
                         uint32_t proc_id = 0;
                         double total_thread_time = 0.0;
+
+                        uint64_t num_part_accesses = 0;
                         uint32_t tried_movements = 0;
                         uint32_t accepted_movements = 0;
                         uint32_t scaned_neighbours = 0;
+
                         double total_thread_try_move_time = 0.0;
                         double total_thread_accepted_move_time = 0.0;
                         double total_thread_compute_gain_time = 0.0;
@@ -396,6 +381,7 @@ public:
                         proc_stat& operator+= (const proc_stat& ps) {
                                 proc_id = ps.proc_id;
 
+                                num_part_accesses += ps.num_part_accesses;
                                 total_thread_time += ps.total_thread_time;
                                 tried_movements += ps.tried_movements;
                                 accepted_movements += ps.accepted_movements;
@@ -426,10 +412,10 @@ public:
                         time_move_nodes += stat.time_move_nodes;
                         total_compute_gain_time += stat.total_compute_gain_time;
 
+                        total_num_part_accesses += stat.total_num_part_accesses;
                         total_tried_movements += stat.total_tried_movements;
                         total_accepted_movements += stat.total_accepted_movements;
                         total_scanned_neighbours += stat.total_scanned_neighbours;
-                        total_num_part_accesses += stat.total_num_part_accesses;
                         total_performed_gain += stat.total_performed_gain;
                         total_unperformed_gain += stat.total_unperformed_gain;
 
@@ -462,12 +448,12 @@ public:
         complete_boundary& m_boundary;
 
         // global data
-        std::vector <AtomicWrapper<bool>> m_moved_idx;
+        std::vector<AtomicWrapper<bool>> m_moved_idx;
+        //Cvector<AtomicWrapper<bool>> m_moved_idx;
         Cvector <AtomicWrapper<NodeWeight>> m_parts_weights;
         Cvector <AtomicWrapper<NodeWeight>> m_parts_sizes;
         Cvector <AtomicWrapper<int>> m_moved_count;
         AtomicWrapper<uint32_t> m_reset_counter;
-        AtomicWrapper<uint32_t> m_time_stamp;
 };
 
 class multitry_kway_fm : public ::multitry_kway_fm {

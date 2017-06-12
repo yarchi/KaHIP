@@ -145,24 +145,6 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 #endif
         int total_gain_improvement = 0;
 
-//        std::vector<NodeID> todolist;
-//        todolist.reserve(m_factory.queue.size());
-//        NodeID node;
-//        while (m_factory.queue.try_pop(node)) {
-//                todolist.push_back(node);
-//        }
-
-//        tbb::concurrent_queue<NodeID> queue;
-//        while (!todolist.empty()) {
-//                size_t random_idx = random_functions::nextInt(0, todolist.size() - 1);
-//                NodeID node = todolist[random_idx];
-//                queue.push(node);
-//
-//                std::swap(todolist[random_idx], todolist.back());
-//                todolist.pop_back();
-//        }
-
-
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
         while (!todolist.empty()) {
 #else
@@ -188,8 +170,8 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                 int random_idx = random_functions::nextInt(0, todolist.size() - 1);
                                 NodeID node = todolist[random_idx];
 #else
-                        //std::cout << "Size\t" << m_factory.queue.size() << std::endl;
-                        while (m_factory.queue.try_pop(node)) {
+                        __itt_resume();
+                        while (m_factory.queue.try_pop(node, id)) {
 #endif
                                 // this change changes num part accesses since it changes random source
                                 if (!td.moved_idx[node].load(std::memory_order_relaxed)) {
@@ -225,11 +207,8 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                                 uint32_t tried_movements = 0;
                                                 size_t moved_before = td.moved.size();
 
-                                                __itt_resume();
                                                 std::tie(improvement, min_cut_index, tried_movements) =
                                                         refinement_core.single_kway_refinement_round(td);
-
-                                                __itt_pause();
 
                                                 if (improvement < 0) {
                                                         std::cout << "buf error improvement < 0" << std::endl;
@@ -240,36 +219,35 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 
                                                 ALWAYS_ASSERT(td.transpositions.size() > 0);
                                                 td.min_cut_indices.emplace_back(min_cut_index, td.transpositions.size() - 1);
-                                                td.moved_count[id].get().fetch_add(td.moved.size() - moved_before,
-                                                                                   std::memory_order_relaxed);
+                                                if (!td.config.kway_all_boundary_nodes_refinement) {
+                                                        td.moved_count[id].get().fetch_add(td.moved.size() - moved_before,
+                                                                std::memory_order_relaxed);
+                                                }
                                                 td.tried_movements += tried_movements;
                                                 s += tried_movements;
                                         }
                                 }
 
-                                int overall_movement = 0;
-                                for (uint32_t id = 0; id < num_threads; ++id) {
-                                        int moved = td.moved_count[id].get().load(std::memory_order_relaxed);
-                                        overall_movement += moved;
-                                }
+                                if (!td.config.kway_all_boundary_nodes_refinement) {
+                                        int overall_movement = 0;
+                                        for (uint32_t id = 0; id < num_threads; ++id) {
+                                                int moved = td.moved_count[id].get().load(std::memory_order_relaxed);
+                                                overall_movement += moved;
+                                        }
 
-                                if (!td.config.kway_all_boundary_nodes_refinement
-                                    && overall_movement > 0.05 * G.number_of_nodes()) {
-                                        ++td.stop_faction_of_nodes_moved;
-                                        res = true;
-                                        break;
+                                        if (overall_movement > 0.05 * G.number_of_nodes()) {
+                                                ++td.stop_faction_of_nodes_moved;
+                                                res = true;
+                                                break;
+                                        }
                                 }
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
                                 std::swap(todolist[random_idx], todolist[todolist.size() - 1]);
                                 todolist.pop_back();
 #endif
                         }
-//                        std::cout << "tried moves\t" << s << std::endl;
-//                        std::cout << "scanned neighbours\t" << td.scaned_neighbours - old1 << std::endl;
-//                        std::cout << "num accesses\t" << td.num_part_accesses - old << std::endl;
-//                        std::cout << "sum deg\t" << td.sum_deg << std::endl;
-//                        std::cout << "num\t" << td.num << std::endl;
-//                        std::cout << "avg deg\t" << (td.sum_deg + 0.0) / td.num << std::endl;
+                        __itt_pause();
+
                         td.num_threads_finished.fetch_add(1, std::memory_order_acq_rel);
                         td.total_thread_time += CLOCK_END_TIME;
 //                        if (id > 0) {
@@ -283,12 +261,11 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 futures.reserve(num_threads - 1);
 
                 for (uint32_t id = 1; id < num_threads; ++id) {
-                        futures.push_back(parallel::g_thread_pool.Submit(task, id));
+                        futures.push_back(parallel::g_thread_pool.Submit(id - 1, task, id));
+                        //futures.push_back(parallel::g_thread_pool.Submit(task, id));
                 }
 
-                //auto b = CLOCK;
                 bool is_more_that_5percent_moved = task(0);
-                //PRINT_TIME("LS time", CLOCK - b);
 
                 {
                         CLOCK_START;
@@ -309,9 +286,6 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 CLOCK_START_N;
                 std::tie(real_gain_improvement, real_nodes_movement) = refinement_core.apply_moves(num_threads,
                         m_factory.get_all_threads_data(), compute_touched_blocks, touched_blocks, reactivated_vertices);
-//                std::tie(real_gain_improvement, real_nodes_movement) = refinement_core.apply_moves(
-//                        m_factory.get_all_threads_data(), compute_touched_blocks, touched_blocks, reactivated_vertices,
-//                        finished_threads, futures, is_more_that_5percent_moved);
 
                 total_gain_improvement += real_gain_improvement;
 
@@ -322,8 +296,6 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 }
 
                 m_factory.get_thread_data(0).rnd.shuffle(reactivated_vertices);
-                //std::cout << "Size\t" << reactivated_vertices.size() << std::endl;
-                //std::cout << "imr\t" << real_gain_improvement << std::endl;
                 for (auto vertex : reactivated_vertices) {
                         m_factory.queue.push(vertex);
                 }
@@ -397,7 +369,7 @@ int multitry_kway_fm::start_more_locallized_search_experimental(PartitionConfig&
 
                         td.step_limit = local_step_limit;
                         uint32_t nodes_processed = 0;
-                        while (m_factory.queue.try_pop(node)) {
+                        while (m_factory.queue.try_pop(node, id)) {
                                 PartitionID maxgainer;
                                 EdgeWeight extdeg = 0;
                                 PartitionID from = td.get_local_partition(node);
@@ -466,7 +438,8 @@ int multitry_kway_fm::start_more_locallized_search_experimental(PartitionConfig&
                 futures.reserve(num_threads - 1);
 
                 for (uint32_t id = 1; id < num_threads; ++id) {
-                        futures.push_back(parallel::g_thread_pool.Submit(task, id));
+                        futures.push_back(parallel::g_thread_pool.Submit(id - 1, task, id));
+                        //futures.push_back(parallel::g_thread_pool.Submit(task, id));
                 }
 
                 bool is_more_that_5percent_moved = task(0);
@@ -555,7 +528,8 @@ void multitry_kway_fm::setup_start_nodes_around_blocks(graph_access& G, complete
         futures.reserve(parallel::g_thread_pool.NumThreads());
 
         for (uint32_t id = 0; id < parallel::g_thread_pool.NumThreads(); ++id) {
-                futures.push_back(parallel::g_thread_pool.Submit(task, id + 1));
+                futures.push_back(parallel::g_thread_pool.Submit(id, task, id + 1));
+                //futures.push_back(parallel::g_thread_pool.Submit(task, id + 1));
         }
 
         task(0);
@@ -573,10 +547,10 @@ void multitry_kway_fm::setup_start_nodes_all(graph_access& G, complete_boundary&
         auto sub_task = [this, &G, &boundary, &quotient_graph_edges](uint32_t thread_id, std::atomic<size_t>& counter) {
                 auto& thread_container = m_factory.queue[thread_id];
 
-#undef NO_DUBLICATES
+#undef NO_DUPLICATES
 
-#ifdef NO_DUBLICATES
-                parallel::hash_set<NodeID> added_nodes(parallel::hash_set<NodeID>::get_max_size_to_fit_l1());
+#ifdef NO_DUPLICATES
+                parallel::hash_set<NodeID> added_nodes(get_max_size_to_fit_l1<parallel::hash_set<NodeID>>());
 #endif
                 size_t offset = counter.fetch_add(1, std::memory_order_relaxed);
 
@@ -589,7 +563,7 @@ void multitry_kway_fm::setup_start_nodes_all(graph_access& G, complete_boundary&
                         for (const auto& elem : partial_boundary_lhs.internal_boundary) {
                                 NodeID cur_bnd_node = elem.first;
                                 ALWAYS_ASSERT(G.getPartitionIndex(cur_bnd_node) == lhs);
-#ifdef NO_DUBLICATES
+#ifdef NO_DUPLICATES
                                 if (!added_nodes.contains(cur_bnd_node)) {
                                         thread_container.push_back(cur_bnd_node);
                                         added_nodes.insert(cur_bnd_node);
@@ -603,7 +577,7 @@ void multitry_kway_fm::setup_start_nodes_all(graph_access& G, complete_boundary&
                         for (const auto& elem : partial_boundary_rhs.internal_boundary) {
                                 NodeID cur_bnd_node = elem.first;
                                 ALWAYS_ASSERT(G.getPartitionIndex(cur_bnd_node) == rhs);
-#ifdef NO_DUBLICATES
+#ifdef NO_DUPLICATES
                                 if (!added_nodes.contains(cur_bnd_node)) {
                                         thread_container.push_back(cur_bnd_node);
                                         added_nodes.insert(cur_bnd_node);
@@ -629,7 +603,8 @@ void multitry_kway_fm::setup_start_nodes_all(graph_access& G, complete_boundary&
         futures.reserve(parallel::g_thread_pool.NumThreads());
 
         for (uint32_t id = 0; id < parallel::g_thread_pool.NumThreads(); ++id) {
-                futures.push_back(parallel::g_thread_pool.Submit(task, id + 1));
+                futures.push_back(parallel::g_thread_pool.Submit(id, task, id + 1));
+                //futures.push_back(parallel::g_thread_pool.Submit(task, id + 1));
         }
 
         task(0);

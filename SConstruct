@@ -58,7 +58,7 @@ def GetEnvironment():
     print 'Illegal value for variant: %s' % env['variant']
     sys.exit(1)
   
-  if not env['program'] in ['kaffpa', 'kaffpaE', 'partition_to_vertex_separator','improve_vertex_separator','library','graphchecker','label_propagation','evaluator','node_separator']:
+  if not env['program'] in ['kaffpa', 'kaffpa_test', 'kaffpa_compare_with_sequential', 'kaffpa_test_stopping_rule', 'kaffpaE', 'partition_to_vertex_separator','improve_vertex_separator','library','graphchecker','label_propagation','evaluator','node_separator']:
     print 'Illegal value for program: %s' % env['program']
     sys.exit(1)
 
@@ -71,9 +71,12 @@ def GetEnvironment():
 # Get the common environment.
 env = GetEnvironment()
 
+env.Append(LIBPATH=['/home/akhremtsev/lib/tbb/build/linux_intel64_gcc_cc5.4.1_libc2.19_kernel3.13.0_release'])
 env.Append(CPPPATH=['../extern/argtable-2.10/include'])
+env.Append(CPPPATH=['/opt/intel/vtune_amplifier_xe_2015.4.0.410668/include/'])
 env.Append(CPPPATH=['./extern/argtable-2.10/include'])
 env.Append(CPPPATH=['./lib'])
+env.Append(CPPPATH=['/home/akhremtsev/lib/tbb/include'])
 env.Append(CPPPATH=['./lib/tools'])
 env.Append(CPPPATH=['./lib/partition'])
 env.Append(CPPPATH=['./lib/io'])
@@ -86,6 +89,7 @@ env.Append(CPPPATH=['../lib/partition'])
 env.Append(CPPPATH=['../lib/io'])
 env.Append(CPPPATH=['../lib/partition/uncoarsening/refinement/quotient_graph_refinement/flow_refinement/'])
 env.Append(LIBPATH=['../../extern/argtable-2.10/lib'])
+env.Append(LIBPATH=['/opt/intel/vtune_amplifier_xe_2015.4.0.410668/lib64/'])
 env.Append(CPPPATH=['/usr/include/openmpi/'])
 
 conf = Configure(env)
@@ -107,18 +111,20 @@ if SYSTEM == 'Darwin':
         #Exit(-1)
 #
 #
-env.Append(CXXFLAGS = '-fopenmp')
+#env.Append(CXXFLAGS = '-fopenmp -g')
+env.Append(CXXFLAGS = '-g')
 # Apply variant specific settings.
 if env['variant'] == 'optimized':
-  env.Append(CXXFLAGS = '-DNDEBUG -Wall -funroll-loops  -fno-stack-limit -O3 -std=c++0x')
-  env.Append(CCFLAGS  = '-O3  -DNDEBUG -funroll-loops -std=c++0x')
+  env.Append(CXXFLAGS = '-DNDEBUG -Wall -funroll-loops  -fno-stack-limit -O3 -std=c++14 -g -D_GLIBCXX_PARALLEL')
+  env.Append(CCFLAGS  = '-O3  -DNDEBUG -funroll-loops -std=c++14')
 elif env['variant'] == 'optimized_output':
   # A little bit more output on the console
-  env.Append(CXXFLAGS = ' -DNDEBUG -funroll-loops -Wall -fno-stack-limit -O3 -std=c++0x')
-  env.Append(CCFLAGS  = '-O3  -DNDEBUG -DKAFFPAOUTPUT  -std=c++0x')
+  env.Append(CXXFLAGS = ' -DNDEBUG -funroll-loops -Wall -fno-stack-limit -O3 -std=c++14 -g')
+  env.Append(CCFLAGS  = '-O3  -DNDEBUG -DKAFFPAOUTPUT  -std=c++14')
 else:
-  env.Append(CXXFLAGS = ' -DNDEBUG -Wall -funroll-loops  -fno-stack-limit -O3 -std=c++0x')
-  env.Append(CCFLAGS  = '-O3  -DNDEBUG -funroll-loops -std=c++0x ')
+  #env.Append(CXXFLAGS = ' -DNDEBUG -Wall -funroll-loops  -fno-stack-limit -O3 -std=c++14 -g')
+  #env.Append(CCFLAGS  = '-O3  -DNDEBUG -funroll-loops -std=c++14 ')
+  env.Append(CXXFLAGS = '-O0 -std=c++14 -g -D_GLIBCXX_PARALLEL')
   if SYSTEM != 'Darwin':
         env.Append(CXXFLAGS = '-march=native')
         env.Append(CCFLAGS  = '-march=native')

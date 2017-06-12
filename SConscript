@@ -27,15 +27,26 @@
 # submodule contains a sequential matching and contraction code and tests for
 # the code.
 import platform
-import sys
+import os, sys
+from subprocess import *
 
 # Get the current platform.
 SYSTEM = platform.uname()[0]
 
 Import('env')
+env.Replace(CC = "gcc-5")
+env.Replace(CXX = "g++-5")
+
+#add git revision
+def getGitDesc():
+  return Popen('cat GIT_COMMIT_HASH', stdout=PIPE, shell=True).stdout.read().strip()
+
+GIT_DESC = getGitDesc() 
+env.Append(CPPDEFINES = { 'GIT_DESC' : ('\\"%s\\"' % GIT_DESC) })
 
 # Build a library from the code in lib/.
 libkaffpa_files = [   'lib/data_structure/graph_hierarchy.cpp',
+		      'lib/data_structure/parallel/thread_pool.cpp',
                       'lib/algorithms/strongly_connected_components.cpp',
                       'lib/algorithms/topological_sort.cpp',
                       'lib/algorithms/push_relabel.cpp',
@@ -52,6 +63,7 @@ libkaffpa_files = [   'lib/data_structure/graph_hierarchy.cpp',
                       'lib/partition/coarsening/edge_rating/edge_ratings.cpp',
                       'lib/partition/coarsening/matching/matching.cpp',
                       'lib/partition/coarsening/matching/random_matching.cpp',
+		      'lib/partition/coarsening/matching/local_max.cpp',
                       'lib/partition/coarsening/matching/gpa/path.cpp',
                       'lib/partition/coarsening/matching/gpa/gpa_matching.cpp',
                       'lib/partition/coarsening/matching/gpa/path_set.cpp',
@@ -87,6 +99,9 @@ libkaffpa_files = [   'lib/data_structure/graph_hierarchy.cpp',
                       'lib/partition/uncoarsening/refinement/kway_graph_refinement/kway_graph_refinement.cpp',
                       'lib/partition/uncoarsening/refinement/kway_graph_refinement/kway_graph_refinement_core.cpp',
                       'lib/partition/uncoarsening/refinement/kway_graph_refinement/kway_graph_refinement_commons.cpp',
+		      'lib/partition/uncoarsening/refinement/kway_graph_refinement/kway_stop_rule.cpp',
+		      'lib/partition/uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.cpp',
+		      'lib/partition/uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_core.cpp',
                       'lib/partition/uncoarsening/refinement/cycle_improvements/augmented_Qgraph_fabric.cpp', 
                       'lib/partition/uncoarsening/refinement/cycle_improvements/advanced_models.cpp', 
                       'lib/partition/uncoarsening/refinement/kway_graph_refinement/multitry_kway_fm.cpp', 
@@ -107,9 +122,22 @@ libkaffpa_parallel_async  = ['lib/parallel_mh/parallel_mh_async.cpp',
                              'lib/tools/mpi_tools.cpp' ]
 
 if env['program'] == 'kaffpa':
+        env.Append(CXXFLAGS = '-DMODE_KAFFPA -DKAFFPAOUTPUT')
+        env.Append(CCFLAGS  = '-DMODE_KAFFPA')
+        env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
+if env['program'] == 'kaffpa_test':
         env.Append(CXXFLAGS = '-DMODE_KAFFPA')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')
-        env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['libargtable2','gomp'])
+	env.Program('kaffpa_test', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
+if env['program'] == 'kaffpa_compare_with_sequential':
+	env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCOMPARE_WITH_SEQUENTIAL_KAHIP -DKAFFPAOUTPUT')
+        env.Append(CCFLAGS  = '-DMODE_KAFFPA -DCOMPARE_WITH_SEQUENTIAL_KAHIP -DKAFFPAOUTPUT')
+        env.Program('kaffpa_compare_with_sequential', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
+
+if env['program'] == 'kaffpa_test_stopping_rule':
+	env.Append(CXXFLAGS = '-DMODE_KAFFPA -DTEST_STOPPING_RULE')
+        env.Append(CCFLAGS  = '-DMODE_KAFFPA -DTEST_STOPPING_RULE')
+        env.Program('kaffpa_test_stopping_rule', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
 
 if env['program'] == 'evaluator':
         env.Append(CXXFLAGS = '-DMODE_EVALUATOR')

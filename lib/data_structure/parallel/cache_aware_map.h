@@ -22,30 +22,46 @@ public:
         static_assert(std::is_integral<key_type>::value, "key_type shoud be integral");
 
         cache_aware_map_impl(uint64_t _max_size)
+#ifndef ONLY_ARRAY
                 :       small_map(get_max_size_to_fit_l1())
                 ,       max_size(_max_size)
                 ,       cur_container(cur_container_type::SMALL)
+#else
+                :       max_size(_max_size)
+                ,       cur_container(cur_container_type::LARGE)
+#endif
         {
                 try_swap_containers();
         }
 
         inline bool contains(key_type key, value_type& value) {
+#ifndef ONLY_ARRAY
                 if (cur_container == cur_container_type::SMALL) {
                         return small_map.contains(key, value);
                 } else {
                         value = large_map[key];
                         return value != non_initialized;
                 }
+#else
+                value = large_map[key];
+                return value != non_initialized;
+#endif
         }
 
         inline void clear() {
+#ifndef ONLY_ARRAY
                 small_map.clear();
                 small_map.reserve(get_max_size_to_fit_l1());
-                large_map.assign(max_size, non_initialized);
                 cur_container = cur_container_type::SMALL;
+#endif
+                for (auto key : accessed) {
+                        large_map[key] = non_initialized;
+                }
+                accessed.clear();
         }
 
         inline value_type& operator[](key_type key) {
+#ifndef ONLY_ARRAY
                 if (cur_container == cur_container_type::SMALL) {
                         value_type& ref = small_map[key];
 
@@ -54,9 +70,20 @@ public:
                         if (!try_swap_containers())
                                 return ref;
                 }
+#endif
+                if (large_map[key] == non_initialized) {
+                        accessed.push_back(key);
+                }
                 return large_map[key];
         }
 
+        size_t memory_size() const {
+                if (cur_container == cur_container_type::SMALL) {
+                        return small_map.ht_memory_size();
+                } else {
+                        return max_size * sizeof(value_type);
+                }
+        }
 private:
         enum class cur_container_type {
                 SMALL,
@@ -68,12 +95,14 @@ private:
 
         small_map_type small_map;
         large_map_type large_map;
+        std::vector<key_type> accessed;
         uint64_t max_size;
         cur_container_type cur_container;
 
         inline bool try_swap_containers() {
                 if (cur_container == cur_container_type::SMALL && small_map.ht_memory_size() > l2_cache_size) {
                         large_map.assign(max_size, non_initialized);
+                        accessed.reserve(128);
 
                         for (const auto& rec : small_map) {
                                 large_map[rec.first] = rec.second;
@@ -93,8 +122,7 @@ private:
                 using position_type = typename small_map_type::Position;
                 using element_type = typename small_map_type::Element;
 
-                return round_up_to_next_power_2(16 * 1024 / (sizeof(element_type) * (size_factor + 1.1) +
-                       sizeof(position_type)) - sizeof(small_map_type)) / size_factor;
+                return round_up_to_previous_power_2(16 * 1024 / (sizeof(element_type) * (size_factor + 1.1)));
         }
 };
 

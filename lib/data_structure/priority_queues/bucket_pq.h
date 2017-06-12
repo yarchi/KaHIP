@@ -50,6 +50,8 @@ class bucket_pq : public priority_queue_interface {
                 void deleteNode(NodeID node);
 
                 bool contains(NodeID node);
+
+                void clear();
         private:
                 NodeID     m_elements;
                 EdgeWeight m_gain_span;
@@ -58,6 +60,15 @@ class bucket_pq : public priority_queue_interface {
                 std::unordered_map<NodeID, std::pair<Count, Gain> > m_queue_index;
                 std::vector< std::vector<NodeID> >             m_buckets;
 };
+
+inline void bucket_pq::clear() {
+        m_queue_index.clear();
+
+        m_elements  = 0;
+        m_max_idx   = 0;
+
+        m_buckets.resize(2*m_gain_span+1);
+}
 
 inline bucket_pq::bucket_pq( const EdgeWeight & gain_span_input ) {
         m_elements  = 0;

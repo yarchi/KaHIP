@@ -1,5 +1,6 @@
 #pragma once
 
+#include "data_structure/parallel/algorithm.h"
 #include "data_structure/parallel/spin_lock.h"
 
 #include <atomic>
@@ -264,6 +265,112 @@ public:
         }
 };
 
-extern TThreadPool g_thread_pool;
+class TThreadPoolWithTaskQueuePerThread {
+private:
+        using TQueue = CacheAlignedData<TThreadsafeQueue<TFunctionWrapper>>;
+
+        std::atomic_bool Done;
+        std::vector <std::thread> Threads;
+        TThreadJoiner ThreadJoiner;
+        std::unique_ptr<TQueue[]> Queues;
+
+        void Worker(
+#ifdef __gnu_linux__
+                uint32_t core_id
+#endif
+        ) {
+#ifdef __gnu_linux__
+                PinToCore(core_id);
+#endif
+                while (!Done) {
+                        TFunctionWrapper task;
+                        if (Queues[core_id - 1].get().TryPop(task))
+                                task();
+//                        else
+//                                std::this_thread::yield();
+                }
+        }
+
+public:
+        explicit TThreadPoolWithTaskQueuePerThread(size_t threadsCount = 0)
+                :       ThreadJoiner(Threads)
+                ,       Queues(std::make_unique<TQueue[]>(threadsCount))
+        {
+
+                Done = false;
+
+                try {
+                        Threads.reserve(threadsCount);
+                        for (size_t i = 0; i < threadsCount; ++i)
+                                Threads.push_back(std::thread(&TThreadPoolWithTaskQueuePerThread::Worker, this
+#ifdef __gnu_linux__
+                                        , i + 1
+#endif
+                                ));
+                }
+                catch (...) {
+                        Done = true;
+                        throw;
+                }
+        }
+
+        void Resize(size_t threadsCount) {
+                Done = true;
+                ThreadJoiner.Clear();
+                Threads.clear();
+                Queues = std::make_unique<TQueue[]>(threadsCount);
+
+                Done = false;
+                Threads.reserve(threadsCount);
+                for (size_t i = 0; i < threadsCount; ++i)
+                        Threads.push_back(std::thread(&TThreadPoolWithTaskQueuePerThread::Worker, this
+#ifdef __gnu_linux__
+                                , i + 1
+#endif
+                        ));
+
+        }
+
+        size_t NumThreads() const {
+                return Threads.size();
+        }
+
+        ~TThreadPoolWithTaskQueuePerThread() {
+                Done = true;
+        }
+
+        template<typename TFunctor, typename... TArgs>
+        std::future<typename std::result_of<TFunctor(TArgs...)>::type> Submit(size_t thread_id, TFunctor&& f,
+                                                                              TArgs... args) {
+                typedef typename std::result_of<TFunctor(TArgs...)>::type TResultType;
+                std::packaged_task < TResultType() >
+                        task(std::bind(std::forward<TFunctor>(f), std::forward<TArgs>(args)...));
+                std::future <TResultType> res(task.get_future());
+
+                Queues[thread_id].get().Push(std::move(task));
+
+                return res;
+        }
+
+        template<typename TFunctor, typename... TArgs>
+        std::vector <std::future<typename std::result_of<TFunctor()>::type>> SubmitAll(size_t thread_id, TFunctor&& f,
+                                                                                       TArgs... args) {
+                typedef typename std::result_of<TFunctor()>::type TResultType;
+
+                std::vector <std::future<TResultType>> futures;
+                futures.reserve(NumThreads());
+                for (size_t i = 0; i < NumThreads(); ++i) {
+                        std::packaged_task < TResultType() > task(std::bind(std::forward<TFunctor>(f),
+                                                                            std::forward<TArgs>(args)...));
+
+                        futures.push_back(task.get_future());
+                        Queues[thread_id].get().Push(std::move(task));
+                }
+
+                return futures;
+        }
+};
+
+extern TThreadPoolWithTaskQueuePerThread g_thread_pool;
 
 }

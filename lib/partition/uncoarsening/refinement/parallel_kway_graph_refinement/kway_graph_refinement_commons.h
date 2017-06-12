@@ -9,6 +9,8 @@
 #include "data_structure/parallel/hash_table.h"
 #include "data_structure/parallel/spin_lock.h"
 #include "data_structure/parallel/thread_config.h"
+#include "data_structure/priority_queues/bucket_pq.h"
+#include "data_structure/priority_queues/maxNodeHeap.h"
 #include "definitions.h"
 #include "partition/partition_config.h"
 #include "partition/uncoarsening/refinement/quotient_graph_refinement/complete_boundary.h"
@@ -27,24 +29,28 @@ public:
         graph_access& G;
         complete_boundary& boundary;
         int step_limit;
-        std::vector <AtomicWrapper<bool>>& moved_idx;
-        Cvector <AtomicWrapper<NodeWeight>>& parts_weights;
-        Cvector <AtomicWrapper<NodeWeight>>& parts_sizes;
-        Cvector <AtomicWrapper<int>>& moved_count;
+        std::vector<AtomicWrapper<bool>>& moved_idx;
+//        Cvector<AtomicWrapper<bool>>& moved_idx;
+//        Cvector<AtomicWrapper<NodeWeight>>& parts_weights;
+//        Cvector<AtomicWrapper<NodeWeight>>& parts_sizes;
+        Cvector<AtomicWrapper<int>>& moved_count;
         int upper_bound_gain_improvement;
         AtomicWrapper<uint32_t>& num_threads_finished;
-        AtomicWrapper<uint32_t>& time_stamp;
 
         // local thread data
+        //std::vector<AtomicWrapper<bool>> moved_idx;
+        std::vector<NodeWeight> parts_weights;
+        std::vector<NodeWeight> parts_sizes;
+
         boundary_starting_nodes start_nodes;
-        nodes_partitions_hash_table nodes_partitions;
+        std::unique_ptr<nodes_partitions_hash_table> nodes_partitions;
+        std::unique_ptr<refinement_pq> queue;
         std::vector<std::pair<int, int>> min_cut_indices;
         std::vector<NodeID> transpositions;
         std::vector<PartitionID> from_partitions;
         std::vector<PartitionID> to_partitions;
         std::vector<EdgeWeight> gains;
         std::vector<NodeID> moved;
-        std::vector<uint32_t> time_stamps;
         std::vector<uint32_t> tried_moves;
 
         // local statistics about time in all iterations
@@ -75,27 +81,27 @@ public:
                                     graph_access& _G,
                                     complete_boundary& _boundary,
                                     std::vector <AtomicWrapper<bool>>& _moved_idx,
-                                    Cvector <AtomicWrapper<NodeWeight>>& _parts_weights,
-                                    Cvector <AtomicWrapper<NodeWeight>>& _parts_sizes,
-                                    Cvector <AtomicWrapper<int>>& _moved_count,
+                                    //Cvector<AtomicWrapper<bool>>& _moved_idx,
+                                    Cvector<AtomicWrapper<NodeWeight>>& _parts_weights,
+                                    Cvector<AtomicWrapper<NodeWeight>>& _parts_sizes,
+                                    Cvector<AtomicWrapper<int>>& _moved_count,
                                     AtomicWrapper<uint32_t>& _reset_counter,
-                                    AtomicWrapper<uint32_t>& _num_threads_finished,
-                                    AtomicWrapper<uint32_t>& _time_stamp)
+                                    AtomicWrapper<uint32_t>& _num_threads_finished
+        )
                 :       parallel::thread_config(_id, _seed)
                 ,       config(_config)
                 ,       G(_G)
                 ,       boundary(_boundary)
                 ,       step_limit(0)
                 ,       moved_idx(_moved_idx)
-                ,       parts_weights(_parts_weights)
-                ,       parts_sizes(_parts_sizes)
+//                ,       moved_idx(_G.number_of_nodes(), false)
+//                ,       parts_weights(_parts_weights)
+//                ,       parts_sizes(_parts_sizes)
                 ,       moved_count(_moved_count)
                 ,       upper_bound_gain_improvement(0)
                 ,       num_threads_finished(_num_threads_finished)
-                ,       time_stamp(_time_stamp)
-                ,       nodes_partitions(_G.number_of_nodes())
-                //,       nodes_partitions(std::min<int>(131072, _G.number_of_nodes()))
-                //,       nodes_partitions(G.number_of_nodes(), -1)
+                ,       nodes_partitions(nullptr)
+                ,       queue(nullptr)
                 ,       total_thread_time(0.0)
                 ,       tried_movements(0)
                 ,       accepted_movements(0)
@@ -116,19 +122,24 @@ public:
         {
                 m_local_degrees.resize(config.k);
 
+                for (PartitionID block = 0; block < config.k; ++block) {
+                        parts_weights.push_back(boundary.getBlockWeight(block));
+                        parts_sizes.push_back(boundary.getBlockNoNodes(block));
+                }
+
                 // needed for the computation of internal and external degrees
                 m_round = 0;
 
-                min_cut_indices.reserve(100);
-                transpositions.reserve(100);
-                from_partitions.reserve(100);
-                to_partitions.reserve(100);
-                gains.reserve(100);
-                moved.reserve(100);
-                start_nodes.reserve(100);
+//                min_cut_indices.reserve(100);
+//                transpositions.reserve(100);
+//                from_partitions.reserve(100);
+//                to_partitions.reserve(100);
+//                gains.reserve(100);
+//                moved.reserve(100);
+//                start_nodes.reserve(100);
         }
 
-        thread_data_refinement_core(const thread_data_refinement_core& td) = default;
+        thread_data_refinement_core(const thread_data_refinement_core& td) = delete;
         thread_data_refinement_core(thread_data_refinement_core&& td) = default;
 
         thread_data_refinement_core& operator=(const thread_data_refinement_core&) = delete;
@@ -137,7 +148,7 @@ public:
         inline PartitionID get_local_partition(NodeID node) {
                 // ht
                 PartitionID part;
-                if (nodes_partitions.contains(node, part)) {
+                if (nodes_partitions->contains(node, part)) {
                         return part;
                 } else {
                         return G.getPartitionIndex(node);
@@ -153,8 +164,27 @@ public:
         void partial_reset_thread_data() {
                 m_reset_counter.fetch_add(1, std::memory_order_release);
 
+                if (nodes_partitions.get() == nullptr) {
+                        nodes_partitions = std::make_unique<nodes_partitions_hash_table>(G.number_of_nodes());
+                        //nodes_partitions = std::make_unique<nodes_partitions_hash_table>();
+                }
+
+                if (queue.get() == nullptr) {
+                        if (config.use_bucket_queues) {
+                                EdgeWeight max_degree = G.getMaxDegree();
+                                queue = std::make_unique<bucket_pq>(max_degree);
+                        } else {
+                                queue = std::make_unique<maxNodeHeap>();
+                        }
+                }
+
+                for (PartitionID block = 0; block < config.k; ++block) {
+                        parts_weights[block] = boundary.getBlockWeight(block);
+                        parts_sizes[block] = boundary.getBlockNoNodes(block);
+                }
+
                 // ht
-                nodes_partitions.clear();
+                nodes_partitions->clear();
 
                 //nodes_partitions.reserve(131072);
 
@@ -162,13 +192,13 @@ public:
                 //nodes_partitions.assign(G.number_of_nodes(), -1);
 
                 ////////nodes_partitions.reserve(nodes_partitions_hash_table::get_max_size_to_fit_l1());
+                queue->clear();
                 min_cut_indices.clear();
                 transpositions.clear();
                 from_partitions.clear();
                 to_partitions.clear();
                 gains.clear();
                 start_nodes.clear();
-                time_stamps.clear();
 
                 while (!is_all_data_reseted());
         }

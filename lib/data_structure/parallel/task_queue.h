@@ -59,6 +59,7 @@ public:
         }
 private:
         std::vector<T> m_elems;
+        double dummy[parallel::g_cache_line_size - sizeof(std::vector<T>)];
         AtomicWrapper<T> m_counter;
 };
 
@@ -87,7 +88,6 @@ public:
 
                         m_counter.compare_exchange_strong(offset, offset + 1, std::memory_order_release);
                 }
-
                 return res;
         }
 
@@ -133,6 +133,91 @@ public:
                 return m_thread_containers.end();
         }
 
+protected:
+
+        inline bool is_size_zero() const {
+                for (const auto& container : m_thread_containers) {
+                        if (container.get().size() > 0) {
+                                return false;
+                        }
+                }
+                return true;
+        }
+
+        Cvector<thread_container<T>> m_thread_containers;
+        double dummy[parallel::g_cache_line_size - sizeof(Cvector<thread_container<T>>)];
+        std::atomic<size_t> m_counter;
+};
+
+template <typename T>
+class circular_task_queue {
+public:
+        using iterator = typename Cvector<thread_container<T>>::iterator;
+
+        explicit circular_task_queue(size_t size)
+                :       m_thread_containers(size)
+        {}
+
+        inline bool try_pop(T& elem, uint32_t id) {
+                if (m_thread_containers[id].get().try_pop(elem)) {
+                        return true;
+                }
+
+                for (uint32_t next_id = id + 1; next_id < m_thread_containers.size(); ++next_id) {
+                        if (m_thread_containers[next_id].get().try_pop(elem)) {
+                                return true;
+                        }
+                }
+
+                for (uint32_t next_id = 0; next_id < id; ++next_id) {
+                        if (m_thread_containers[next_id].get().try_pop(elem)) {
+                                return true;
+                        }
+                }
+
+                return false;
+        }
+
+        inline bool empty() const {
+                return is_size_zero();
+        }
+
+        inline thread_container<T>& operator[](size_t thread_id) {
+                ALWAYS_ASSERT(thread_id < m_thread_containers.size());
+                return m_thread_containers[thread_id].get();
+        }
+
+        inline const thread_container<T>& operator[](size_t thread_id) const {
+                ALWAYS_ASSERT(thread_id < m_thread_containers.size());
+                return m_thread_containers[thread_id].get();
+        }
+
+        inline void push(const T& elem) {
+                m_thread_containers[0].get().push_back(elem);
+        }
+
+        inline void clear() {
+                for (auto& container : m_thread_containers) {
+                        container.get().clear();
+                }
+        }
+
+        inline size_t size() const {
+                size_t size = 0;
+                for (const auto& container : m_thread_containers) {
+                        size += container.get().size();
+                }
+                return size;
+        }
+
+        inline iterator begin() {
+                return m_thread_containers.begin();
+        }
+
+        inline iterator end() {
+                return m_thread_containers.end();
+        }
+
 private:
 
         inline bool is_size_zero() const {
@@ -145,7 +230,7 @@ private:
         }
 
         Cvector<thread_container<T>> m_thread_containers;
-        std::atomic<size_t> m_counter;
+        double dummy[parallel::g_cache_line_size - sizeof(Cvector<thread_container<T>>)];
 };
 
 static void test_task_queue(size_t num_tests) {
@@ -189,7 +274,8 @@ static void test_task_queue(size_t num_tests) {
                 std::vector<std::future<void>> futures;
                 futures.reserve(num_threads);
                 for (size_t id = 1; id < num_threads; ++id) {
-                        futures.push_back(g_thread_pool.Submit(insert_task, id));
+                        futures.push_back(g_thread_pool.Submit(id - 1, insert_task, id));
+                        //futures.push_back(g_thread_pool.Submit(insert_task, id));
                 }
                 insert_task(0);
 
@@ -211,7 +297,8 @@ static void test_task_queue(size_t num_tests) {
                 };
                 futures.clear();
                 for (size_t id = 1; id < num_threads; ++id) {
-                        futures.push_back(g_thread_pool.Submit(read_task, id));
+                        futures.push_back(g_thread_pool.Submit(id - 1, read_task, id));
+                        //futures.push_back(g_thread_pool.Submit(read_task, id));
                 }
                 read_task(0);
 

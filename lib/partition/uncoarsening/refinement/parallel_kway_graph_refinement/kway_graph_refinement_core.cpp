@@ -48,13 +48,9 @@ kway_graph_refinement_core::single_kway_refinement_round(thread_data_refinement_
 
 std::tuple<EdgeWeight, int, uint32_t>
 kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_refinement_core& td) {
-        std::unique_ptr<refinement_pq> queue;
-        if (td.config.use_bucket_queues) {
-                EdgeWeight max_degree = td.G.getMaxDegree();
-                queue = std::make_unique<bucket_pq>(max_degree);
-        } else {
-                queue = std::make_unique<maxNodeHeap>();
-        }
+        auto& queue = td.queue;
+
+        queue->clear();
 
         init_queue_with_boundary(td, queue);
 
@@ -63,7 +59,7 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                 td.from_partitions.push_back(sentinel);
                 td.to_partitions.push_back(sentinel);
                 td.gains.push_back(signed_sentinel);
-                //td.tried_moves.push_back(0);
+
                 return std::make_tuple(0, -1, 0);
         }
 
@@ -92,7 +88,7 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
 
         int previously_moved = (int) td.transpositions.size();
         // minus 1 for sentinel
-        CLOCK_START;
+
         int min_cut_index = previously_moved - 1;
         for (number_of_swaps = 0, movements = 0; movements < max_number_of_swaps; movements++, number_of_swaps++) {
                 if (queue->empty()) {
@@ -125,7 +121,6 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
 #endif
 
                 PartitionID to;
-                CLOCK_START;
                 bool successfull = local_move_node(td, node, from, to, queue, gain);
 
                 if (successfull) {
@@ -149,10 +144,8 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                         td.to_partitions.push_back(to);
                         td.transpositions.push_back(node);
                         td.gains.push_back(gain);
-                        //td.time_stamps.push_back(td.time_stamp.fetch_add(1, std::memory_order_release));
 
                         ALWAYS_ASSERT(min_cut_index < (int64_t) td.transpositions.size());
-                        td.total_thread_accepted_move_time += CLOCK_END_TIME;
                 } else {
                         number_of_swaps--; //because it wasnt swaps
                 }
@@ -162,18 +155,13 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                 ++td.stop_max_number_of_swaps;
         }
 
-        td.total_thread_try_move_time += CLOCK_END_TIME;
-
-        CLOCK_START_N;
         unroll_moves(td, min_cut_index);
-        td.total_thread_unroll_move_time += CLOCK_END_TIME;
 
         td.transpositions.push_back(sentinel);
         td.from_partitions.push_back(sentinel);
         td.to_partitions.push_back(sentinel);
         td.gains.push_back(signed_sentinel);
-        //td.time_stamps.push_back(sentinel);
-        //td.tried_moves.push_back(movements);
+
         return std::make_tuple(initial_cut - best_cut, min_cut_index, movements);
 }
 
@@ -237,7 +225,7 @@ std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::local_search_from_on
                         break;
         }
 
-        moved_hash_set moved_by_local_search(std::min<uint32_t>(moved_hash_set::get_max_size_to_fit_l1(),
+        moved_hash_set moved_by_local_search(std::min<uint32_t>(get_max_size_to_fit_l1<moved_hash_set>(),
                                                                 round_up_to_next_power_2(max_number_of_swaps)));
 
         for (number_of_swaps = 0, movements = 0; movements < max_number_of_swaps; movements++, number_of_swaps++) {
@@ -408,15 +396,10 @@ kway_graph_refinement_core::apply_moves(uint32_t num_threads,
         uint32_t overall_moved = 0;
         EdgeWeight overall_gain = 0;
 
-        moved_nodes_hash_map moved_nodes(moved_nodes_hash_map::get_max_size_to_fit_l1());
-//        std::ofstream ftxt("moved_nodes_tmp.log");
-//        ftxt << "";
-//        ftxt.close();
+        moved_nodes_hash_map moved_nodes(get_max_size_to_fit_l1<moved_nodes_hash_map>());
         for (size_t id = 0; id < num_threads; ++id) {
-                //std::cout << "Moved ";
                 overall_gain += apply_moves(threads_data[id].get(), moved_nodes, compute_touched_partitions,
                                             touched_blocks, reactivated_vertices);
-                //std::cout << std::endl;
         }
         overall_moved = moved_nodes.size();
         return std::make_pair(overall_gain, overall_moved);
@@ -434,7 +417,7 @@ kway_graph_refinement_core::apply_moves(Cvector <thread_data_refinement_core>& t
         uint32_t overall_moved = 0;
         EdgeWeight overall_gain = 0;
 
-        moved_nodes_hash_map moved_nodes(moved_nodes_hash_map::get_max_size_to_fit_l1());
+        moved_nodes_hash_map moved_nodes(get_max_size_to_fit_l1<moved_nodes_hash_map>());
 
         overall_gain += apply_moves(threads_data[0].get(), moved_nodes, compute_touched_partitions,
                                     touched_blocks, reactivated_vertices);
@@ -463,166 +446,166 @@ bool kway_graph_refinement_core::is_moved(moved_nodes_hash_map& moved_nodes, Nod
         return !moved_nodes.contains(node) ? false : (moved_nodes[node].first != thread_id);
 }
 
-std::pair<EdgeWeight, uint32_t>
-kway_graph_refinement_core::apply_moves_with_time_stamp(Cvector<thread_data_refinement_core>& threads_data,
-                                                        bool compute_touched_partitions,
-                                                        std::unordered_map<PartitionID, PartitionID>& touched_blocks,
-                                                        std::vector<std::future<uint32_t>>& futures) const {
-        uint32_t num_threads = threads_data.size();
-        uint32_t overall_moved = 0;
-        EdgeWeight overall_gain = 0;
-        EdgeWeight gain = 0;
-        uint32_t movements = 0;
-
-        std::for_each(futures.begin(), futures.end(), [](auto& future) {
-                future.get();
-        });
-
-        //ALWAYS_ASSERT(num_threads <= 16, "Use priority queue for greater number of threads");
-
-        std::vector<uint32_t> time_stamps(num_threads);
-        std::vector<uint32_t> time_stamps_poses(num_threads);
-        std::vector<uint32_t> min_cut_indices_poses(num_threads);
-
-        const uint32_t max_time_stamp = std::numeric_limits<uint32_t>::max();
-
-        uint32_t active_threads = 0;
-        for (size_t id = 0; id < num_threads; ++id) {
-                auto& td = threads_data[id].get();
-                ALWAYS_ASSERT(td.transpositions.size() == td.from_partitions.size());
-                ALWAYS_ASSERT(td.transpositions.size() == td.to_partitions.size());
-                ALWAYS_ASSERT(td.transpositions.size() == td.gains.size());
-                ALWAYS_ASSERT(td.transpositions.size() == td.time_stamps.size());
-
-                if (td.min_cut_indices.size() > 0) {
-                        ++active_threads;
-
-
-                        time_stamps_poses[id] = 0;
-                        time_stamps[id] = td.time_stamps[time_stamps_poses[id]];
-                        min_cut_indices_poses[id] = 0;
-
-                        // skip sentinels
-                        while (time_stamps[id] == sentinel) {
-                                if (min_cut_indices_poses[id] + 1 == td.min_cut_indices.size()) {
-                                        time_stamps[id] = max_time_stamp;
-                                        break;
-                                }
-
-                                int next_index = td.min_cut_indices[min_cut_indices_poses[id]].second;
-                                time_stamps_poses[id] = next_index + 1;
-                                time_stamps[id] = td.time_stamps[time_stamps_poses[id]];
-                                ++min_cut_indices_poses[id];
-                        }
-                } else {
-                        time_stamps[id] = max_time_stamp;
-                }
-        }
-
-
-        moved_nodes_hash_map moved_nodes(moved_nodes_hash_map::get_max_size_to_fit_l1());
-
-        while (active_threads > 0) {
-                // 1. choose thread with minimum time stamp
-                uint32_t id = std::min_element(time_stamps.begin(), time_stamps.end()) - time_stamps.begin();
-                uint32_t index = time_stamps_poses[id];
-                auto& td = threads_data[id].get();
-
-                ALWAYS_ASSERT(min_cut_indices_poses[id] < td.min_cut_indices.size());
-                int next_index = td.min_cut_indices[min_cut_indices_poses[id]].second;
-                ALWAYS_ASSERT(index < next_index);
-
-                // 2. do moves
-                NodeID node = td.transpositions[index];
-                PartitionID from = td.from_partitions[index];
-                PartitionID to = td.to_partitions[index];
-
-                // local search called because other local search could moved it (local search for other node)
-                if (is_moved(moved_nodes, node, id)) {
-                        // start local search from node and max work amount (next_index - index)
-                        std::tie(gain, movements) = local_search_from_one_node(td, moved_nodes, node,
-                                                                               next_index - index,
-                                                                               compute_touched_partitions,
-                                                                               touched_blocks);
-                        overall_gain += gain;
-                        overall_moved += movements;
-                }
-
-                forall_out_edges(td.G, e, node)
-                                {
-                                        NodeID target = td.G.getEdgeTarget(e);
-                                        PartitionID target_partition = td.G.getPartitionIndex(target);
-                                        if (is_moved(moved_nodes, node, id) &&
-                                            (target_partition == to || target_partition == from)) {
-//                                int unperformed_gain = 0;
-//                                for (size_t i = start_index; i <= min_cut_index; ++i) {
-//                                        unperformed_gain += td.gains[i];
+//std::pair<EdgeWeight, uint32_t>
+//kway_graph_refinement_core::apply_moves_with_time_stamp(Cvector<thread_data_refinement_core>& threads_data,
+//                                                        bool compute_touched_partitions,
+//                                                        std::unordered_map<PartitionID, PartitionID>& touched_blocks,
+//                                                        std::vector<std::future<uint32_t>>& futures) const {
+//        uint32_t num_threads = threads_data.size();
+//        uint32_t overall_moved = 0;
+//        EdgeWeight overall_gain = 0;
+//        EdgeWeight gain = 0;
+//        uint32_t movements = 0;
+//
+//        std::for_each(futures.begin(), futures.end(), [](auto& future) {
+//                future.get();
+//        });
+//
+//        //ALWAYS_ASSERT(num_threads <= 16, "Use priority queue for greater number of threads");
+//
+//        std::vector<uint32_t> time_stamps(num_threads);
+//        std::vector<uint32_t> time_stamps_poses(num_threads);
+//        std::vector<uint32_t> min_cut_indices_poses(num_threads);
+//
+//        const uint32_t max_time_stamp = std::numeric_limits<uint32_t>::max();
+//
+//        uint32_t active_threads = 0;
+//        for (size_t id = 0; id < num_threads; ++id) {
+//                auto& td = threads_data[id].get();
+//                ALWAYS_ASSERT(td.transpositions.size() == td.from_partitions.size());
+//                ALWAYS_ASSERT(td.transpositions.size() == td.to_partitions.size());
+//                ALWAYS_ASSERT(td.transpositions.size() == td.gains.size());
+//                ALWAYS_ASSERT(td.transpositions.size() == td.time_stamps.size());
+//
+//                if (td.min_cut_indices.size() > 0) {
+//                        ++active_threads;
+//
+//
+//                        time_stamps_poses[id] = 0;
+//                        time_stamps[id] = td.time_stamps[time_stamps_poses[id]];
+//                        min_cut_indices_poses[id] = 0;
+//
+//                        // skip sentinels
+//                        while (time_stamps[id] == sentinel) {
+//                                if (min_cut_indices_poses[id] + 1 == td.min_cut_indices.size()) {
+//                                        time_stamps[id] = max_time_stamp;
+//                                        break;
 //                                }
-//                                td.unperformed_gain += unperformed_gain;
-                                                // start local search from node and max work amount (next_index - index)
-                                                std::tie(gain, movements) = local_search_from_one_node(td, moved_nodes,
-                                                                                                       node,
-                                                                                                       next_index -
-                                                                                                       index,
-                                                                                                       compute_touched_partitions,
-                                                                                                       touched_blocks);
-                                                overall_gain += gain;
-                                                overall_moved += movements;
-                                        }
-                                }
-                endfor
-
-                int min_cut_index = td.min_cut_indices[min_cut_indices_poses[id]].first;
-                bool success = relaxed_move_node(td, node, from, to);
-                if (success) {
-                        moved_nodes[node] = std::make_pair(id, from);
-                        if (compute_touched_partitions) {
-                                touched_blocks[from] = from;
-                                touched_blocks[to] = to;
-                        }
-                        ++overall_moved;
-                        overall_gain += gain;
-                } else {
-//                        int unperformed_gain = 0;
-//                        for (size_t i = start_index; i <= min_cut_index; ++i) {
-//                                unperformed_gain += td.gains[i];
+//
+//                                int next_index = td.min_cut_indices[min_cut_indices_poses[id]].second;
+//                                time_stamps_poses[id] = next_index + 1;
+//                                time_stamps[id] = td.time_stamps[time_stamps_poses[id]];
+//                                ++min_cut_indices_poses[id];
 //                        }
-//                        td.unperformed_gain += unperformed_gain;
-                        // start local search from node and max work amount (next_index - index)
-                        std::tie(gain, movements) = local_search_from_one_node(td, moved_nodes, node,
-                                                                               next_index - index,
-                                                                               compute_touched_partitions,
-                                                                               touched_blocks);
-                        overall_gain += gain;
-                        overall_moved += movements;
-                }
-
-                // 3. update time_stamp of chosen thread
-
-                // check if all moves of thread id are performed
-
-                if (time_stamps_poses[id] + 1 <= min_cut_index) {
-                        ++time_stamps_poses[id];
-                        time_stamps[id] = td.time_stamps[time_stamps_poses[id]];
-                } else {
-                        do {
-                                // check if all moves of thread id are performed
-                                if (min_cut_indices_poses[id] + 1 == td.min_cut_indices.size()) {
-                                        --active_threads;
-                                        time_stamps[id] = max_time_stamp;
-                                        break;
-                                }
-
-                                next_index = td.min_cut_indices[min_cut_indices_poses[id]].second;
-                                time_stamps_poses[id] = next_index + 1;
-                                time_stamps[id] = td.time_stamps[time_stamps_poses[id]];
-                                ++min_cut_indices_poses[id];
-                        } while (time_stamps[id] == sentinel);
-                }
-        }
-
-        return std::make_pair(overall_gain, overall_moved);
-}
+//                } else {
+//                        time_stamps[id] = max_time_stamp;
+//                }
+//        }
+//
+//
+//        moved_nodes_hash_map moved_nodes(get_max_size_to_fit_l1<moved_nodes_hash_map>());
+//
+//        while (active_threads > 0) {
+//                // 1. choose thread with minimum time stamp
+//                uint32_t id = std::min_element(time_stamps.begin(), time_stamps.end()) - time_stamps.begin();
+//                uint32_t index = time_stamps_poses[id];
+//                auto& td = threads_data[id].get();
+//
+//                ALWAYS_ASSERT(min_cut_indices_poses[id] < td.min_cut_indices.size());
+//                int next_index = td.min_cut_indices[min_cut_indices_poses[id]].second;
+//                ALWAYS_ASSERT(index < next_index);
+//
+//                // 2. do moves
+//                NodeID node = td.transpositions[index];
+//                PartitionID from = td.from_partitions[index];
+//                PartitionID to = td.to_partitions[index];
+//
+//                // local search called because other local search could moved it (local search for other node)
+//                if (is_moved(moved_nodes, node, id)) {
+//                        // start local search from node and max work amount (next_index - index)
+//                        std::tie(gain, movements) = local_search_from_one_node(td, moved_nodes, node,
+//                                                                               next_index - index,
+//                                                                               compute_touched_partitions,
+//                                                                               touched_blocks);
+//                        overall_gain += gain;
+//                        overall_moved += movements;
+//                }
+//
+//                forall_out_edges(td.G, e, node)
+//                                {
+//                                        NodeID target = td.G.getEdgeTarget(e);
+//                                        PartitionID target_partition = td.G.getPartitionIndex(target);
+//                                        if (is_moved(moved_nodes, node, id) &&
+//                                            (target_partition == to || target_partition == from)) {
+////                                int unperformed_gain = 0;
+////                                for (size_t i = start_index; i <= min_cut_index; ++i) {
+////                                        unperformed_gain += td.gains[i];
+////                                }
+////                                td.unperformed_gain += unperformed_gain;
+//                                                // start local search from node and max work amount (next_index - index)
+//                                                std::tie(gain, movements) = local_search_from_one_node(td, moved_nodes,
+//                                                                                                       node,
+//                                                                                                       next_index -
+//                                                                                                       index,
+//                                                                                                       compute_touched_partitions,
+//                                                                                                       touched_blocks);
+//                                                overall_gain += gain;
+//                                                overall_moved += movements;
+//                                        }
+//                                }
+//                endfor
+//
+//                int min_cut_index = td.min_cut_indices[min_cut_indices_poses[id]].first;
+//                bool success = relaxed_move_node(td, node, from, to);
+//                if (success) {
+//                        moved_nodes[node] = std::make_pair(id, from);
+//                        if (compute_touched_partitions) {
+//                                touched_blocks[from] = from;
+//                                touched_blocks[to] = to;
+//                        }
+//                        ++overall_moved;
+//                        overall_gain += gain;
+//                } else {
+////                        int unperformed_gain = 0;
+////                        for (size_t i = start_index; i <= min_cut_index; ++i) {
+////                                unperformed_gain += td.gains[i];
+////                        }
+////                        td.unperformed_gain += unperformed_gain;
+//                        // start local search from node and max work amount (next_index - index)
+//                        std::tie(gain, movements) = local_search_from_one_node(td, moved_nodes, node,
+//                                                                               next_index - index,
+//                                                                               compute_touched_partitions,
+//                                                                               touched_blocks);
+//                        overall_gain += gain;
+//                        overall_moved += movements;
+//                }
+//
+//                // 3. update time_stamp of chosen thread
+//
+//                // check if all moves of thread id are performed
+//
+//                if (time_stamps_poses[id] + 1 <= min_cut_index) {
+//                        ++time_stamps_poses[id];
+//                        time_stamps[id] = td.time_stamps[time_stamps_poses[id]];
+//                } else {
+//                        do {
+//                                // check if all moves of thread id are performed
+//                                if (min_cut_indices_poses[id] + 1 == td.min_cut_indices.size()) {
+//                                        --active_threads;
+//                                        time_stamps[id] = max_time_stamp;
+//                                        break;
+//                                }
+//
+//                                next_index = td.min_cut_indices[min_cut_indices_poses[id]].second;
+//                                time_stamps_poses[id] = next_index + 1;
+//                                time_stamps[id] = td.time_stamps[time_stamps_poses[id]];
+//                                ++min_cut_indices_poses[id];
+//                        } while (time_stamps[id] == sentinel);
+//                }
+//        }
+//
+//        return std::make_pair(overall_gain, overall_moved);
+//}
 
 EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& td, moved_nodes_hash_map& moved_nodes,
                                                    bool compute_touched_partitions,
@@ -664,12 +647,12 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
                         ALWAYS_ASSERT(false);
 #endif
+                        unroll_relaxed_moves(td, moved_nodes, best_cut_index + 1, index, cut_improvement);
+
                         // add all nodes that were not moved
-                        for (int i = index; i <= min_cut_index; ++i) {
+                        for (int i = best_cut_index + 1; i <= min_cut_index; ++i) {
                                 not_moved.insert(td.transpositions[i]);
                         }
-
-                        unroll_relaxed_moves(td, moved_nodes, best_cut_index + 1, index, cut_improvement);
 
                         EdgeWeight gain = 0;
                         uint32_t movements = 0;
@@ -706,7 +689,7 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
                         PartitionID to = td.to_partitions[index];
                         EdgeWeight gain = td.gains[index];
 
-                        // local search called because other local search could moved it (local search for other node)
+                        // for ApplyMoveStrategy::LOCAL_SEARCH: local search for other node moved this node
                         if (is_moved(moved_nodes, node, td.id)) {
 
                                 EdgeWeight gain;
@@ -944,8 +927,7 @@ inline bool kway_graph_refinement_core::relaxed_move_node(thread_data_refinement
 }
 
 void kway_graph_refinement_core::unroll_relaxed_moves(thread_data_refinement_core& td,
-                                                      moved_nodes_hash_map& moved_nodes,
-                                                      int start, int end,
+                                                      moved_nodes_hash_map& moved_nodes, int start, int end,
                                                       int& cut_improvement) const {
         // iterate from end - 1 to start [start, end)
         //for (size_t i = 0; i + start < end; ++i) {
@@ -984,13 +966,19 @@ inline bool kway_graph_refinement_core::local_move_back_node(thread_data_refinem
                                                              NodeID node,
                                                              PartitionID from,
                                                              PartitionID to) const {
-        td.nodes_partitions[node] = from;
+        (*td.nodes_partitions)[node] = from;
         NodeWeight this_nodes_weight = td.G.getNodeWeight(node);
 
-        td.parts_weights[from].get().fetch_add(this_nodes_weight, std::memory_order_relaxed);
-        td.parts_weights[to].get().fetch_sub(this_nodes_weight, std::memory_order_relaxed);
-        td.parts_sizes[to].get().fetch_sub(1, std::memory_order_relaxed);
-        td.parts_sizes[from].get().fetch_add(1, std::memory_order_relaxed);
+//        td.parts_weights[from].get().fetch_add(this_nodes_weight, std::memory_order_relaxed);
+//        td.parts_weights[to].get().fetch_sub(this_nodes_weight, std::memory_order_relaxed);
+//        td.parts_sizes[to].get().fetch_sub(1, std::memory_order_relaxed);
+//        td.parts_sizes[from].get().fetch_add(1, std::memory_order_relaxed);
+
+        td.parts_weights[from] += this_nodes_weight;
+        td.parts_weights[to] -= this_nodes_weight;
+        --td.parts_sizes[to];
+        ++td.parts_sizes[from];
+
 
         return true;
 };
@@ -1003,33 +991,47 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
 
         EdgeWeight node_ext_deg;
 
-        CLOCK_START;
         Gain expected_gain = td.compute_gain(node, from, to, node_ext_deg);
-        td.time_compute_gain += CLOCK_END_TIME;
 
         ALWAYS_ASSERT(expected_gain == gain);
         ALWAYS_ASSERT(to != INVALID_PARTITION);
 
         NodeWeight this_nodes_weight = td.G.getNodeWeight(node);
 
-        if (td.parts_sizes[from].get().load(std::memory_order_relaxed) == 1) {
+//        if (td.parts_sizes[from].get().load(std::memory_order_relaxed) == 1) {
+//                return false;
+//        }
+//
+//        NodeWeight part_weight = td.parts_weights[to].get().load(std::memory_order_relaxed);
+//
+//        do {
+//                if (part_weight + this_nodes_weight >= td.config.upper_bound_partition) {
+//                        return false;
+//                }
+//        } while (!td.parts_weights[to].get().compare_exchange_weak(part_weight,
+//                                                                   part_weight + this_nodes_weight,
+//                                                                   std::memory_order_relaxed));
+
+        if (td.parts_sizes[from] == 1) {
                 return false;
         }
 
-        NodeWeight part_weight = td.parts_weights[to].get().load(std::memory_order_relaxed);
+        NodeWeight part_weight = td.parts_weights[to];
 
-        do {
-                if (part_weight + this_nodes_weight >= td.config.upper_bound_partition) {
-                        return false;
-                }
-        } while (!td.parts_weights[to].get().compare_exchange_weak(part_weight,
-                                                                   part_weight + this_nodes_weight,
-                                                                   std::memory_order_relaxed));
+        if (part_weight + this_nodes_weight >= td.config.upper_bound_partition) {
+                return false;
+        }
+        td.parts_weights[to] = part_weight + this_nodes_weight;
 
-        td.nodes_partitions[node] = to;
-        td.parts_weights[from].get().fetch_sub(this_nodes_weight, std::memory_order_relaxed);
-        td.parts_sizes[to].get().fetch_add(1, std::memory_order_relaxed);
-        td.parts_sizes[from].get().fetch_sub(1, std::memory_order_relaxed);
+
+        (*td.nodes_partitions)[node] = to;
+//        td.parts_weights[from].get().fetch_sub(this_nodes_weight, std::memory_order_relaxed);
+//        td.parts_sizes[to].get().fetch_add(1, std::memory_order_relaxed);
+//        td.parts_sizes[from].get().fetch_sub(1, std::memory_order_relaxed);
+
+        td.parts_weights[from] -= this_nodes_weight;
+        ++td.parts_sizes[to];
+        --td.parts_sizes[from];
 
         //update gain of neighbors / the boundaries have allready been updated
         forall_out_edges(td.G, e, node) {
@@ -1039,9 +1041,7 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
                 EdgeWeight ext_degree; // the local external degree
                 PartitionID target_from = td.get_local_partition(target);
 
-                CLOCK_START;
                 Gain gain = td.compute_gain(target, target_from, targets_to, ext_degree);
-                td.time_compute_gain += CLOCK_END_TIME;
 
                 if (queue->contains(target)) {
                         assert(td.moved_idx[target].load(std::memory_order_relaxed));

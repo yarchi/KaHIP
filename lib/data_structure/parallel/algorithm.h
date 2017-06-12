@@ -93,11 +93,15 @@ static Functor for_each(Iterator first, Iterator last, TaskConsumer& task_consum
 
         for (size_t i = 0; i + 1 < proc; ++i) {
                 if (Sync) {
-                        futures.push_back(task_consumer.Submit(wrapper, first,
+                        futures.push_back(task_consumer.Submit(i, wrapper, first,
                                                                first + work_per_thread, func));
+//                        futures.push_back(task_consumer.Submit(wrapper, first,
+//                                                               first + work_per_thread, func));
                 } else {
-                        task_consumer.Submit(wrapper,
+                        task_consumer.Submit(i, wrapper,
                                              first, first + work_per_thread, func);
+//                        task_consumer.Submit(wrapper,
+//                                             first, first + work_per_thread, func);
                 }
                 first += work_per_thread;
         }
@@ -179,18 +183,20 @@ Functor apply_to_range_async(Iterator first, Iterator last, TaskConsumer& task_c
                                                        typename std::iterator_traits<iter_type>::iterator_category());
 }
 
-const uint32_t g_cache_line_size = 64 * sizeof(char);
+constexpr uint32_t g_cache_line_size = 64 * sizeof(char);
 
 template <typename T>
 class alignas(g_cache_line_size) CacheAlignedData {
 public:
         using Type = T;
 
-        inline operator T() const {
-                return m_elem;
+        CacheAlignedData()
+                :       m_elem()
+        {
+                static_assert(sizeof(Self) % g_cache_line_size == 0, "No cache line alignment");
         }
 
-        CacheAlignedData(T elem = T())
+        CacheAlignedData(T elem)
                 :       m_elem(elem)
         {
                 static_assert(sizeof(Self) % g_cache_line_size == 0, "No cache line alignment");
@@ -201,14 +207,9 @@ public:
                 :       m_elem(std::forward<Args>(args)...)
         {}
 
-        CacheAlignedData(const CacheAlignedData& other)
-                :       m_elem(other.m_elem)
-        {}
 
-        CacheAlignedData(CacheAlignedData&& other)
-                :       m_elem(other.m_elem)
-        {}
-
+        CacheAlignedData(const CacheAlignedData& other) = default;
+        CacheAlignedData(CacheAlignedData&& other) = default;
 
         inline T& get() {
                 return m_elem;

@@ -572,7 +572,8 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
 
 
                 for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
-                        futures.push_back(parallel::g_thread_pool.Submit(process, i + 1));
+                        futures.push_back(parallel::g_thread_pool.Submit(i, process, i + 1));
+                        //futures.push_back(parallel::g_thread_pool.Submit(process, i + 1));
                 }
 
                 num_changed_label += process(0);
@@ -677,8 +678,11 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(graph_access
                 size_t work_per_thread = G.number_of_nodes() / (parallel::g_thread_pool.NumThreads() + 1);
                 NodeID first = 0;
                 for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
-                        futures.push_back(parallel::g_thread_pool.Submit(process, i + 1, first,
+                        futures.push_back(parallel::g_thread_pool.Submit(i, process, i + 1, first,
                                                                          first + work_per_thread));
+//                        futures.push_back(parallel::g_thread_pool.Submit(process, i + 1, first,
+//                                                                         first + work_per_thread));
+
                         first += work_per_thread;
                 }
 

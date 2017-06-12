@@ -83,11 +83,11 @@ private:
 
         bool is_moved(moved_nodes_hash_map& moved_nodes, NodeID node, uint32_t thread_id) const;
 
-        std::pair<EdgeWeight, uint32_t>
-        apply_moves_with_time_stamp(Cvector<thread_data_refinement_core>& threads_data,
-                                    bool compute_touched_partitions,
-                                    std::unordered_map<PartitionID, PartitionID>& touched_blocks,
-                                    std::vector<std::future<uint32_t>>& futures) const;
+//        std::pair<EdgeWeight, uint32_t>
+//        apply_moves_with_time_stamp(Cvector<thread_data_refinement_core>& threads_data,
+//                                    bool compute_touched_partitions,
+//                                    std::unordered_map<PartitionID, PartitionID>& touched_blocks,
+//                                    std::vector<std::future<uint32_t>>& futures) const;
 
         inline bool move_node(thread_data_refinement_core& td,
                               moved_hash_set& moved,
