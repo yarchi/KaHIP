@@ -122,7 +122,7 @@ private:
                 using position_type = typename small_map_type::Position;
                 using element_type = typename small_map_type::Element;
 
-                return round_up_to_previous_power_2( 16 * 1024 / (sizeof(element_type) * (size_factor)) );
+                return round_up_to_previous_power_2( 32 * 1024 / (sizeof(element_type) * (size_factor)) );
         }
 };
 
