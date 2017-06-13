@@ -200,6 +200,6 @@ private:
 };
 
 template <typename key_type, typename value_type>
-using cache_aware_map = hash_table_map<key_type, value_type>;
+using cache_aware_map = cache_aware_map_impl<key_type, value_type>;
 
 }
