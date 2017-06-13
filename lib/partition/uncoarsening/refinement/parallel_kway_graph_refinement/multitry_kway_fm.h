@@ -314,9 +314,9 @@ public:
                 print_iteration_statistics();
         }
 
+        AtomicWrapper<uint32_t> num_threads_finished;
         //task_queue<NodeID> queue;
         circular_task_queue<NodeID> queue;
-        AtomicWrapper<uint32_t> num_threads_finished;
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
         PartitionConfig& m_config;
 #endif

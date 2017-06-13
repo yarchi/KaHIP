@@ -162,9 +162,6 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                         td.step_limit = local_step_limit;
                         uint32_t nodes_processed = 0;
                         bool res = false;
-                        size_t s = 0;
-                        size_t old = td.num_part_accesses;
-                        size_t old1 = td.scaned_neighbours;
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
                         while (!todolist.empty()) {
                                 int random_idx = random_functions::nextInt(0, todolist.size() - 1);
@@ -224,7 +221,6 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                                                 std::memory_order_relaxed);
                                                 }
                                                 td.tried_movements += tried_movements;
-                                                s += tried_movements;
                                         }
                                 }
 

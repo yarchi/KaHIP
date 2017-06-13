@@ -5,7 +5,7 @@
 #include "data_structure/graph_access.h"
 #include "data_structure/parallel/algorithm.h"
 #include "data_structure/parallel/atomics.h"
-#include "data_structure/parallel/cache_aware_map.h"
+#include "data_structure/parallel/nodes_partitions_map.h"
 #include "data_structure/parallel/hash_table.h"
 #include "data_structure/parallel/spin_lock.h"
 #include "data_structure/parallel/thread_config.h"
@@ -166,7 +166,6 @@ public:
 
                 if (nodes_partitions.get() == nullptr) {
                         nodes_partitions = std::make_unique<nodes_partitions_hash_table>(G.number_of_nodes());
-                        //nodes_partitions = std::make_unique<nodes_partitions_hash_table>();
                 }
 
                 if (queue.get() == nullptr) {
