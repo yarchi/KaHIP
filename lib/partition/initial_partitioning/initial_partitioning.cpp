@@ -27,6 +27,7 @@
 #include "graph_partitioner.h"
 #include "initial_partition_bipartition.h"
 #include "initial_partitioning.h"
+#include "initial_partitioning/parallel/initial_partitioning.h"
 #include "initial_refinement/initial_refinement.h"
 #include "initial_node_separator.h"
 #include "quality_metrics.h"
@@ -46,7 +47,12 @@ void initial_partitioning::perform_initial_partitioning(const PartitionConfig & 
         if(config.mode_node_separators) {
                 perform_initial_partitioning_separator(config, G);
         } else {
-                perform_initial_partitioning(config, G);
+                if (!config.parallel_initial_partitioning) {
+                        perform_initial_partitioning(config, G);
+                } else {
+                        parallel::initial_partitioning init_part;
+                        init_part.perform_initial_partitioning(config, G);
+                }
         }
 }
 

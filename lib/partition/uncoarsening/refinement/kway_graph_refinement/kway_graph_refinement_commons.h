@@ -55,8 +55,8 @@ public:
 
         inline unsigned getUnderlyingK();
 
-        static size_t scaned_movements;
-        static size_t num_part_accesses;
+//        static size_t scaned_movements;
+//        static size_t num_part_accesses;
 private:
         kway_graph_refinement_commons();
 
@@ -66,8 +66,11 @@ private:
                 EdgeWeight local_degree;
         };
 
-        static
-        std::vector<kway_graph_refinement_commons*>* m_instances;
+#ifdef CPP11THREADS
+        static std::unordered_map<std::thread::id, std::unique_ptr<kway_graph_refinement_commons>> m_instances;
+#else
+        static std::vector<kway_graph_refinement_commons*>* m_instances;
+#endif
         std::vector <round_struct> m_local_degrees;
         unsigned m_round;
 };
@@ -160,7 +163,7 @@ inline Gain kway_graph_refinement_commons::compute_gain(graph_access& G,
         {
                 NodeID target = G.getEdgeTarget(e);
                 PartitionID target_partition = G.getPartitionIndex(target);
-                ++num_part_accesses;
+                //++num_part_accesses;
 
                 if (m_local_degrees[target_partition].round == m_round) {
                         m_local_degrees[target_partition].local_degree += G.getEdgeWeight(e);

@@ -415,6 +415,8 @@ struct PartitionConfig
         bool quotient_graph_two_way_refinement = true;
         std::string configuration;
         bool lp_before_local_search = false;
+        bool parallel_initial_partitioning = false;
+        bool check_cut = false;
 };
 
 

@@ -39,7 +39,7 @@ env.Replace(CXX = "g++-5")
 
 #add git revision
 def getGitDesc():
-  return Popen('cat GIT_COMMIT_HASH', stdout=PIPE, shell=True).stdout.read().strip()
+  return Popen('cat ../GIT_COMMIT_HASH', stdout=PIPE, shell=True).stdout.read().strip()
 
 GIT_DESC = getGitDesc() 
 env.Append(CPPDEFINES = { 'GIT_DESC' : ('\\"%s\\"' % GIT_DESC) })
@@ -70,6 +70,7 @@ libkaffpa_files = [   'lib/data_structure/graph_hierarchy.cpp',
                       'lib/partition/coarsening/clustering/node_ordering.cpp',
                       'lib/partition/coarsening/clustering/size_constraint_label_propagation.cpp',
                       'lib/partition/initial_partitioning/initial_partitioning.cpp',
+		      'lib/partition/initial_partitioning/parallel/initial_partitioning.cpp',
                       'lib/partition/initial_partitioning/initial_partitioner.cpp',
                       'lib/partition/initial_partitioning/initial_partition_bipartition.cpp',
                       'lib/partition/initial_partitioning/initial_refinement/initial_refinement.cpp',
@@ -122,15 +123,15 @@ libkaffpa_parallel_async  = ['lib/parallel_mh/parallel_mh_async.cpp',
                              'lib/tools/mpi_tools.cpp' ]
 
 if env['program'] == 'kaffpa':
-        env.Append(CXXFLAGS = '-DMODE_KAFFPA -DKAFFPAOUTPUT')
+        env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')
         env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
 if env['program'] == 'kaffpa_test':
-        env.Append(CXXFLAGS = '-DMODE_KAFFPA')
+        env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')
 	env.Program('kaffpa_test', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
 if env['program'] == 'kaffpa_compare_with_sequential':
-	env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCOMPARE_WITH_SEQUENTIAL_KAHIP -DKAFFPAOUTPUT')
+	env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCOMPARE_WITH_SEQUENTIAL_KAHIP -DKAFFPAOUTPUT -DCPP11THREADS')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA -DCOMPARE_WITH_SEQUENTIAL_KAHIP -DKAFFPAOUTPUT')
         env.Program('kaffpa_compare_with_sequential', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
 

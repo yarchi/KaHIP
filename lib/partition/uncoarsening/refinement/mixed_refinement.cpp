@@ -63,7 +63,18 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
         } else {
                 if(config.corner_refinement_enabled) {
                         CLOCK_START;
-                        overall_improvement += kway->perform_refinement(config, G, boundary);
+                        quality_metrics qm;
+                        EdgeWeight old_cut;
+                        if (config.check_cut) {
+                                old_cut = qm.edge_cut(G);
+                        }
+                        EdgeWeight improvement = kway->perform_refinement(config, G, boundary);
+                        overall_improvement += improvement;
+
+                        if (config.check_cut) {
+                                ALWAYS_ASSERT(old_cut - qm.edge_cut(G) == improvement);
+                        }
+
                         CLOCK_END("Kway refinement");
                 }
 
@@ -71,9 +82,22 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
                         CLOCK_START;
                         std::unique_ptr<multitry_kway_fm> multitry_kway = get_multitry_kway_fm_instance(config, G,
                                                                                                         boundary);
-                        overall_improvement += multitry_kway->perform_refinement(config, G, boundary,
+                        quality_metrics qm;
+                        EdgeWeight old_cut;
+                        if (config.check_cut) {
+                                old_cut = qm.edge_cut(G);
+                        }
+
+
+                        EdgeWeight improvement = multitry_kway->perform_refinement(config, G, boundary,
                                                                                  config.global_multitry_rounds, true,
                                                                                  config.kway_adaptive_limits_alpha);
+                        overall_improvement += improvement;
+
+                        if (config.check_cut) {
+                                ALWAYS_ASSERT(old_cut - qm.edge_cut(G) == improvement);
+                        }
+
                         CLOCK_END("Multitry kway refinement");
                 }
 

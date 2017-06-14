@@ -51,6 +51,7 @@ void initial_partition_bipartition::initial_partition( const PartitionConfig & c
 	rec_config.graph_allready_partitioned       = false;
         rec_config.label_propagation_refinement     = false;
         rec_config.parallel_multitry_kway           = false;
+        rec_config.parallel_initial_partitioning    = false;
 
 	if( config.cluster_coarsening_during_ip == true) {
 		rec_config.matching_type             = CLUSTER_COARSENING;
@@ -58,16 +59,20 @@ void initial_partition_bipartition::initial_partition( const PartitionConfig & c
 		rec_config.ensemble_clusterings      = false;
 	}
 
-
-        std::streambuf* backup = std::cout.rdbuf();
+        std::streambuf* backup;
         std::ofstream ofs;
-        ofs.open("/dev/null");
-        std::cout.rdbuf(ofs.rdbuf());
+        if (!config.parallel_multitry_kway) {
+                backup = std::cout.rdbuf();
+                ofs.open("/dev/null");
+                std::cout.rdbuf(ofs.rdbuf());
+        }
 
-        gp.perform_recursive_partitioning(rec_config, G); 
+        gp.perform_recursive_partitioning(rec_config, G);
 
-        ofs.close();
-        std::cout.rdbuf(backup);
+        if (!config.parallel_multitry_kway) {
+                ofs.close();
+                std::cout.rdbuf(backup);
+        }
 
         forall_nodes(G, n) {
                 partition_map[n] =  G.getPartitionIndex(n);

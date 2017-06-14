@@ -44,10 +44,10 @@ class quotient_graph_refinement : public refinement {
                                        boundary_starting_nodes & start_nodes);
 
                 static void print_full_statistics() {
-                        std::cout << "Total time two way\t" << total_time_two_way << std::endl;
+                        //std::cout << "Total time two way\t" << total_time_two_way << std::endl;
                 }
         private:
-                static double total_time_two_way;
+                //static double total_time_two_way;
 
                 EdgeWeight perform_a_two_way_refinement(PartitionConfig & config, 
                                                         graph_access & G,

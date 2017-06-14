@@ -24,12 +24,6 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
         config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
         int overall_improvement = 0;
 
-        //thread_data_refinement_core::nodes_partitions_hash_table::reset_statistics();
-        size_t num = m_factory.get_thread_data(0).num_part_accesses;
-
-        //for (unsigned i = 0; i < rounds; i++) {
-//        const uint32_t num_threads = config.num_threads;
-//        while (config.num_threads > 0) {
         while (true) {
                 CLOCK_START;
 
@@ -48,8 +42,6 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
                                                                       false,
                                                                       touched_blocks);
 
-//                EdgeWeight improvement = start_more_locallized_search_experimental(config, G, boundary, init_neighbors,
-//                                                                                   true, touched_blocks, start_nodes);
                 m_factory.time_local_search += CLOCK_END_TIME;
                 if (improvement == 0) {
                         break;
@@ -57,12 +49,7 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
 
                 overall_improvement += improvement;
         }
-                //config.num_threads /= std::max(num_threads, 2u);
-        //}
-        // config.num_threads = num_threads;
-        std::cout << "num part accesses\t" << m_factory.get_thread_data(0).num_part_accesses - num << std::endl;
 
-        //}
         config.kway_adaptive_limits_alpha = tmp_alpha;
         config.kway_stop_rule = tmp_stop;
         ASSERT_TRUE(overall_improvement >= 0);
@@ -83,19 +70,11 @@ int multitry_kway_fm::perform_refinement_around_parts(PartitionConfig& config, g
         for (unsigned i = 0; i < config.local_multitry_rounds; i++) {
                 CLOCK_START;
 
-//#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
-//                boundary_starting_nodes start_nodes;
-//                boundary.setup_start_nodes_around_blocks(G, lhs, rhs, start_nodes);
-//                if (start_nodes.size() == 0) {
-//                        break;
-//                }
-//#else
                 setup_start_nodes_around_blocks(G, boundary, lhs, rhs);
 
                 if (m_factory.queue.size() == 0) {
                         break;
                 }
-//#endif
                 m_factory.time_setup_start_nodes += CLOCK_END_TIME;
 
 
@@ -103,8 +82,6 @@ int multitry_kway_fm::perform_refinement_around_parts(PartitionConfig& config, g
                 EdgeWeight improvement = start_more_locallized_search(config, G, boundary, init_neighbors, true,
                                                                       touched_blocks);
 
-//                EdgeWeight improvement = start_more_locallized_search_experimental(config, G, boundary, init_neighbors,
-//                                                                                   true, touched_blocks, start_nodes);
                 m_factory.time_local_search += CLOCK_END_TIME;
                 if (improvement == 0) {
                         break;

@@ -36,7 +36,7 @@
 
 #include "quality_metrics.h"
 
-double quotient_graph_refinement::total_time_two_way(0.0);
+//double quotient_graph_refinement::total_time_two_way(0.0);
 
 quotient_graph_refinement::quotient_graph_refinement() {
 
@@ -196,10 +196,10 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
                         ASSERT_TRUE(boundary.getBlockNoNodes(rhs) > 0);
                         //*************************** end ****************************************
                 } while (!scheduler->hasFinished());
-                std::cout << "Cut improvement time\t" << time << std::endl;
-                std::cout << "Two way time\t" << time_two_way << std::endl;
-                total_time_two_way += time_two_way;
-                std::cout << "Cut improvement\t" << cut_improvement << std::endl;
+                //std::cout << "Cut improvement time\t" << time << std::endl;
+                //std::cout << "Two way time\t" << time_two_way << std::endl;
+                //total_time_two_way += time_two_way;
+                //std::cout << "Cut improvement\t" << cut_improvement << std::endl;
 
                 delete scheduler;
         }
