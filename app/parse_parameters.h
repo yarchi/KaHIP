@@ -181,6 +181,7 @@ int parse_parameters(int argn, char **argv,
         struct arg_lit *no_quotient_graph_two_way_refinement = arg_lit0(NULL, "no_quotient_graph_two_way_refinement", "(Default: disabled)");
         struct arg_lit *lp_before_local_search               = arg_lit0(NULL, "lp_before_local_search", "(Default: disabled)");
         struct arg_lit *parallel_initial_partitioning        = arg_lit0(NULL, "parallel_initial_partitioning", "(Default: disabled)");
+        struct arg_lit *parallel_coarsening_lp               = arg_lit0(NULL, "parallel_coarsening_lp", "(Default: disabled)");
         struct arg_lit *check_cut                            = arg_lit0(NULL, "check_cut", "(Default: disabled)");
         struct arg_end *end                                  = arg_end(100);
 
@@ -242,6 +243,7 @@ int parse_parameters(int argn, char **argv,
                 global_multitry_rounds,
                 lp_before_local_search,
                 parallel_initial_partitioning,
+                parallel_coarsening_lp,
                 check_cut,
 #elif defined MODE_EVALUATOR
                 k,   
@@ -1142,6 +1144,10 @@ int parse_parameters(int argn, char **argv,
 
         if (parallel_initial_partitioning->count > 0) {
                 partition_config.parallel_initial_partitioning = true;
+        }
+
+        if (parallel_coarsening_lp->count > 0) {
+                partition_config.parallel_coarsening_lp = true;
         }
 
         if (check_cut->count > 0) {

@@ -604,6 +604,10 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(graph_access
         futures.reserve(parallel::g_thread_pool.NumThreads());
         NodeWeight num_changed_label = 0;
 
+        forall_nodes(G, node) {
+                cluster_sizes[G.getPartitionIndex(node)].get().store(G.getNodeWeight(node), std::memory_order_relaxed);
+        } endfor
+
         end = std::chrono::high_resolution_clock::now();
         std::cout << "Init parallel lp:\t" << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
                   << std::endl;
@@ -665,8 +669,8 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(graph_access
                                         }
 
                                         if (perform_move) {
-                                                cluster_sizes[G.getPartitionIndex(node)].get().fetch_add(
-                                                        -G.getNodeWeight(node), std::memory_order_acq_rel);
+                                                cluster_sizes[G.getPartitionIndex(node)].get().fetch_sub(
+                                                        G.getNodeWeight(node), std::memory_order_acq_rel);
                                                 G.setPartitionIndex(node, max_block);
                                                 ++num_changed_label;
                                         }

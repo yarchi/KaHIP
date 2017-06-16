@@ -5,7 +5,8 @@
 
 #if defined(TIME)
 
-#define TIME_RANGE_TYPE
+#define GET_MACRO12(_1, _2, NAME, ...) NAME
+#define CLOCK_END(...) GET_MACRO12(__VA_ARGS__, CLOCK_END2, CLOCK_END1)(__VA_ARGS__)
 
 #define CLOCK \
 std::chrono::high_resolution_clock::now()
@@ -14,8 +15,12 @@ std::chrono::high_resolution_clock::now()
 std::chrono::time_point<std::chrono::high_resolution_clock> __begin; \
 do {__begin = std::chrono::high_resolution_clock::now();} while (false)
 
-#define CLOCK_END(message) \
+#define CLOCK_END1(message) \
 {std::cout << message << '\t' << std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - __begin).count() \
+<< std::endl;} while (false)
+
+#define CLOCK_END2(message, ratio) \
+{std::cout << message << '\t' << std::chrono::duration<double, ratio>(std::chrono::high_resolution_clock::now() - __begin).count() \
 << std::endl;} while (false)
 
 #define CLOCK_END_TIME \

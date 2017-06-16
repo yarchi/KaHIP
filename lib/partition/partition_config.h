@@ -416,6 +416,7 @@ struct PartitionConfig
         std::string configuration;
         bool lp_before_local_search = false;
         bool parallel_initial_partitioning = false;
+        bool parallel_coarsening_lp = false;
         bool check_cut = false;
 };
 

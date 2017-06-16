@@ -60,6 +60,9 @@ typedef std::unordered_map<const ensemble_pair,
 
 
 class size_constraint_label_propagation : public matching {
+        private:
+                using pair_type = std::pair<NodeID, NodeID>;
+
         public:
                 size_constraint_label_propagation();
                 virtual ~size_constraint_label_propagation();
@@ -112,8 +115,22 @@ class size_constraint_label_propagation : public matching {
                 void label_propagation(const PartitionConfig & partition_config, 
                                 graph_access & G, 
                                 std::vector<NodeWeight> & cluster_id,
-                                NodeID & number_of_blocks ); 
+                                NodeID & number_of_blocks );
 
+                void parallel_label_propagation(const PartitionConfig& config,
+                                                graph_access& G,
+                                                const NodeWeight block_upperbound,
+                                                std::vector<NodeWeight>& cluster_id,
+                                                NodeID& no_of_blocks);
+
+                uint32_t parallel_label_propagation(const PartitionConfig& config,
+                                                    graph_access& G,
+                                                    const NodeWeight block_upperbound,
+                                                    std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
+                                                    std::vector<NodeID>& cluster_id,
+                                                    std::vector<std::vector<PartitionID>>& hash_maps,
+                                                    std::vector<pair_type>& permutation,
+                                                    NodeID& no_of_blocks);
 };
 
 

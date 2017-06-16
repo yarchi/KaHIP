@@ -33,6 +33,7 @@
 #include "matching/gpa/gpa_matching.h"
 #include "matching/random_matching.h"
 #include "stop_rules/stop_rules.h"
+#include "data_structure/parallel/time.h"
 
 coarsening::coarsening() {
 
@@ -79,10 +80,15 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                 NodePermutationMap permutation;
 
                 coarsening_config.configure_coarsening(copy_of_partition_config, &edge_matcher, level);
-                rating.rate(*finer, level);
 
+                CLOCK_START;
+                rating.rate(*finer, level);
+                CLOCK_END("rate");
+
+                CLOCK_START_N;
                 edge_matcher->match(copy_of_partition_config, *finer, edge_matching, 
                                     *coarse_mapping, no_of_coarser_vertices, permutation);
+                CLOCK_END("match");
 
                 delete edge_matcher; 
 
@@ -90,8 +96,10 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                         contracter->contract_partitioned(copy_of_partition_config, *finer, *coarser, edge_matching, 
                                                          *coarse_mapping, no_of_coarser_vertices, permutation);
                 } else {
+                        CLOCK_START;
                         contracter->contract(copy_of_partition_config, *finer, *coarser, edge_matching, 
                                              *coarse_mapping, no_of_coarser_vertices, permutation);
+                        CLOCK_END("contract");
                 }
 
                 hierarchy.push_back(finer, coarse_mapping);
