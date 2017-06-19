@@ -39,10 +39,6 @@ void initial_partitioning::perform_initial_partitioning(const PartitionConfig& c
 
                 std::unique_ptr<int[]> partition_map = std::make_unique<int[]>(G.number_of_nodes());
 
-                if (id == 0) {
-                        PRINT(std::cout << "no of initial partitioning repetitions = " << reps_to_do << std::endl;);
-                        PRINT(std::cout << "no of nodes for partition = " << G.number_of_nodes() << std::endl;);
-                }
                 parallel::random rnd(id + config.seed);
                 if (!((config.graph_allready_partitioned && config.no_new_initial_partitioning) ||
                       config.omit_given_partitioning)) {
@@ -56,14 +52,6 @@ void initial_partitioning::perform_initial_partitioning(const PartitionConfig& c
 
                                 EdgeWeight cur_cut = qm.edge_cut(G, partition_map.get());
                                 if (cur_cut < best_cut) {
-                                        if (id == 0) {
-                                                PRINT(std::cout << "log>"
-                                                                << "improved the current initial partitiong from "
-                                                                << best_cut
-                                                                << " to " << cur_cut << std::endl;)
-                                        }
-
-
                                         best_map.swap(partition_map);
                                         best_cut = cur_cut;
 
@@ -95,7 +83,6 @@ void initial_partitioning::perform_initial_partitioning(const PartitionConfig& c
         ofs.open("/dev/null");
         std::cout.rdbuf(ofs.rdbuf());
 
-        std::cout << "Pool size\t" << g_thread_pool.NumThreads() << std::endl;
         for (uint32_t id = 0; id < g_thread_pool.NumThreads(); ++id) {
                 futures.push_back(parallel::g_thread_pool.Submit(id, task, id + 1));
         }
@@ -106,30 +93,37 @@ void initial_partitioning::perform_initial_partitioning(const PartitionConfig& c
         std::tie(best_cut, best_map) = task(0);
 
         parallel::random rnd(config.seed);
+        std::vector<std::pair<EdgeWeight, std::unique_ptr<int[]>>> cuts;
         std::for_each(futures.begin(), futures.end(), [&](auto& future) {
-                EdgeWeight cur_cut;
-                std::unique_ptr<int[]> cur_map;
-                std::tie(cur_cut, cur_map) = future.get();
-
-                std::cout << cur_cut << "\n";
-                if (cur_cut < best_cut || (cur_cut == best_cut && rnd.bit())) {
-                        best_cut = cur_cut;
-                        best_map = std::move(cur_map);
-                }
+                cuts.push_back(future.get());
         });
 
         ofs.close();
         std::cout.rdbuf(backup);
 
+        for (auto& cut : cuts) {
+                EdgeWeight cur_cut = cut.first;
+                std::unique_ptr<int[]> cur_map = std::move(cut.second);
+
+                if (cur_cut < best_cut || (cur_cut == best_cut && rnd.bit())) {
+                        PRINT(std::cout << "log>"
+                                        << "improved the current initial partitiong from "
+                                        << best_cut
+                                        << " to " << cur_cut << std::endl;)
+                        best_cut = cur_cut;
+                        best_map = std::move(cur_map);
+                }
+        }
+
         G.set_partition_count(config.k);
+        forall_nodes(G, n) {
+                G.setPartitionIndex(n, best_map[n]);
+        } endfor
 
         PRINT(std::cout << "initial partitioning took " << t.elapsed()                << std::endl;)
         PRINT(std::cout << "log>"                       << "current initial balance " << qm.balance(G) << std::endl;)
 
         ALWAYS_ASSERT(!config.initial_partition_optimize && !config.combine);
-
-        PRINT(std::cout << "log>" << "final current initial partitiong from " << best_cut
-                        << " to " << best_cut                                 << std::endl;)
 
         if(!(config.graph_allready_partitioned && config.no_new_initial_partitioning)) {
                 PRINT(std::cout << "finalinitialcut " << best_cut                         << std::endl;)
