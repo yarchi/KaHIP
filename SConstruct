@@ -111,11 +111,11 @@ if SYSTEM == 'Darwin':
         #Exit(-1)
 #
 #
-#env.Append(CXXFLAGS = '-fopenmp -g')
-env.Append(CXXFLAGS = '-g')
+env.Append(CXXFLAGS = '-fopenmp -g')
+#env.Append(CXXFLAGS = '-g')
 # Apply variant specific settings.
 if env['variant'] == 'optimized':
-  env.Append(CXXFLAGS = '-DNDEBUG -Wall -funroll-loops  -fno-stack-limit -O3 -std=c++14 -g -D_GLIBCXX_PARALLEL')
+  env.Append(CXXFLAGS = '-DNDEBUG -Wall -funroll-loops  -fno-stack-limit -O3 -std=c++14 -g')
   env.Append(CCFLAGS  = '-O3  -DNDEBUG -funroll-loops -std=c++14')
 elif env['variant'] == 'optimized_output':
   # A little bit more output on the console

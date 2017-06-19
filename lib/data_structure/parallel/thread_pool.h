@@ -335,6 +335,12 @@ public:
                 return Threads.size();
         }
 
+        void Clear() {
+                Done = true;
+                ThreadJoiner.Clear();
+                Threads.clear();
+        }
+
         ~TThreadPoolWithTaskQueuePerThread() {
                 Done = true;
         }

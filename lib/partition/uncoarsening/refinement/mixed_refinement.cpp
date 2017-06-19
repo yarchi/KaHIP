@@ -67,12 +67,16 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
                         EdgeWeight old_cut;
                         if (config.check_cut) {
                                 old_cut = qm.edge_cut(G);
+                                std::cout << "before\t" << old_cut << std::endl;
                         }
                         EdgeWeight improvement = kway->perform_refinement(config, G, boundary);
                         overall_improvement += improvement;
 
                         if (config.check_cut) {
-                                ALWAYS_ASSERT(old_cut - qm.edge_cut(G) == improvement);
+                                EdgeWeight new_cut = qm.edge_cut(G);
+                                ALWAYS_ASSERT(old_cut - new_cut == improvement);
+                                std::cout << "after\t" << new_cut << std::endl;
+                                std::cout << "improvement\t" << improvement << std::endl;
                         }
 
                         CLOCK_END("Kway refinement");
@@ -86,6 +90,7 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
                         EdgeWeight old_cut;
                         if (config.check_cut) {
                                 old_cut = qm.edge_cut(G);
+                                std::cout << "before\t" << old_cut << std::endl;
                         }
 
 
@@ -95,7 +100,10 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
                         overall_improvement += improvement;
 
                         if (config.check_cut) {
-                                ALWAYS_ASSERT(old_cut - qm.edge_cut(G) == improvement);
+                                EdgeWeight new_cut = qm.edge_cut(G);
+                                ALWAYS_ASSERT(old_cut - new_cut == improvement);
+                                std::cout << "after\t" << new_cut << std::endl;
+                                std::cout << "improvement\t" << improvement << std::endl;
                         }
 
                         CLOCK_END("Multitry kway refinement");

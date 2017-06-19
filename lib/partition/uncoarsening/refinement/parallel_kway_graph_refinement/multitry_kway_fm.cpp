@@ -112,7 +112,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
         std::vector<NodeID> todolist;
         todolist.reserve(m_factory.queue.size());
         NodeID node;
-        while (m_factory.queue.try_pop(node)) {
+        while (m_factory.queue.try_pop(node, 0)) {
                 todolist.push_back(node);
         }
         std::sort(todolist.begin(), todolist.end());
@@ -148,13 +148,19 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                         while (m_factory.queue.try_pop(node, id)) {
 #endif
                                 // this change changes num part accesses since it changes random source
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+#else
                                 if (!td.moved_idx[node].load(std::memory_order_relaxed)) {
+#endif
                                         PartitionID maxgainer;
                                         EdgeWeight extdeg = 0;
                                         PartitionID from = td.get_local_partition(node);
                                         td.compute_gain(node, from, maxgainer, extdeg);
-
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+                                        if (!td.moved_idx[node].load(std::memory_order_relaxed) && extdeg > 0) {
+#else
                                         if (extdeg > 0) {
+#endif
                                                 td.start_nodes.clear();
                                                 td.start_nodes.reserve(G.getNodeDegree(node) + 1);
                                                 td.start_nodes.push_back(node);
@@ -199,7 +205,9 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                                 }
                                                 td.tried_movements += tried_movements;
                                         }
+#ifndef COMPARE_WITH_SEQUENTIAL_KAHIP
                                 }
+#endif
 
                                 if (!td.config.kway_all_boundary_nodes_refinement) {
                                         int overall_movement = 0;
