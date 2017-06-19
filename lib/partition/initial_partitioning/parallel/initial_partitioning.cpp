@@ -27,6 +27,8 @@ void initial_partitioning::perform_initial_partitioning(const PartitionConfig& c
         t.restart();
 
         uint32_t reps_to_do = (unsigned) std::max((int)ceil(config.initial_partitioning_repetitions/(double)log2(config.k)),2);
+        reps_to_do = std::max(reps_to_do, config.num_threads);
+
         std::atomic<uint32_t> reps_done(0);
 
         auto task_impl = [&qm, &config, &reps_done, &reps_to_do] (graph_access& G, uint32_t id)
