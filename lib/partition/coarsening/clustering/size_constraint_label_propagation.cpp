@@ -40,6 +40,8 @@
 #include <parallel/algorithm>
 #include <omp.h>
 
+#include "ittnotify.h"
+
 size_constraint_label_propagation::size_constraint_label_propagation() {
                 
 }
@@ -221,7 +223,6 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
                                                                        const NodeWeight block_upperbound,
                                                                        std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                                        std::vector<NodeID>& cluster_id,
-                                                                       std::vector<std::vector<PartitionID>>& hash_maps,
                                                                        std::vector<pair_type>& permutation,
                                                                        NodeID& no_of_blocks
 ) {
@@ -229,38 +230,49 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
         futures.reserve(parallel::g_thread_pool.NumThreads());
         uint32_t num_changed_label_all = 0;
 
-        CLOCK_START;
+        std::vector<std::vector<PartitionID>> hash_maps(config.num_threads, std::vector<PartitionID>());
+        const uint32_t edges_per_block = (uint32_t) sqrt(G.number_of_edges() / config.num_threads);
         for (int j = 0; j < config.label_iterations; j++) {
                 std::atomic<uint32_t> offset(0);
-                auto process = [&](const size_t id) {
+                auto process = [&](const uint32_t id) {
                         auto& hash_map = hash_maps[id];
+
+                        if (hash_map.empty()) {
+                                hash_map.resize(G.number_of_nodes());
+                        }
+
                         uint32_t num_changed_label = 0;
                         parallel::random rnd(config.seed + id);
-
+                        std::vector<NodeID> neighbor_parts;
                         uint32_t begin;
-                        const uint32_t block_size = 20;
+                        const uint32_t block_size =  edges_per_block / G.getNodeDegree(offset.load(std::memory_order_relaxed));
                         while ((begin = offset.fetch_add(block_size, std::memory_order_relaxed)) < G.number_of_nodes()) {
                                 uint32_t end = begin + block_size;
                                 end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
 
                                 for (NodeID index = begin; index != end; ++index) {
                                         NodeID node = permutation[index].first;
+                                        const PartitionID my_block = cluster_id[node];
                                         //now move the node to the cluster that is most common in the neighborhood
+                                        neighbor_parts.clear();
+                                        neighbor_parts.reserve(G.getNodeDegree(node));
                                         forall_out_edges(G, e, node){
                                                 NodeID target = G.getEdgeTarget(e);
-                                                hash_map[cluster_id[target]] += G.getEdgeWeight(e);
+                                                NodeID cluster = cluster_id[target];
+                                                hash_map[cluster] += G.getEdgeWeight(e);
+                                                neighbor_parts.push_back(cluster);
                                         } endfor
 
                                         //second sweep for finding max and resetting array
-                                        PartitionID max_block = cluster_id[node];
-                                        const PartitionID my_block = cluster_id[node];
+                                        PartitionID max_block = my_block;
                                         NodeWeight max_cluster_size = cluster_sizes[max_block].load(
                                                 std::memory_order_relaxed);
 
                                         PartitionID max_value = 0;
+                                        size_t i = 0;
                                         forall_out_edges(G, e, node){
                                                 NodeID target = G.getEdgeTarget(e);
-                                                PartitionID cur_block = cluster_id[target];
+                                                PartitionID cur_block = neighbor_parts[i++];
                                                 PartitionID cur_value = hash_map[cur_block];
                                                 NodeWeight cur_cluster_size = cluster_sizes[cur_block].load(
                                                         std::memory_order_relaxed);
@@ -328,9 +340,7 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
                                                                    std::vector<NodeWeight>& cluster_id,
                                                                    NodeID& no_of_blocks) {
 
-        auto begin = CLOCK;
         CLOCK_START;
-        std::vector<std::vector<PartitionID>> hash_maps(config.num_threads, std::vector<PartitionID>(G.number_of_nodes()));
         std::vector<parallel::AtomicWrapper<NodeWeight>> cluster_sizes(G.number_of_nodes());
 
         forall_nodes(G, node) {
@@ -348,11 +358,15 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
                 permutation.emplace_back(node, G.getNodeDegree(node));
         } endfor
 
-        omp_set_dynamic(false);
-        omp_set_num_threads(config.num_threads);
+        //omp_set_dynamic(false);
+        //omp_set_num_threads(config.num_threads);
         {
                 CLOCK_START;
-                __gnu_parallel::sort(permutation.begin(), permutation.end(),
+//                __gnu_parallel::sort(permutation.begin(), permutation.end(),
+//                                     [&](const pair_type& lhs, const pair_type& rhs) {
+//                                             return lhs.second < rhs.second;
+//                                     });
+                std::sort(permutation.begin(), permutation.end(),
                                      [&](const pair_type& lhs, const pair_type& rhs) {
                                              return lhs.second < rhs.second;
                                      });
@@ -360,10 +374,12 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
         }
         CLOCK_END("Parallel init of permutations lp");
 
+        CLOCK_START_N;
+        __itt_resume();
         uint32_t num_changed_label = parallel_label_propagation(config, G, block_upperbound, cluster_sizes, cluster_id,
-                                                                hash_maps, permutation, no_of_blocks);
-        auto end = CLOCK;
-        std::cout << "Main parallel (no queue) lp\t" << std::chrono::duration<double>(end - begin).count() << std::endl;
+                                                                permutation, no_of_blocks);
+        __itt_pause();
+        CLOCK_END("Main parallel (no queue) lp");
         std::cout << "Improved\t" << num_changed_label << std::endl;
 
         CLOCK_START_N;
@@ -373,7 +389,7 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
 
 void size_constraint_label_propagation::create_coarsemapping(const PartitionConfig & partition_config, 
                                                              graph_access & G,
-                                                             std::vector<NodeWeight> & cluster_id,
+                                                             std::vector<NodeWeight>& cluster_id,
                                                              CoarseMapping & coarse_mapping) {
         forall_nodes(G, node) {
                 coarse_mapping[node] = cluster_id[node];

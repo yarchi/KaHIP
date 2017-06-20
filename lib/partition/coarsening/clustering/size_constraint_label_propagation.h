@@ -128,7 +128,6 @@ class size_constraint_label_propagation : public matching {
                                                     const NodeWeight block_upperbound,
                                                     std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                     std::vector<NodeID>& cluster_id,
-                                                    std::vector<std::vector<PartitionID>>& hash_maps,
                                                     std::vector<pair_type>& permutation,
                                                     NodeID& no_of_blocks);
 };
