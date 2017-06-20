@@ -222,7 +222,7 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
                                                                        graph_access& G,
                                                                        const NodeWeight block_upperbound,
                                                                        std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
-                                                                       std::vector<NodeID>& cluster_id,
+                                                                       parallel::Cvector<parallel::AtomicWrapper<NodeID>>& cluster_id,
                                                                        std::vector<pair_type>& permutation,
                                                                        NodeID& no_of_blocks
 ) {
@@ -266,13 +266,13 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
 
                                 for (NodeID index = begin; index != end; ++index) {
                                         NodeID node = permutation[index].first;
-                                        const PartitionID my_block = cluster_id[node];
+                                        const PartitionID my_block = cluster_id[node].get();
                                         //now move the node to the cluster that is most common in the neighborhood
                                         neighbor_parts.clear();
                                         neighbor_parts.reserve(G.getNodeDegree(node));
                                         forall_out_edges(G, e, node){
                                                 NodeID target = G.getEdgeTarget(e);
-                                                NodeID cluster = cluster_id[target];
+                                                NodeID cluster = cluster_id[target].get();
                                                 hash_map[cluster] += G.getEdgeWeight(e);
                                                 neighbor_parts.push_back(cluster);
                                         } endfor
@@ -323,7 +323,7 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
                                                         cluster_sizes[my_block].fetch_sub(G.getNodeWeight(node),
                                                                                           std::memory_order_relaxed);
 
-                                                        cluster_id[node] = max_block;
+                                                        cluster_id[node].get() = max_block;
 
                                                         ++num_changed_label;
                                                 }
@@ -350,14 +350,15 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
 void size_constraint_label_propagation::parallel_label_propagation(const PartitionConfig& config,
                                                                    graph_access& G,
                                                                    const NodeWeight block_upperbound,
-                                                                   std::vector<NodeWeight>& cluster_id,
+                                                                   std::vector<NodeID>& cluster_id,
                                                                    NodeID& no_of_blocks) {
 
         CLOCK_START;
         std::vector<parallel::AtomicWrapper<NodeWeight>> cluster_sizes(G.number_of_nodes());
+        parallel::Cvector<parallel::AtomicWrapper<NodeID>> aligned_cluster_id(G.number_of_nodes());
 
         forall_nodes(G, node) {
-                cluster_id[node] = node;
+                aligned_cluster_id[node].get() = node;
                 cluster_sizes[node].store(G.getNodeWeight(node), std::memory_order_relaxed);
         } endfor
 
@@ -389,9 +390,14 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
 
         CLOCK_START_N;
         __itt_resume();
-        uint32_t num_changed_label = parallel_label_propagation(config, G, block_upperbound, cluster_sizes, cluster_id,
+        uint32_t num_changed_label = parallel_label_propagation(config, G, block_upperbound, cluster_sizes, aligned_cluster_id,
                                                                 permutation, no_of_blocks);
         __itt_pause();
+
+        forall_nodes(G, node) {
+                cluster_id[node] = aligned_cluster_id[node].get();
+        } endfor
+
         CLOCK_END("Main parallel (no queue) lp");
         std::cout << "Improved\t" << num_changed_label << std::endl;
 
