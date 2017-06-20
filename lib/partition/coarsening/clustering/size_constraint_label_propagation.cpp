@@ -242,11 +242,25 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
 
                         uint32_t num_changed_label = 0;
                         parallel::random rnd(config.seed + id);
-                        uint32_t begin;
-                        const uint32_t block_size =  edges_per_block / G.getNodeDegree(offset.load(std::memory_order_relaxed));
-                        while ((begin = offset.fetch_add(block_size, std::memory_order_relaxed)) < G.number_of_nodes()) {
+
+                        while (true) {
+                                size_t index = offset.load(std::memory_order_relaxed);
+                                NodeID node = permutation[index].first;
+
+                                if (node >= G.number_of_nodes()) {
+                                        break;
+                                }
+
+                                const uint32_t block_size =
+                                        G.getNodeDegree(node) > 0 ? edges_per_block / G.getNodeDegree(node) : edges_per_block;
+
+                                uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
                                 uint32_t end = begin + block_size;
                                 end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
+
+                                if (begin >= G.number_of_nodes()) {
+                                        break;
+                                }
 
                                 for (NodeID index = begin; index != end; ++index) {
                                         NodeID node = permutation[index].first;
