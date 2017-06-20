@@ -283,15 +283,18 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
                                                 std::memory_order_relaxed);
 
                                         PartitionID max_value = 0;
-                                        size_t i = 0;
-                                        forall_out_edges(G, e, node){
-                                                PartitionID cur_block = neighbor_parts[i++];
+                                        NodeWeight node_weight = G.getNodeWeight(node);
+                                        for (auto cur_block : neighbor_parts) {
                                                 PartitionID cur_value = hash_map[cur_block];
+                                                if (cur_value == 0) {
+                                                        continue;
+                                                }
+
                                                 NodeWeight cur_cluster_size = cluster_sizes[cur_block].load(
                                                         std::memory_order_relaxed);
 
                                                 if ((cur_value > max_value || (cur_value == max_value && rnd.bit())) &&
-                                                        (cur_cluster_size + G.getNodeWeight(node) < block_upperbound || cur_block == my_block)) {
+                                                        (cur_cluster_size + node_weight < block_upperbound || cur_block == my_block)) {
                                                         ALWAYS_ASSERT(
                                                                 !config.graph_allready_partitioned);
                                                         ALWAYS_ASSERT(!config.combine);
@@ -301,7 +304,7 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
                                                 }
 
                                                 hash_map[cur_block] = 0;
-                                        } endfor
+                                        }
 
                                         bool changed_label = my_block != max_block;
                                         if (changed_label) {
@@ -309,18 +312,16 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
                                                 bool perform_move = true;
                                                 auto& atomic_val = cluster_sizes[max_block];
                                                 while (!atomic_val.compare_exchange_weak(max_cluster_size,
-                                                                                         max_cluster_size +
-                                                                                         G.getNodeWeight(node),
+                                                                                         max_cluster_size + node_weight,
                                                                                          std::memory_order_relaxed)) {
-                                                        if (max_cluster_size + G.getNodeWeight(node) >
-                                                            block_upperbound) {
+                                                        if (max_cluster_size + node_weight > block_upperbound) {
                                                                 perform_move = false;
                                                                 break;
                                                         }
                                                 }
 
                                                 if (perform_move) {
-                                                        cluster_sizes[my_block].fetch_sub(G.getNodeWeight(node),
+                                                        cluster_sizes[my_block].fetch_sub(node_weight,
                                                                                           std::memory_order_relaxed);
 
                                                         cluster_id[node] = max_block;
