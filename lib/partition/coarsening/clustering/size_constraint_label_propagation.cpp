@@ -37,10 +37,8 @@
 
 #include "size_constraint_label_propagation.h"
 
-#include <parallel/algorithm>
-#include <omp.h>
-
-#include "ittnotify.h"
+//#include <parallel/algorithm>
+//#include <omp.h>
 
 size_constraint_label_propagation::size_constraint_label_propagation() {
                 
@@ -56,7 +54,6 @@ void size_constraint_label_propagation::match(const PartitionConfig & partition_
                                               CoarseMapping & coarse_mapping, 
                                               NodeID & no_of_coarse_vertices,
                                               NodePermutationMap & permutation) {
-        permutation.resize(G.number_of_nodes());
         coarse_mapping.resize(G.number_of_nodes());
         no_of_coarse_vertices = 0;
 
@@ -72,7 +69,7 @@ void size_constraint_label_propagation::match_internal(const PartitionConfig & p
                                               Matching & _matching, 
                                               CoarseMapping & coarse_mapping, 
                                               NodeID & no_of_coarse_vertices,
-                                              NodePermutationMap & permutation) {
+                                              NodePermutationMap&) {
 
         std::vector<NodeWeight> cluster_id(G.number_of_nodes());
         NodeWeight block_upperbound = ceil(partition_config.upper_bound_partition/(double)partition_config.cluster_coarsening_factor);
@@ -117,7 +114,7 @@ void size_constraint_label_propagation::ensemble_clusterings(const PartitionConf
                                                              Matching & _matching, 
                                                              CoarseMapping & coarse_mapping, 
                                                              NodeID & no_of_coarse_vertices,
-                                                             NodePermutationMap & permutation) {
+                                                             NodePermutationMap &) {
         int runs = partition_config.number_of_clusterings;
         std::vector< NodeID >  cur_cluster(G.number_of_nodes(), 0);
         std::vector< NodeID >  ensemble_cluster(G.number_of_nodes(),0);
@@ -230,7 +227,7 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
         futures.reserve(parallel::g_thread_pool.NumThreads());
         uint32_t num_changed_label_all = 0;
 
-        std::vector<std::vector<PartitionID>> hash_maps(config.num_threads, std::vector<PartitionID>());
+        std::vector<std::unique_ptr<PartitionID[]>> hash_maps(config.num_threads);
         uint32_t edges_per_block = (uint32_t) sqrt(G.number_of_edges() / config.num_threads);
         edges_per_block = edges_per_block > 0 ? edges_per_block : G.number_of_edges();
 
@@ -239,8 +236,8 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
                 auto process = [&](const uint32_t id) {
                         auto& hash_map = hash_maps[id];
 
-                        if (hash_map.empty()) {
-                                hash_map.resize(G.number_of_nodes());
+                        if (hash_map.get() == nullptr) {
+                                hash_map = std::make_unique<PartitionID[]>(G.number_of_nodes());
                         }
 
                         uint32_t num_changed_label = 0;
@@ -392,10 +389,8 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
         CLOCK_END("Parallel init of permutations lp");
 
         CLOCK_START_N;
-        __itt_resume();
         uint32_t num_changed_label = parallel_label_propagation(config, G, block_upperbound, cluster_sizes, cluster_id,
                                                                 permutation, no_of_blocks);
-        __itt_pause();
         CLOCK_END("Main parallel (no queue) lp");
         std::cout << "Improved\t" << num_changed_label << std::endl;
 

@@ -129,14 +129,14 @@ if env['program'] == 'kaffpa':
 if env['program'] == 'kaffpa_test':
         env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')
-	env.Program('kaffpa_test', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
+        env.Program('kaffpa_test', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
 if env['program'] == 'kaffpa_compare_with_sequential':
-	env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCOMPARE_WITH_SEQUENTIAL_KAHIP -DKAFFPAOUTPUT -DCPP11THREADS')
+        env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCOMPARE_WITH_SEQUENTIAL_KAHIP -DKAFFPAOUTPUT -DCPP11THREADS')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA -DCOMPARE_WITH_SEQUENTIAL_KAHIP -DKAFFPAOUTPUT')
         env.Program('kaffpa_compare_with_sequential', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
 
 if env['program'] == 'kaffpa_test_stopping_rule':
-	env.Append(CXXFLAGS = '-DMODE_KAFFPA -DTEST_STOPPING_RULE')
+        env.Append(CXXFLAGS = '-DMODE_KAFFPA -DTEST_STOPPING_RULE')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA -DTEST_STOPPING_RULE')
         env.Program('kaffpa_test_stopping_rule', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
 
