@@ -21,6 +21,8 @@
  *****************************************************************************/
 
 #include "contraction.h"
+#include "data_structure/parallel/hash_table.h"
+#include "data_structure/parallel/time.h"
 #include "../uncoarsening/refinement/quotient_graph_refinement/complete_boundary.h"
 #include "macros_assertions.h"
 
@@ -42,7 +44,11 @@ void contraction::contract(const PartitionConfig & partition_config,
                            const NodePermutationMap & permutation) const {
 
         if(partition_config.matching_type == CLUSTER_COARSENING) {
-                return contract_clustering(partition_config, G, coarser, edge_matching, coarse_mapping, no_of_coarse_vertices, permutation);
+                if (!partition_config.fast_contract_clustering) {
+                        return contract_clustering(partition_config, G, coarser, edge_matching, coarse_mapping, no_of_coarse_vertices, permutation);
+                } else {
+                        return fast_contract_clustering(partition_config, G, coarser, edge_matching, coarse_mapping, no_of_coarse_vertices, permutation);
+                }
         }
 
         if(partition_config.combine) {
@@ -145,6 +151,85 @@ void contraction::contract_clustering(const PartitionConfig & partition_config,
 
 }
 
+void contraction::fast_contract_clustering(const PartitionConfig& partition_config,
+                                      graph_access& G,
+                                      graph_access& coarser,
+                                      const Matching&,
+                                      const CoarseMapping& coarse_mapping,
+                                      const NodeID& no_of_coarse_vertices,
+                                      const NodePermutationMap&) const {
+        if (partition_config.combine) {
+                coarser.resizeSecondPartitionIndex(no_of_coarse_vertices);
+        }
+
+        block_informations empty;
+        std::vector<block_informations> block_infos(no_of_coarse_vertices, empty);
+
+        // build set of new edges
+        auto get_pair = [](NodeID cluster_a, NodeID cluster_b) {
+                if (cluster_a <= cluster_b) {
+                        return std::make_pair(cluster_a, cluster_b);
+                } else {
+                        return std::make_pair(cluster_b, cluster_a);
+                }
+        };
+
+        double avg_degree = (G.number_of_edges() + 0.0) / G.number_of_nodes();
+        size_t num_cut_edges = std::min<size_t>(avg_degree * no_of_coarse_vertices, G.number_of_edges() / 2);
+        using key_type = std::pair<NodeID, NodeID>;
+        parallel::HashMap<key_type, EdgeWeight, parallel::MurmurHash<key_type>, true> new_edges(num_cut_edges);
+
+        forall_nodes(G, n) {
+                PartitionID source_cluster = coarse_mapping[n];
+                block_infos[source_cluster].block_weight += G.getNodeWeight(n);
+                block_infos[source_cluster].block_no_nodes += 1;
+
+
+                forall_out_edges(G, e, n) {
+                        NodeID targetID = G.getEdgeTarget(e);
+                        PartitionID target_cluster = coarse_mapping[targetID];
+                        bool is_cut_edge = source_cluster != target_cluster;
+
+                        if (is_cut_edge) {
+                                new_edges[get_pair(source_cluster, target_cluster)] += G.getEdgeWeight(e);
+                        }
+                } endfor
+        } endfor
+
+        // construct graph
+        std::vector<std::vector<std::pair<PartitionID, EdgeWeight>>> building_tool(no_of_coarse_vertices);
+        for (auto& data : building_tool) {
+                data.reserve(avg_degree);
+        }
+
+        for (const auto& edge_data : new_edges) {
+                auto& edge = edge_data.first;
+                auto edge_weight = edge_data.second / 2;
+                building_tool[edge.first].emplace_back(edge.second, edge_weight);
+                building_tool[edge.second].emplace_back(edge.first, edge_weight);
+        }
+
+        coarser.start_construction(building_tool.size(), 2 * new_edges.size());
+
+        for (size_t p = 0; p < building_tool.size(); p++) {
+                NodeID node = coarser.new_node();
+                coarser.setNodeWeight(node, block_infos[p].block_weight);
+
+                for(size_t j = 0; j < building_tool[p].size(); j++) {
+                        EdgeID e = coarser.new_edge(node, building_tool[p][j].first);
+                        coarser.setEdgeWeight(e, building_tool[p][j].second);
+                }
+        }
+        coarser.finish_construction();
+
+        forall_nodes(G, node) {
+                coarser.setPartitionIndex(coarse_mapping[node], G.getPartitionIndex(node));
+
+                if(partition_config.combine) {
+                        coarser.setSecondPartitionIndex(coarse_mapping[node], G.getSecondPartitionIndex(node));
+                }
+        } endfor
+}
 
 // for documentation see technical reports of christian schulz  
 void contraction::contract_partitioned(const PartitionConfig & partition_config, 

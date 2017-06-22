@@ -37,8 +37,8 @@
 #include "data_structure/parallel/thread_pool.h"
 
 struct block_informations {
-        NodeWeight block_weight;
-        NodeID block_no_nodes;
+        NodeWeight block_weight = 0;
+        NodeID block_no_nodes = 0;
 };
 
 typedef std::vector<boundary_pair> QuotientGraphEdges;

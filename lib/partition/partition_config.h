@@ -418,6 +418,7 @@ struct PartitionConfig
         bool parallel_initial_partitioning = false;
         bool parallel_coarsening_lp = false;
         bool check_cut = false;
+        bool fast_contract_clustering = false;
 };
 
 

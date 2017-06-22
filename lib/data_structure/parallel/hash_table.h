@@ -90,6 +90,17 @@ private:
         }
 };
 
+template <typename T>
+struct MurmurHash<std::pair<T, T>> {
+        using hash_type = uint64_t;
+
+        MurmurHash<T> h;
+
+        uint64_t operator() (const std::pair<T, T>& x) const {
+                return h(x.first) ^ h(x.second);
+        }
+};
+
 constexpr static uint32_t round_up_to_next_power_2(uint32_t v) {
         v--;
         v |= v >> 1;
