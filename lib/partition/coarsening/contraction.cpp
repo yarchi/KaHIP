@@ -26,6 +26,8 @@
 #include "../uncoarsening/refinement/quotient_graph_refinement/complete_boundary.h"
 #include "macros_assertions.h"
 
+#include "ittnotify.h"
+
 contraction::contraction() {
 
 }
@@ -158,6 +160,7 @@ void contraction::fast_contract_clustering(const PartitionConfig& partition_conf
                                       const CoarseMapping& coarse_mapping,
                                       const NodeID& no_of_coarse_vertices,
                                       const NodePermutationMap&) const {
+        __itt_resume();
         if (partition_config.combine) {
                 coarser.resizeSecondPartitionIndex(no_of_coarse_vertices);
         }
@@ -229,6 +232,7 @@ void contraction::fast_contract_clustering(const PartitionConfig& partition_conf
                         coarser.setSecondPartitionIndex(coarse_mapping[node], G.getSecondPartitionIndex(node));
                 }
         } endfor
+        __itt_pause();
 }
 
 // for documentation see technical reports of christian schulz  
@@ -239,7 +243,7 @@ void contraction::contract_partitioned(const PartitionConfig & partition_config,
                                        const CoarseMapping & coarse_mapping,
                                        const NodeID & no_of_coarse_vertices,
                                        const NodePermutationMap & permutation) const {
-        
+
         if(partition_config.matching_type == CLUSTER_COARSENING) {
                 return contract_clustering(partition_config, G, coarser, edge_matching, coarse_mapping, no_of_coarse_vertices, permutation);
         }

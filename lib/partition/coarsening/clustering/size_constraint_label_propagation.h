@@ -99,9 +99,15 @@ class size_constraint_label_propagation : public matching {
                                 graph_access & G,
                                 std::vector<NodeID> & cluster_id, 
                                 NodeID & no_of_coarse_vertices,
-                                bool apply_to_graph = false); 
+                                bool apply_to_graph = false);
 
-                void create_coarsemapping(const PartitionConfig & partition_config, 
+                void remap_cluster_ids_fast(const PartitionConfig & partition_config,
+                                            graph_access & G,
+                                            std::vector<NodeID> & cluster_id,
+                                            NodeID & no_of_coarse_vertices,
+                                            bool apply_to_graph = false);
+
+                void create_coarsemapping(const PartitionConfig & partition_config,
                                 graph_access & G,
                                 std::vector<NodeID> & cluster_id, 
                                 CoarseMapping & coarse_mapping); 

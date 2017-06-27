@@ -37,8 +37,8 @@
 
 #include "size_constraint_label_propagation.h"
 
-//#include <parallel/algorithm>
-//#include <omp.h>
+#include <parallel/algorithm>
+#include <omp.h>
 
 size_constraint_label_propagation::size_constraint_label_propagation() {
                 
@@ -212,7 +212,7 @@ void size_constraint_label_propagation::label_propagation(const PartitionConfig 
                 } endfor
         }
 
-        remap_cluster_ids( partition_config, G, cluster_id, no_of_blocks);
+        remap_cluster_ids_fast(partition_config, G, cluster_id, no_of_blocks);
 }
 
 uint32_t size_constraint_label_propagation::parallel_label_propagation(const PartitionConfig& config,
@@ -372,20 +372,21 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
                 permutation.emplace_back(node, G.getNodeDegree(node));
         } endfor
 
-        //omp_set_dynamic(false);
-        //omp_set_num_threads(config.num_threads);
+        parallel::g_thread_pool.Clear();
+        parallel::Unpin();
+        omp_set_dynamic(false);
+        omp_set_num_threads(config.num_threads);
         {
                 CLOCK_START;
-//                __gnu_parallel::sort(permutation.begin(), permutation.end(),
-//                                     [&](const pair_type& lhs, const pair_type& rhs) {
-//                                             return lhs.second < rhs.second;
-//                                     });
-                std::sort(permutation.begin(), permutation.end(),
+                __gnu_parallel::sort(permutation.begin(), permutation.end(),
                                      [&](const pair_type& lhs, const pair_type& rhs) {
                                              return lhs.second < rhs.second;
                                      });
                 CLOCK_END("Sort");
         }
+        omp_set_num_threads(0);
+        parallel::PinToCore(0);
+        parallel::g_thread_pool.Resize(config.num_threads - 1);
         CLOCK_END("Parallel init of permutations lp");
 
         CLOCK_START_N;
@@ -395,7 +396,7 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
         std::cout << "Improved\t" << num_changed_label << std::endl;
 
         CLOCK_START_N;
-        remap_cluster_ids(config, G, cluster_id, no_of_blocks);
+        remap_cluster_ids_fast(config, G, cluster_id, no_of_blocks);
         CLOCK_END("Remap cluster ids");
 }
 
@@ -433,4 +434,40 @@ void size_constraint_label_propagation::remap_cluster_ids(const PartitionConfig 
         }
 
         no_of_coarse_vertices = cur_no_clusters;
+}
+
+
+
+void size_constraint_label_propagation::remap_cluster_ids_fast(const PartitionConfig& partition_config,
+                                                               graph_access& G,
+                                                               std::vector<NodeWeight>& cluster_id,
+                                                               NodeID& no_of_coarse_vertices,
+                                                               bool apply_to_graph) {
+        if (cluster_id.empty()) {
+                no_of_coarse_vertices = 0;
+                return;
+        }
+
+        std::vector<NodeWeight> cluster_map(G.number_of_edges());
+
+        forall_nodes(G, node) {
+                PartitionID cur_cluster = cluster_id[node];
+                cluster_map[cur_cluster] = 1;
+        } endfor
+
+        for (size_t i = 1; i < cluster_map.size(); ++i)
+                cluster_map[i] += cluster_map[i - 1];
+
+        forall_nodes(G, node) {
+                cluster_id[node] = cluster_map[cluster_id[node]] - 1;
+        } endfor
+
+        no_of_coarse_vertices = cluster_map.back();
+
+        if (apply_to_graph) {
+                forall_nodes(G, node) {
+                        G.setPartitionIndex(node, cluster_id[node]);
+                } endfor
+                G.set_partition_count(no_of_coarse_vertices);
+        }
 }

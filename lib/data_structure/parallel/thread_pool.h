@@ -22,6 +22,16 @@ static void PinToCore(size_t core)
     CPU_SET(core, &cpuset);
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 }
+
+static void Unpin() {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    for (size_t core = 0; core < std::thread::hardware_concurrency(); ++core) {
+        CPU_SET(core, &cpuset);
+    }
+    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+}
+
 #endif
 
 template<typename T>
@@ -289,6 +299,9 @@ private:
 //                        else
 //                                std::this_thread::yield();
                 }
+#ifdef __gnu_linux__
+                Unpin();
+#endif
         }
 
 public:

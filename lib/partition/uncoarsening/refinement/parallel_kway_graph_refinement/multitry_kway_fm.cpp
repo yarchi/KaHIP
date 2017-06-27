@@ -144,7 +144,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                 int random_idx = random_functions::nextInt(0, todolist.size() - 1);
                                 NodeID node = todolist[random_idx];
 #else
-                        __itt_resume();
+                        //__itt_resume();
                         while (m_factory.queue.try_pop(node, id)) {
 #endif
                                 // this change changes num part accesses since it changes random source
@@ -227,7 +227,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                 todolist.pop_back();
 #endif
                         }
-                        __itt_pause();
+                        //__itt_pause();
 
                         td.num_threads_finished.fetch_add(1, std::memory_order_acq_rel);
                         td.total_thread_time += CLOCK_END_TIME;
