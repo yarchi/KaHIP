@@ -61,7 +61,7 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
                 }
 
         } else {
-                if(config.corner_refinement_enabled) {
+                if(config.corner_refinement_enabled && !config.parallel_multitry_kway) {
                         CLOCK_START;
                         quality_metrics qm;
                         EdgeWeight old_cut;
