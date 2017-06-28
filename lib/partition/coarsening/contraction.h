@@ -59,14 +59,22 @@ class contraction {
                                               const NodeID& no_of_coarse_vertices,
                                               const NodePermutationMap&) const;
 
+                void parallel_fast_contract_clustering(const PartitionConfig& partition_config,
+                                                       graph_access& G,
+                                                       graph_access& coarser,
+                                                       const Matching&,
+                                                       const CoarseMapping& coarse_mapping,
+                                                       const NodeID& no_of_coarse_vertices,
+                                                       const NodePermutationMap&) const;
 
-        void contract_partitioned(const PartitionConfig & partition_config,
-                                           graph_access & G, 
-                                           graph_access & coarser, 
-                                           const Matching & edge_matching,
-                                           const CoarseMapping & coarse_mapping,
-                                           const NodeID & no_of_coarse_vertices,
-                                           const NodePermutationMap & permutation) const; 
+
+                void contract_partitioned(const PartitionConfig & partition_config,
+                                                   graph_access & G,
+                                                   graph_access & coarser,
+                                                   const Matching & edge_matching,
+                                                   const CoarseMapping & coarse_mapping,
+                                                   const NodeID & no_of_coarse_vertices,
+                                                   const NodePermutationMap & permutation) const;
 
         private:
                 // visits an edge in G (and auxillary graph) and updates/creates and edge in coarser graph 
@@ -77,8 +85,19 @@ class contraction {
                                 const EdgeID e,
                                 const std::vector<NodeID> & new_edge_targets) const;
 
+                inline uint64_t get_uint64_from_pair(NodeID cluster_a, NodeID cluster_b) const {
+                        if (cluster_a > cluster_b) {
+                                std::swap(cluster_a, cluster_b);
+                        }
+                        return ((uint64_t)cluster_a << 32) | cluster_b;
+                }
 
-};
+                inline std::pair<NodeID, NodeID> get_pair_from_uint64 (uint64_t data) const {
+                        NodeID first = data >> 32;
+                        NodeID second = data;
+                        return std::make_pair(first, second);
+                }
+        };
 
 inline void contraction::visit_edge(graph_access & G, 
                 graph_access & coarser,

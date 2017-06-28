@@ -21,9 +21,21 @@ struct simple_hash {
 
 template <typename T>
 struct xxhash {
+        static const size_t significant_digits = 64;
         using hash_type = uint64_t;
         inline hash_type operator()(const T& x) const {
                 return XXH64(&x, sizeof(x), 0);
+        }
+};
+
+template <typename T>
+struct xxhash<std::pair<T, T>> {
+        using hash_type = uint64_t;
+
+        xxhash<T> h;
+
+        uint64_t operator() (const std::pair<T, T>& x) const {
+                return h(x.first) ^ h(x.second);
         }
 };
 
