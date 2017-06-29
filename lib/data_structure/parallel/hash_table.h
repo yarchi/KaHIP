@@ -42,6 +42,7 @@ struct xxhash<std::pair<T, T>> {
 template <typename Key>
 class MurmurHash {
 public:
+        static const size_t significant_digits = 64;
         using hash_type = std::uint64_t;
 
         explicit MurmurHash(uint32_t seed = 0)

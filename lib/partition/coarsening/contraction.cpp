@@ -28,8 +28,6 @@
 
 #include "data-structures/definitions.h"
 
-#include "ittnotify.h"
-
 contraction::contraction() {
 
 }
@@ -170,14 +168,20 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
         double avg_degree = (G.number_of_edges() + 0.0) / G.number_of_nodes();
         size_t num_cut_edges = std::min<size_t>(avg_degree * no_of_coarse_vertices, G.number_of_edges() / 2);
 
+        std::cout << "ht capacity\t" << num_cut_edges << std::endl;
         growt::uaGrow<parallel::xxhash<uint64_t>> new_edges(num_cut_edges);
+        CLOCK_END("Init hash table");
 
+        CLOCK_START_N;
         std::atomic<uint32_t> offset(0);
+
+        uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
+        block_size = std::max(block_size, 1000u);
+        std::cout << "block_size\t" << block_size << std::endl;
+
         auto process = [&]() {
                 auto handle = new_edges.getHandle();
                 while (true) {
-                        uint32_t block_size = 20;
-
                         uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
                         uint32_t end = begin + block_size;
                         end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
@@ -211,7 +215,6 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
 
         std::vector<std::future<void>> futures;
         futures.reserve(partition_config.num_threads - 1);
-
         for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
                 futures.push_back(parallel::g_thread_pool.Submit(i, process));
         }

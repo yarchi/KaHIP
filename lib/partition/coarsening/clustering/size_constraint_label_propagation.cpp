@@ -228,8 +228,9 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
         uint32_t num_changed_label_all = 0;
 
         std::vector<std::unique_ptr<PartitionID[]>> hash_maps(config.num_threads);
-        uint32_t edges_per_block = (uint32_t) sqrt(G.number_of_edges() / config.num_threads);
-        edges_per_block = edges_per_block > 0 ? edges_per_block : G.number_of_edges();
+
+        uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
+        block_size = std::max(block_size, 1000u);
 
         for (int j = 0; j < config.label_iterations; j++) {
                 std::atomic<uint32_t> offset(0);
@@ -250,11 +251,6 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
                                 if (cur_index >= G.number_of_nodes()) {
                                         break;
                                 }
-
-                                NodeID cur_node = permutation[cur_index].first;
-
-                                uint32_t block_size = G.getNodeDegree(cur_node) > 0 ? edges_per_block / G.getNodeDegree(cur_node) : edges_per_block;
-                                block_size = block_size > 0 ? block_size : 1;
 
                                 uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
                                 uint32_t end = begin + block_size;
