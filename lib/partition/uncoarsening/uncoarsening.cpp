@@ -70,11 +70,27 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
         PRINT(std::cout << "log>" << "unrolling graph with " << coarsest->number_of_nodes() << std::endl;)
 
         if (config.lp_before_local_search) {
+                quality_metrics qm;
+                EdgeWeight old_cut = 0;
+                if (config.check_cut) {
+                        old_cut = qm.edge_cut(*coarsest);
+                        std::cout << "before\t" << old_cut << std::endl;
+                        std::cout << "before balance\t" << qm.balance(*coarsest) << std::endl;
+                }
+
                 CLOCK_START;
                 label_propagation_refinement* lp_refinement = new label_propagation_refinement();
                 complete_boundary boundary(coarsest);
-                improvement += lp_refinement->perform_refinement(cfg, *coarsest, boundary);
-                CLOCK_END("Label propagation");
+                EdgeWeight improvement = lp_refinement->perform_refinement(cfg, *coarsest, boundary);
+                CLOCK_END("Uncoarsening: Label propagation");
+
+                if (config.check_cut) {
+                        EdgeWeight new_cut = qm.edge_cut(*coarsest);
+                        std::cout << "after\t" << new_cut << std::endl;
+                        std::cout << "after balance\t" << qm.balance(*coarsest) << std::endl;
+                        std::cout << "improvement\t" << improvement << std::endl;
+                        ALWAYS_ASSERT(old_cut >= new_cut);
+                }
         }
 
         complete_boundary* finer_boundary   = NULL;
@@ -85,7 +101,15 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
         }
         double factor = config.balance_factor;
         cfg.upper_bound_partition = ((!hierarchy.isEmpty()) * factor +1.0)*config.upper_bound_partition;
+
+        std::cerr << "Uncoarsening before: <<<" << std::endl;
+        quality_metrics qm;
+        qm.balance(*coarsest);
+        std::cerr << ">>>>>" << std::endl;
         improvement += (int)refine->perform_refinement(cfg, *coarsest, *coarser_boundary);
+        std::cerr << "Uncoarsening after: <<<" << std::endl;
+        qm.balance(*coarsest);
+        std::cerr << ">>>>>" << std::endl;
 
         NodeID coarser_no_nodes = coarsest->number_of_nodes();
         graph_access* finest    = NULL;
@@ -98,18 +122,39 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
                 PRINT(std::cout << "log>" << "unrolling graph with " << G->number_of_nodes()<<  std::endl;)
 
                 if (config.lp_before_local_search) {
+                        quality_metrics qm;
+                        EdgeWeight old_cut = 0;
+                        if (config.check_cut) {
+                                old_cut = qm.edge_cut(*G);
+                                std::cout << "before\t" << old_cut << std::endl;
+                                std::cout << "before balance\t" << qm.balance(*G) << std::endl;
+                        }
+
                         CLOCK_START;
                         label_propagation_refinement* lp_refinement = new label_propagation_refinement();
-                        complete_boundary boundary(coarsest);
+                        complete_boundary boundary(G);
                         // boundary is not used in lp
-                        improvement += lp_refinement->perform_refinement(cfg, *G, boundary);
-                        CLOCK_END("Label propagation");
+                        EdgeWeight improvement = lp_refinement->perform_refinement(cfg, *G, boundary);
+                        CLOCK_END("Uncoarsening: Label propagation");
+
+                        if (config.check_cut) {
+                                EdgeWeight new_cut = qm.edge_cut(*G);
+                                std::cout << "after\t" << new_cut << std::endl;
+                                std::cout << "after balance\t" << qm.balance(*G) << std::endl;
+                                std::cout << "improvement\t" << improvement << std::endl;
+                                ALWAYS_ASSERT(old_cut >= new_cut);
+                        }
                 }
 
                 if(!config.label_propagation_refinement) {
                         finer_boundary = new complete_boundary(G); 
                         finer_boundary->build_from_coarser(coarser_boundary, coarser_no_nodes, hierarchy.get_mapping_of_current_finer());
                 }
+
+                std::cerr << "Uncoarsening before: <<<" << std::endl;
+                quality_metrics qm;
+                qm.balance(*G);
+                std::cerr << ">>>>>" << std::endl;
 
                 //call refinement
                 double cur_factor = factor/(hierarchy_deepth-hierarchy.size());
@@ -126,6 +171,10 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
                 if(!config.label_propagation_refinement) delete coarser_boundary;
                 coarser_boundary = finer_boundary;
                 coarser_no_nodes = G->number_of_nodes();
+
+                std::cerr << "Uncoarsening after: <<<" << std::endl;
+                qm.balance(*G);
+                std::cerr << ">>>>>" << std::endl;
 
 		//clean up 
 		if(to_delete != NULL) {

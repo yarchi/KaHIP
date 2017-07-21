@@ -56,10 +56,25 @@ void bipartition::initial_partition( const PartitionConfig & config,
 
                 G.set_partition_count(2);
 
+                std::cerr << "before post_fm: <<<" << std::endl;
+                quality_metrics qm;
+                double balance = qm.balance(G);
+                if (balance > 1.03) {
+                        std::cerr << "incorrect balance\t" << balance << std::endl;
+                }
+                ALWAYS_ASSERT(balance <= 1.03);
+                std::cerr << ">>>>>" << std::endl;
                 post_fm(config, G);
 
-                quality_metrics qm;
-                EdgeWeight curcut = qm.edge_cut(G); 
+                std::cerr << "after post_fm: <<<" << std::endl;
+                balance = qm.balance(G);
+                if (balance > 1.03) {
+                        std::cerr << "incorrect balance\t" << balance << std::endl;
+                }
+                ALWAYS_ASSERT(balance <= 1.03);
+                std::cerr << ">>>>>" << std::endl;
+
+                EdgeWeight curcut = qm.edge_cut(G);
 
                 int lhs_block_weight = 0;
                 int rhs_block_weight = 0;
@@ -114,7 +129,7 @@ void bipartition::post_fm(const PartitionConfig & config, graph_access & G) {
                 initial_cfg.bank_account_factor             = 5;
                 initial_cfg.rebalance                       = true;
                 initial_cfg.softrebalance                   = true;
-                initial_cfg.upper_bound_partition           = 100000000;
+                //initial_cfg.upper_bound_partition           = 100000000;
                 initial_cfg.initial_bipartitioning          = true;
                 refine->perform_refinement(initial_cfg, G, *boundary);
 

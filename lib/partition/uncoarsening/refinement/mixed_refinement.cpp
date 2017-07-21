@@ -64,7 +64,7 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
                 if(config.corner_refinement_enabled && !config.parallel_multitry_kway) {
                         CLOCK_START;
                         quality_metrics qm;
-                        EdgeWeight old_cut;
+                        EdgeWeight old_cut = 0;
                         if (config.check_cut) {
                                 old_cut = qm.edge_cut(G);
                                 std::cout << "before\t" << old_cut << std::endl;

@@ -45,15 +45,25 @@ void graph_partitioner::perform_recursive_partitioning(PartitionConfig & config,
         m_global_k = config.k;
         m_global_upper_bound = config.upper_bound_partition;
         m_rnd_bal = random_functions::nextDouble(1,2);
-        perform_recursive_partitioning_internal(config, G, 0, config.k-1);
+        m_global_work_load = config.work_load;
+
+        perform_recursive_partitioning_internal(config, G, 0, config.k-1, 1.0);
+        quality_metrics qm;
+        double balance = qm.balance(G);
+        if (balance > config.imbalance / 100.0) {
+                std::cerr << "balance = " << balance << std::endl;
+                std::cerr << "desired balance = " << 1 + config.imbalance / 100.0 << std::endl;
+        }
+        ALWAYS_ASSERT(balance <= 1 + config.imbalance / 100.0 + 0.001);
 }
 
 void graph_partitioner::perform_recursive_partitioning_internal(PartitionConfig & config, 
                                                                 graph_access & G, 
                                                                 PartitionID lb, 
-                                                                PartitionID ub) {
+                                                                PartitionID ub, double part_fraction) {
 
         G.set_partition_count(2);
+        std::cerr << "Partition [" << lb << ", " << ub << "]: <<<<" << std::endl;
         
         // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         // configuration of bipartitioning
@@ -79,6 +89,8 @@ void graph_partitioner::perform_recursive_partitioning_internal(PartitionConfig 
 
         
         bipart_config.upper_bound_partition              = ceil((1+epsilon)*config.work_load/(double)bipart_config.k);
+        NodeWeight upper                                 = floor((1 + bipart_config.imbalance / 100.0) * m_global_work_load * part_fraction);
+
         bipart_config.corner_refinement_enabled          = false;
         bipart_config.quotient_graph_refinement_disabled = false;
         bipart_config.refinement_scheduling_algorithm    = REFINEMENT_SCHEDULING_ACTIVE_BLOCKS;
@@ -99,17 +111,24 @@ void graph_partitioner::perform_recursive_partitioning_internal(PartitionConfig 
                 bipart_config.target_weights.push_back((1+epsilon)*num_blocks_rhs/(double)(num_blocks_lhs+num_blocks_rhs)*config.work_load);
                 bipart_config.initial_bipartitioning  = true;
                 bipart_config.refinement_type         = REFINEMENT_TYPE_FM; // flows not supported for odd block weights
+
+                std::cerr << "So far works only for k which is the power of 2. Not clear how to calulcate upper_bound_partition for different sized partitions." << std::endl;
+                ALWAYS_ASSERT(config.k % 2 == 0);
         } else {
 
                 bipart_config.target_weights.clear();
                 bipart_config.target_weights.push_back(bipart_config.upper_bound_partition);
                 bipart_config.target_weights.push_back(bipart_config.upper_bound_partition);
                 bipart_config.initial_bipartitioning  = false;
+
+                bipart_config.upper_bound_partition = std::min<int>(bipart_config.upper_bound_partition, upper / 2.0);
         }
 
         bipart_config.grow_target = ceil(num_blocks_lhs/(double)(num_blocks_lhs+num_blocks_rhs)*config.work_load);
 
-        perform_partitioning(bipart_config, G);        
+        std::cerr << "load work = " << config.work_load << std::endl;
+        std::cerr << "Partition upper bound = " << bipart_config.upper_bound_partition << std::endl;
+        perform_partitioning(bipart_config, G);
 
         if( config.k > 2 ) {
                graph_extractor extractor;
@@ -134,7 +153,7 @@ void graph_partitioner::perform_recursive_partitioning_internal(PartitionConfig 
 
                        rec_config.largest_graph_weight = weight_lhs_block;
                        rec_config.work_load            = weight_lhs_block;
-                       perform_recursive_partitioning_internal( rec_config, extracted_block_lhs, lb, new_ub_lhs);
+                       perform_recursive_partitioning_internal( rec_config, extracted_block_lhs, lb, new_ub_lhs, part_fraction * num_blocks_lhs/(num_blocks_lhs + num_blocks_rhs + 0.0));
                        
                        //apply partition
                        forall_nodes(extracted_block_lhs, node) {
@@ -152,7 +171,7 @@ void graph_partitioner::perform_recursive_partitioning_internal(PartitionConfig 
                        rec_config.k = num_blocks_rhs;
                        rec_config.largest_graph_weight = weight_rhs_block;
                        rec_config.work_load            = weight_lhs_block;
-                       perform_recursive_partitioning_internal( rec_config, extracted_block_rhs, new_lb_rhs, ub);
+                       perform_recursive_partitioning_internal( rec_config, extracted_block_rhs, new_lb_rhs, ub, part_fraction * num_blocks_rhs/(num_blocks_lhs + num_blocks_rhs + 0.0));
 
                        forall_nodes(extracted_block_rhs, node) {
                                G.setPartitionIndex(mapping_extracted_to_G_rhs[node], extracted_block_rhs.getPartitionIndex(node));
@@ -166,13 +185,18 @@ void graph_partitioner::perform_recursive_partitioning_internal(PartitionConfig 
                }
 
         } else {
+                int a = 0, b = 0;
                forall_nodes(G, node) {
                        if(G.getPartitionIndex(node) == 0) {
                             G.setPartitionIndex(node, lb);
+                               a += G.getNodeWeight(node);
                        } else {
+                               b += G.getNodeWeight(node);
                             G.setPartitionIndex(node, ub);
                        }
                } endfor
+                std::cerr << "parta = " << a << std::endl;
+                std::cerr << "partb = " << b << std::endl;
         }
        
         G.set_partition_count(config.k);
@@ -181,7 +205,7 @@ void graph_partitioner::perform_recursive_partitioning_internal(PartitionConfig 
 void graph_partitioner::single_run( PartitionConfig & config, graph_access & G) {
 
         for( unsigned i = 1; i <= config.global_cycle_iterations; i++) {
-                PRINT(std::cout <<  "vcycle " << i << " of " << config.global_cycle_iterations  << std::endl;)
+                PRINT(std::cerr <<  "vcycle " << i << " of " << config.global_cycle_iterations  << std::endl;)
                         if(config.use_wcycles || config.use_fullmultigrid)  {
                                 wcycle_partitioner w_partitioner;
                                 w_partitioner.perform_partitioning(config, G);
@@ -217,7 +241,7 @@ void graph_partitioner::single_run( PartitionConfig & config, graph_access & G) 
                                 CLOCK_END("Uncoarsening");
                                 if( config.mode_node_separators ) {
                                         quality_metrics qm;
-                                        std::cout <<  "vcycle result " << qm.separator_weight(G)  << std::endl;
+                                        std::cerr <<  "vcycle result " << qm.separator_weight(G)  << std::endl;
                                 }
                         }
                 config.graph_allready_partitioned = true;

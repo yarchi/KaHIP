@@ -33,7 +33,9 @@
 #include "definitions.h"
 #include "../refinement.h"
 
+#include <tbb/scalable_allocator.h>
 #include <tbb/concurrent_queue.h>
+#include <tbb/memory_pool.h>
 
 #include <vector>
 
@@ -47,12 +49,19 @@ public:
                                               complete_boundary&);
 
 private:
-        using Allocator = growt::PoolAllocator<NodeID>;
+        //using Allocator = growt::PoolAllocator<NodeID>;
+        using Allocator = tbb::scalable_allocator<NodeID>;
         using Block = std::vector<NodeID, Allocator>;
         using ConcurrentQueue = tbb::concurrent_queue<Block>;
         using Pair = std::pair<NodeID, NodeID>;
 
         Allocator m_block_allocator;
+
+        inline uint32_t get_block_size(graph_access& G, PartitionConfig& config) const {
+                uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
+                block_size = std::max(block_size, 1000u);
+                return block_size;
+        }
 
         std::chrono::system_clock::time_point begin, end;
         EdgeWeight sequential_label_propagation(PartitionConfig & config,
@@ -73,17 +82,17 @@ private:
                                               std::vector<std::vector<PartitionID>>& hash_maps,
                                               std::vector<Pair>& permutation);
 
-        void seq_init_for_edge_unit(graph_access& G, const size_t block_size,
+        void seq_init_for_edge_unit(graph_access& G, const uint32_t block_size,
                                 std::vector<Pair>& permutation,
                                 std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                 std::unique_ptr<ConcurrentQueue>& queue);
 
-        void par_init_for_edge_unit(graph_access& G, const size_t block_size,
+        void par_init_for_edge_unit(graph_access& G, const uint32_t block_size,
                                     std::vector<Pair>& permutation,
                                     std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                     std::unique_ptr<ConcurrentQueue>& queue);
 
-        void init_for_node_unit(graph_access& G, const size_t block_size,
+        void init_for_node_unit(graph_access& G, const uint32_t block_size,
                                 std::vector<Pair>& permutation,
                                 std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                 std::unique_ptr<ConcurrentQueue>& queue);

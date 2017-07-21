@@ -26,7 +26,8 @@
 #include <regex.h>
 #include <sstream>
 #include <stdio.h>
-#include <string.h> 
+#include <string.h>
+#include <thread>
 
 #include "balance_configuration.h"
 #include "data_structure/graph_access.h"
@@ -46,6 +47,9 @@
 #include "uncoarsening/refinement/quotient_graph_refinement/quotient_graph_refinement.h"
 #include "uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_commons.h"
 
+#include "data_structure/parallel/pool_allocator.h"
+#include <tbb/concurrent_queue.h>
+
 int main(int argn, char **argv) {
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
         #pragma message("COMPARE WITH SEQUENTIAL MODE IS ON")
@@ -53,6 +57,7 @@ int main(int argn, char **argv) {
         std::cout << "THIS SLOWS DOWN THE APP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
 #endif
         std::cout << "Git revision\t" << GIT_DESC << std::endl;
+        std::cout << "Max number of threads\t" << std::thread::hardware_concurrency() << std::endl;
         PartitionConfig partition_config;
         std::string graph_filename;
 
@@ -86,7 +91,7 @@ int main(int argn, char **argv) {
         G.set_partition_count(partition_config.k);
  
         balance_configuration bc;
-        bc.configurate_balance( partition_config, G);
+        bc.configurate_balance(partition_config, G);
 
         quality_metrics qm;
         Gain input_partition_cut = 0;
@@ -180,6 +185,15 @@ int main(int argn, char **argv) {
                         break;
         }
 
+        switch (partition_config.block_size_unit) {
+                case BlockSizeUnit::NODES:
+                        std::cout << "uncoarsening lp block size unit\tnodes" << std::endl;
+                        break;
+                case BlockSizeUnit::EDGES:
+                        std::cout << "uncoarsening lp block size unit\tedges" << std::endl;
+                        break;
+        }
+
         // ***************************** perform partitioning ***************************************       
         t.restart();
         graph_partitioner partitioner;
@@ -220,11 +234,11 @@ int main(int argn, char **argv) {
         // ******************************* done partitioning *****************************************       
         ofs.close();
         std::cout.rdbuf(backup);
-        std::cout << "imbalance\t" << partition_config.imbalance / 100.0 << std::endl;
         std::cout <<  "time spent for partitioning " << t.elapsed()  << std::endl;
        
         // output some information about the partition that we have computed
         Gain cut = qm.edge_cut(G);
+        double balance = qm.balance(G);
         std::cout << "cut \t\t"         << cut                            << std::endl;
         if (partition_config.input_partition != "") {
                 std::cout << "input partition cut\t" << input_partition_cut << std::endl;
@@ -232,7 +246,7 @@ int main(int argn, char **argv) {
         }
         std::cout << "finalobjective  " << qm.edge_cut(G)                 << std::endl;
         std::cout << "bnd \t\t"         << qm.boundary_nodes(G)           << std::endl;
-        std::cout << "balance \t"       << qm.balance(G)                  << std::endl;
+        std::cout << "balance \t"       << balance                 << std::endl;
         std::cout << "max_comm_vol \t"  << qm.max_communication_volume(G) << std::endl;
 
         if (!partition_config.label_propagation_refinement) {

@@ -65,6 +65,7 @@ public:
                 partition_config.kway_adaptive_limits_beta  = log(G.number_of_nodes());
                 partition_config.work_load                  = largest_graph_weight + edge_weights;
 
+                std::cout << "imbalance\t" << partition_config.imbalance / 100.0 << std::endl;
                 std::cout <<  "block weight upper bound " <<  partition_config.upper_bound_partition  << std::endl;
 
         }

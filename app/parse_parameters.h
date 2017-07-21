@@ -166,6 +166,7 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *sep_num_vert_stop                    = arg_int0(NULL, "sep_num_vert_stop", NULL, "Number of vertices to stop coarsening at.");
         struct arg_rex *sep_edge_rating_during_ip            = arg_rex0(NULL, "sep_edge_rating_during_ip", "^(weight|expansionstar|expansionstar2|expansionstar2deg|punch|expansionstar2algdist|expansionstar2algdist2|algdist|algdist2|sepmultx|sepaddx|sepmax|seplog|r1|r2|r3|r4|r5|r6|r7|r8)$", "RATING", REG_EXTENDED, "Edge rating to use. One of {weight, expansionstar, expansionstar2, punch, sepmultx, sepaddx, sepmax, seplog, " " expansionstar2deg}. Default: weight"  );
         struct arg_int *num_threads                          = arg_int0(NULL, "num_threads", NULL, "Number of threads to use. Should be at least 1");
+        struct arg_lit *parallel_lp                          = arg_lit0(NULL, "parallel_lp", "(Default: disabled)");
         struct arg_rex *block_size_unit                      = arg_rex0(NULL, "block_size_unit", "^(nodes|edges)$", "VARIANT", REG_EXTENDED, "How to calculate sizes of blocks. Using nodes or edges.");
         struct arg_rex *parallel_lp_type                     = arg_rex0(NULL, "parallel_lp_type", "^(queue|no_queue)$", "VARIANT", REG_EXTENDED, "Type of parallel lp algorithm. Use queue or not.");
         struct arg_int *block_size                           = arg_int0(NULL, "block_size", NULL, "Size of block in parallel lp. Should be at least 1");
@@ -224,6 +225,7 @@ int parse_parameters(int argn, char **argv,
 		balance_edges,
                 filename_output,
                 num_threads,
+                parallel_lp,
                 block_size_unit,
                 parallel_lp_type,
                 block_size,
@@ -1056,6 +1058,10 @@ int parse_parameters(int argn, char **argv,
                                 partition_config.num_threads);
                         exit(0);
                 }
+        }
+
+        if (parallel_lp->count > 0) {
+                partition_config.parallel_lp = true;
         }
 
         if (block_size_unit->count > 0) {
