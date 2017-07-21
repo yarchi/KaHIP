@@ -70,11 +70,25 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
         PRINT(std::cout << "log>" << "unrolling graph with " << coarsest->number_of_nodes() << std::endl;)
 
         if (config.lp_before_local_search) {
+                quality_metrics qm;
+                EdgeWeight old_cut = 0;
+                if (config.check_cut) {
+                        old_cut = qm.edge_cut(*coarsest);
+                        std::cout << "before\t" << old_cut << std::endl;
+                        std::cout << "before balance\t" << qm.balance(*coarsest) << std::endl;
+                }
+
                 CLOCK_START;
                 label_propagation_refinement* lp_refinement = new label_propagation_refinement();
                 complete_boundary boundary(coarsest);
-                improvement += lp_refinement->perform_refinement(cfg, *coarsest, boundary);
-                CLOCK_END("Label propagation");
+                lp_refinement->perform_refinement(cfg, *coarsest, boundary);
+                CLOCK_END("Uncoarsening: Label propagation");
+
+                if (config.check_cut) {
+                        EdgeWeight new_cut = qm.edge_cut(*coarsest);
+                        std::cout << "after\t" << new_cut << std::endl;
+                        std::cout << "after balance\t" << qm.balance(*coarsest) << std::endl;
+                }
         }
 
         complete_boundary* finer_boundary   = NULL;
@@ -98,12 +112,26 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
                 PRINT(std::cout << "log>" << "unrolling graph with " << G->number_of_nodes()<<  std::endl;)
 
                 if (config.lp_before_local_search) {
+                        quality_metrics qm;
+                        EdgeWeight old_cut = 0;
+                        if (config.check_cut) {
+                                old_cut = qm.edge_cut(*G);
+                                std::cout << "before\t" << old_cut << std::endl;
+                                std::cout << "before balance\t" << qm.balance(*G) << std::endl;
+                        }
+
                         CLOCK_START;
                         label_propagation_refinement* lp_refinement = new label_propagation_refinement();
-                        complete_boundary boundary(coarsest);
+                        complete_boundary boundary(G);
                         // boundary is not used in lp
-                        improvement += lp_refinement->perform_refinement(cfg, *G, boundary);
-                        CLOCK_END("Label propagation");
+                        lp_refinement->perform_refinement(cfg, *G, boundary);
+                        CLOCK_END("Uncoarsening: Label propagation");
+
+                        if (config.check_cut) {
+                                EdgeWeight new_cut = qm.edge_cut(*G);
+                                std::cout << "after\t" << new_cut << std::endl;
+                                std::cout << "after balance\t" << qm.balance(*G) << std::endl;
+                        }
                 }
 
                 if(!config.label_propagation_refinement) {
