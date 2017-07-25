@@ -58,20 +58,21 @@ void bipartition::initial_partition( const PartitionConfig & config,
 
                 std::cerr << "before post_fm: <<<" << std::endl;
                 quality_metrics qm;
-                double balance = qm.balance(G);
-                if (balance > 1.03) {
-                        std::cerr << "incorrect balance\t" << balance << std::endl;
-                }
-                ALWAYS_ASSERT(balance <= 1.03);
-                std::cerr << ">>>>>" << std::endl;
+                double balance_before = qm.balance(G);
+                //if (balance_before > 1.03) {
+                        //std::cerr << "incorrect balance\t" << balance << std::endl;
+                //}
+                //ALWAYS_ASSERT(balance <= 1.03);
+                //std::cerr << ">>>>>" << std::endl;
                 post_fm(config, G);
 
                 std::cerr << "after post_fm: <<<" << std::endl;
-                balance = qm.balance(G);
-                if (balance > 1.03) {
+                double balance = qm.balance(G);
+                if (balance > 1.03 && balance_before <= 1.03) {
+                        std::cerr <<  "config.upperbound " <<  config.upper_bound_partition  << std::endl;
                         std::cerr << "incorrect balance\t" << balance << std::endl;
+                        ALWAYS_ASSERT(balance <= 1.03);
                 }
-                ALWAYS_ASSERT(balance <= 1.03);
                 std::cerr << ">>>>>" << std::endl;
 
                 EdgeWeight curcut = qm.edge_cut(G);

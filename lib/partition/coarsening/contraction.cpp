@@ -21,12 +21,12 @@
  *****************************************************************************/
 
 #include "contraction.h"
-#include "data_structure/parallel/hash_table.h"
+//#include "data_structure/parallel/hash_table.h"
 #include "data_structure/parallel/time.h"
 #include "../uncoarsening/refinement/quotient_graph_refinement/complete_boundary.h"
 #include "macros_assertions.h"
 
-#include "data-structures/definitions.h"
+//#include "data-structures/definitions.h"
 
 contraction::contraction() {
 
@@ -161,108 +161,108 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
                                                     const CoarseMapping& coarse_mapping,
                                                     const NodeID& no_of_coarse_vertices,
                                                     const NodePermutationMap&) const {
-        CLOCK_START;
-        std::vector<parallel::AtomicWrapper<NodeWeight>> block_infos(no_of_coarse_vertices);
+        //CLOCK_START;
+        //std::vector<parallel::AtomicWrapper<NodeWeight>> block_infos(no_of_coarse_vertices);
 
-        // build set of new edges
-        double avg_degree = (G.number_of_edges() + 0.0) / G.number_of_nodes();
-        size_t num_cut_edges = std::min<size_t>(avg_degree * no_of_coarse_vertices, G.number_of_edges() / 2);
+        //// build set of new edges
+        //double avg_degree = (G.number_of_edges() + 0.0) / G.number_of_nodes();
+        //size_t num_cut_edges = std::min<size_t>(avg_degree * no_of_coarse_vertices, G.number_of_edges() / 2);
 
-        std::cout << "ht capacity\t" << num_cut_edges << std::endl;
-        growt::uaGrow<parallel::xxhash<uint64_t>> new_edges(num_cut_edges);
-        CLOCK_END("Init hash table");
+        //std::cout << "ht capacity\t" << num_cut_edges << std::endl;
+        //growt::uaGrow<parallel::xxhash<uint64_t>> new_edges(num_cut_edges);
+        //CLOCK_END("Init hash table");
 
-        CLOCK_START_N;
-        std::atomic<uint32_t> offset(0);
+        //CLOCK_START_N;
+        //std::atomic<uint32_t> offset(0);
 
-        uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
-        block_size = std::max(block_size, 1000u);
-        std::cout << "block_size\t" << block_size << std::endl;
+        //uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
+        //block_size = std::max(block_size, 1000u);
+        //std::cout << "block_size\t" << block_size << std::endl;
 
-        auto process = [&]() {
-                auto handle = new_edges.getHandle();
-                while (true) {
-                        uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
-                        uint32_t end = begin + block_size;
-                        end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
+        //auto process = [&]() {
+                //auto handle = new_edges.getHandle();
+                //while (true) {
+                        //uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                        //uint32_t end = begin + block_size;
+                        //end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
 
-                        if (begin >= G.number_of_nodes()) {
-                                break;
-                        }
+                        //if (begin >= G.number_of_nodes()) {
+                                //break;
+                        //}
 
-                        for (NodeID node = begin; node != end; ++node) {
-                                PartitionID source_cluster = coarse_mapping[node];
-                                block_infos[source_cluster].fetch_add(G.getNodeWeight(node), std::memory_order_relaxed);
+                        //for (NodeID node = begin; node != end; ++node) {
+                                //PartitionID source_cluster = coarse_mapping[node];
+                                //block_infos[source_cluster].fetch_add(G.getNodeWeight(node), std::memory_order_relaxed);
 
-                                forall_out_edges(G, e, node) {
-                                        NodeID targetID = G.getEdgeTarget(e);
-                                        PartitionID target_cluster = coarse_mapping[targetID];
-                                        bool is_cut_edge = source_cluster != target_cluster;
+                                //forall_out_edges(G, e, node) {
+                                        //NodeID targetID = G.getEdgeTarget(e);
+                                        //PartitionID target_cluster = coarse_mapping[targetID];
+                                        //bool is_cut_edge = source_cluster != target_cluster;
 
-                                        EdgeWeight edge_weight = G.getEdgeWeight(e);
-                                        if (is_cut_edge) {
-                                                uint64_t key = get_uint64_from_pair(source_cluster, target_cluster);
-                                                handle.insertOrUpdate(key, edge_weight,
-                                                                      [](size_t& lhs, const size_t& rhs) {
-                                                                              return lhs += rhs;
-                                                                      },
-                                                                      edge_weight);
-                                        }
-                                } endfor
-                        }
-                }
-        };
+                                        //EdgeWeight edge_weight = G.getEdgeWeight(e);
+                                        //if (is_cut_edge) {
+                                                //uint64_t key = get_uint64_from_pair(source_cluster, target_cluster);
+                                                //handle.insertOrUpdate(key, edge_weight,
+                                                                      //[](size_t& lhs, const size_t& rhs) {
+                                                                              //return lhs += rhs;
+                                                                      //},
+                                                                      //edge_weight);
+                                        //}
+                                //} endfor
+                        //}
+                //}
+        //};
 
-        std::vector<std::future<void>> futures;
-        futures.reserve(partition_config.num_threads - 1);
-        for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
-                futures.push_back(parallel::g_thread_pool.Submit(i, process));
-        }
+        //std::vector<std::future<void>> futures;
+        //futures.reserve(partition_config.num_threads - 1);
+        //for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
+                //futures.push_back(parallel::g_thread_pool.Submit(i, process));
+        //}
 
-        process();
-        std::for_each(futures.begin(), futures.end(), [&](auto& future){
-                future.get();
-        });
-        CLOCK_END("Construct hash table and aux data");
+        //process();
+        //std::for_each(futures.begin(), futures.end(), [&](auto& future){
+                //future.get();
+        //});
+        //CLOCK_END("Construct hash table and aux data");
 
-        // construct graph
-        CLOCK_START_N;
-        std::vector<std::vector<std::pair<PartitionID, EdgeWeight>>> building_tool(no_of_coarse_vertices);
-        for (auto& data : building_tool) {
-                data.reserve(avg_degree);
-        }
+        //// construct graph
+        //CLOCK_START_N;
+        //std::vector<std::vector<std::pair<PartitionID, EdgeWeight>>> building_tool(no_of_coarse_vertices);
+        //for (auto& data : building_tool) {
+                //data.reserve(avg_degree);
+        //}
 
-        auto handle = new_edges.getHandle();
-        size_t num_edges = 0;
-        for (auto it = handle.begin(); it != handle.end(); it++) {
-                std::pair<NodeID, NodeID> edge = get_pair_from_uint64((*it).first);
-                auto edge_weight = (*it).second / 2;
-                building_tool[edge.first].emplace_back(edge.second, edge_weight);
-                building_tool[edge.second].emplace_back(edge.first, edge_weight);
-                ++num_edges;
-        }
+        //auto handle = new_edges.getHandle();
+        //size_t num_edges = 0;
+        //for (auto it = handle.begin(); it != handle.end(); it++) {
+                //std::pair<NodeID, NodeID> edge = get_pair_from_uint64((*it).first);
+                //auto edge_weight = (*it).second / 2;
+                //building_tool[edge.first].emplace_back(edge.second, edge_weight);
+                //building_tool[edge.second].emplace_back(edge.first, edge_weight);
+                //++num_edges;
+        //}
 
-        coarser.start_construction(building_tool.size(), 2 * num_edges);
+        //coarser.start_construction(building_tool.size(), 2 * num_edges);
 
-        for (size_t p = 0; p < building_tool.size(); p++) {
-                NodeID node = coarser.new_node();
-                coarser.setNodeWeight(node, block_infos[p]);
+        //for (size_t p = 0; p < building_tool.size(); p++) {
+                //NodeID node = coarser.new_node();
+                //coarser.setNodeWeight(node, block_infos[p]);
 
-                for(size_t j = 0; j < building_tool[p].size(); j++) {
-                        EdgeID e = coarser.new_edge(node, building_tool[p][j].first);
-                        coarser.setEdgeWeight(e, building_tool[p][j].second);
-                }
-        }
-        coarser.finish_construction();
+                //for(size_t j = 0; j < building_tool[p].size(); j++) {
+                        //EdgeID e = coarser.new_edge(node, building_tool[p][j].first);
+                        //coarser.setEdgeWeight(e, building_tool[p][j].second);
+                //}
+        //}
+        //coarser.finish_construction();
 
-        forall_nodes(G, node) {
-                coarser.setPartitionIndex(coarse_mapping[node], G.getPartitionIndex(node));
+        //forall_nodes(G, node) {
+                //coarser.setPartitionIndex(coarse_mapping[node], G.getPartitionIndex(node));
 
-                if(partition_config.combine) {
-                        coarser.setSecondPartitionIndex(coarse_mapping[node], G.getSecondPartitionIndex(node));
-                }
-        } endfor
-        CLOCK_END("Construct graph");
+                //if(partition_config.combine) {
+                        //coarser.setSecondPartitionIndex(coarse_mapping[node], G.getSecondPartitionIndex(node));
+                //}
+        //} endfor
+        //CLOCK_END("Construct graph");
 }
 
 void contraction::fast_contract_clustering(const PartitionConfig& partition_config,

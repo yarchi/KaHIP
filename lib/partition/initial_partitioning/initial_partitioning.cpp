@@ -98,6 +98,7 @@ void initial_partitioning::perform_initial_partitioning(const PartitionConfig & 
 
         PRINT(std::cout << "no of initial partitioning repetitions = " << reps_to_do                     << std::endl;);
         PRINT(std::cout << "no of nodes for partition = "              << G.number_of_nodes()            << std::endl;);
+        std::cerr <<  "bound in IP " <<  config.upper_bound_partition  << std::endl;
         if(!((config.graph_allready_partitioned && config.no_new_initial_partitioning) || config.omit_given_partitioning)) {
                 for(unsigned int rep = 0; rep < reps_to_do; rep++) {
                         unsigned seed = random_functions::nextInt(0, std::numeric_limits<int>::max()); 

@@ -288,6 +288,7 @@ double quality_metrics::balance(graph_access& G) {
                 overallWeight += G.getNodeWeight(n);
         } endfor
 
+        std::cerr <<  "overall weight " <<  overallWeight  << std::endl;
         double balance_part_weight = ceil(overallWeight / (double)G.get_partition_count());
         double cur_max             = -1;
 

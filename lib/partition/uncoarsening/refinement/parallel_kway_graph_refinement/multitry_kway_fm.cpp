@@ -8,7 +8,7 @@
 #include <sstream>
 
 #ifdef __gnu_linux__
-#include "ittnotify.h"
+//#include "ittnotify.h"
 #endif
 
 namespace parallel {

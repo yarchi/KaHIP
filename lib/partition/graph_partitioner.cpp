@@ -89,6 +89,9 @@ void graph_partitioner::perform_recursive_partitioning_internal(PartitionConfig 
 
         
         bipart_config.upper_bound_partition              = ceil((1+epsilon)*config.work_load/(double)bipart_config.k);
+
+        std::cerr <<  "workload ub  " <<  config.work_load  << std::endl;
+        std::cerr <<  "bipart ub  " <<  bipart_config.upper_bound_partition  << std::endl;
         NodeWeight upper                                 = floor((1 + bipart_config.imbalance / 100.0) * m_global_work_load * part_fraction);
 
         bipart_config.corner_refinement_enabled          = false;

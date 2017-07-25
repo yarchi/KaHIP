@@ -34,8 +34,8 @@ from subprocess import *
 SYSTEM = platform.uname()[0]
 
 Import('env')
-env.Replace(CC = "gcc-5")
-env.Replace(CXX = "g++-5")
+env.Replace(CC = "gcc")
+env.Replace(CXX = "g++")
 
 #add git revision
 def getGitDesc():
@@ -125,7 +125,8 @@ libkaffpa_parallel_async  = ['lib/parallel_mh/parallel_mh_async.cpp',
 if env['program'] == 'kaffpa':
         env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')
-        env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
+        env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'dl'])
+        #env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
 if env['program'] == 'kaffpa_test':
         env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')
