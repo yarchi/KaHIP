@@ -114,7 +114,6 @@ void bipartition::post_fm(const PartitionConfig & config, graph_access & G) {
                 initial_cfg.bank_account_factor             = 5;
                 initial_cfg.rebalance                       = true;
                 initial_cfg.softrebalance                   = true;
-                initial_cfg.upper_bound_partition           = 100000000;
                 initial_cfg.initial_bipartitioning          = true;
                 refine->perform_refinement(initial_cfg, G, *boundary);
 

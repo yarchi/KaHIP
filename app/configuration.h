@@ -587,7 +587,7 @@ inline void configuration::fastsocialmultitry( PartitionConfig & partition_confi
         standardsnw(partition_config);
 //        partition_config.label_propagation_refinement = true;
 //        partition_config.cluster_coarsening_during_ip = true;
-//        partition_config.balance_factor               = 0;
+        partition_config.balance_factor               = 0;
 
         partition_config.fastmultitry = true;
         partition_config.kway_all_boundary_nodes_refinement = true;

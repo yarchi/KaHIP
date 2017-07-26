@@ -40,12 +40,13 @@ public:
 private:
         void perform_recursive_partitioning_internal(PartitionConfig & graph_partitioner_config, 
                                                      graph_access & G, 
-                                                     PartitionID lb, PartitionID ub);
+                                                     PartitionID lb, PartitionID ub, double part_fraction);
         void single_run( PartitionConfig & config, graph_access & G);
 
         unsigned m_global_k;
 	int m_global_upper_bound;
         int m_rnd_bal;
+        NodeWeight m_global_work_load;
 };
 
 #endif /* end of include guard: PARTITION_OL9XTLU4 */

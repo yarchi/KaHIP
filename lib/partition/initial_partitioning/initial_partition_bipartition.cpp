@@ -57,6 +57,7 @@ void initial_partition_bipartition::initial_partition( const PartitionConfig & c
         rec_config.parallel_lp = false;
         rec_config.parallel_coarsening_lp = false;
         rec_config.lp_before_local_search = false;
+        rec_config.fast_contract_clustering = false;
 
 	if( config.cluster_coarsening_during_ip == true) {
 		rec_config.matching_type             = CLUSTER_COARSENING;

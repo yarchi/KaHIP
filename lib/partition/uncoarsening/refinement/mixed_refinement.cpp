@@ -64,7 +64,7 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
                 if(config.corner_refinement_enabled && !config.parallel_multitry_kway) {
                         CLOCK_START;
                         quality_metrics qm;
-                        EdgeWeight old_cut;
+                        EdgeWeight old_cut = 0;
                         if (config.check_cut) {
                                 old_cut = qm.edge_cut(G);
                                 std::cout << "before\t" << old_cut << std::endl;
@@ -74,9 +74,9 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
 
                         if (config.check_cut) {
                                 EdgeWeight new_cut = qm.edge_cut(G);
-                                ALWAYS_ASSERT(old_cut - new_cut == improvement);
                                 std::cout << "after\t" << new_cut << std::endl;
                                 std::cout << "improvement\t" << improvement << std::endl;
+                                ALWAYS_ASSERT(old_cut - new_cut == improvement);
                         }
 
                         CLOCK_END("Kway refinement");
@@ -88,9 +88,12 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
                                                                                                         boundary);
                         quality_metrics qm;
                         EdgeWeight old_cut;
+                        double old_balance;
                         if (config.check_cut) {
                                 old_cut = qm.edge_cut(G);
-                                std::cout << "before\t" << old_cut << std::endl;
+                                old_balance = qm.balance(G);
+                                std::cout << "before cut\t" << old_cut << std::endl;
+                                std::cout << "balance before\t" << old_balance << std::endl;
                         }
 
 
@@ -101,9 +104,11 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
 
                         if (config.check_cut) {
                                 EdgeWeight new_cut = qm.edge_cut(G);
-                                ALWAYS_ASSERT(old_cut - new_cut == improvement);
-                                std::cout << "after\t" << new_cut << std::endl;
+                                double new_balance = qm.balance(G);
+                                std::cout << "after cut\t" << new_cut << std::endl;
+                                std::cout << "after balance\t" << new_balance << std::endl;
                                 std::cout << "improvement\t" << improvement << std::endl;
+                                ALWAYS_ASSERT(old_cut - new_cut == improvement);
                         }
 
                         CLOCK_END("Multitry kway refinement");
