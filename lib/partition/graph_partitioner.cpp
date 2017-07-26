@@ -50,11 +50,12 @@ void graph_partitioner::perform_recursive_partitioning(PartitionConfig & config,
         perform_recursive_partitioning_internal(config, G, 0, config.k-1, 1.0);
         quality_metrics qm;
         double balance = qm.balance(G);
-        if (balance > config.imbalance / 100.0) {
+        if (balance > 1 + config.imbalance / 100.0) {
+                std::cerr << "config.imbalance = " << config.imbalance << std::endl;
                 std::cerr << "balance = " << balance << std::endl;
                 std::cerr << "desired balance = " << 1 + config.imbalance / 100.0 << std::endl;
         }
-        ALWAYS_ASSERT(balance <= 1 + config.imbalance / 100.0 + 0.001);
+        //ALWAYS_ASSERT(balance <= 1 + config.imbalance / 100.0);
 }
 
 void graph_partitioner::perform_recursive_partitioning_internal(PartitionConfig & config, 
@@ -173,7 +174,7 @@ void graph_partitioner::perform_recursive_partitioning_internal(PartitionConfig 
                if(num_blocks_rhs > 1) {
                        rec_config.k = num_blocks_rhs;
                        rec_config.largest_graph_weight = weight_rhs_block;
-                       rec_config.work_load            = weight_lhs_block;
+                       rec_config.work_load            = weight_rhs_block;
                        perform_recursive_partitioning_internal( rec_config, extracted_block_rhs, new_lb_rhs, ub, part_fraction * num_blocks_rhs/(num_blocks_lhs + num_blocks_rhs + 0.0));
 
                        forall_nodes(extracted_block_rhs, node) {

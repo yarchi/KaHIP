@@ -48,6 +48,9 @@ public:
                                               graph_access & G, 
                                               complete_boundary&);
 
+        EdgeWeight perform_refinement(PartitionConfig& config, graph_access& G, complete_boundary& boundary,
+                                      std::vector<uint8_t>& bounday_nodes);
+
 private:
         //using Allocator = growt::PoolAllocator<NodeID>;
         using Allocator = tbb::scalable_allocator<NodeID>;
@@ -58,17 +61,26 @@ private:
         Allocator m_block_allocator;
 
         inline uint32_t get_block_size(graph_access& G, PartitionConfig& config) const {
-                uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
-                block_size = std::max(block_size, 1000u);
+                uint32_t block_size = 1000;
+                if (config.block_size_unit == BlockSizeUnit::NODES) {
+                        block_size = std::max((uint32_t) sqrt(G.number_of_nodes()), block_size);
+                }
+                if (config.block_size_unit == BlockSizeUnit::EDGES) {
+                        block_size = std::max((uint32_t) sqrt(G.number_of_edges()), block_size);
+                }
                 return block_size;
         }
 
         std::chrono::system_clock::time_point begin, end;
         EdgeWeight sequential_label_propagation(PartitionConfig & config,
-                                                graph_access & G);
+                                                graph_access & G,
+                                                complete_boundary& boundary,
+                                                std::vector<uint8_t>& bounday_nodes);
 
         EdgeWeight parallel_label_propagation(PartitionConfig & config,
-                                              graph_access & G);
+                                              graph_access & G,
+                                              complete_boundary& boundary,
+                                              std::vector<uint8_t>& bounday_nodes);
 
         EdgeWeight parallel_label_propagation_with_queue(graph_access& G,
                                                          PartitionConfig& config,
@@ -84,18 +96,23 @@ private:
 
         void seq_init_for_edge_unit(graph_access& G, const uint32_t block_size,
                                 std::vector<Pair>& permutation,
-                                std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
+                                    parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                 std::unique_ptr<ConcurrentQueue>& queue);
 
         void par_init_for_edge_unit(graph_access& G, const uint32_t block_size,
                                     std::vector<Pair>& permutation,
-                                    std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
+                                    parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                     std::unique_ptr<ConcurrentQueue>& queue);
 
         void init_for_node_unit(graph_access& G, const uint32_t block_size,
                                 std::vector<Pair>& permutation,
-                                std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
+                                parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                 std::unique_ptr<ConcurrentQueue>& queue);
+
+        void sequential_get_boundary_nodes(graph_access& G, std::vector<uint8_t>& bounday_nodes);
+
+        void parallel_get_boundary_nodes(PartitionConfig& config, graph_access& G,
+                                         std::vector<uint8_t>& bounday_nodes);
 };
 
 
