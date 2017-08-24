@@ -1,149 +1,29 @@
 #pragma once
 
 #include <algorithm>
+#include <bitset>
 #include <limits>
+#include <memory>
+#include <random>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
-#define XXH_PRIVATE_API
-#include "data_structure/parallel/lib/xxhash.h"
+#include "data_structure/parallel/bits.h"
+#include "data_structure/parallel/hardware.h"
+#include "data_structure/parallel/hash_function.h"
+
+
+
 #include "tools/macros_assertions.h"
 
 namespace parallel {
-template <typename T>
-struct simple_hash {
-        using hash_type = uint64_t;
-        inline hash_type operator()(const T& x) const {
-                return x;
-        }
-};
-
-template <typename T>
-struct xxhash {
-        static const size_t significant_digits = 64;
-        using hash_type = uint64_t;
-        inline hash_type operator()(const T& x) const {
-                return XXH64(&x, sizeof(x), 0);
-        }
-};
-
-template <typename T>
-struct xxhash<std::pair<T, T>> {
-        using hash_type = uint64_t;
-
-        xxhash<T> h;
-
-        uint64_t operator() (const std::pair<T, T>& x) const {
-                return h(x.first) ^ h(x.second);
-        }
-};
-
-template <typename Key>
-class MurmurHash {
-public:
-        static const size_t significant_digits = 64;
-        using hash_type = std::uint64_t;
-
-        explicit MurmurHash(uint32_t seed = 0)
-                :   _seed(seed)
-        {}
-
-        void reset(uint32_t seed) {
-                _seed = seed;
-        }
-
-        inline hash_type operator() (const Key& key) const {
-                return hash(reinterpret_cast<const void*>(&key), sizeof(key), _seed);
-        }
-
-private:
-        uint32_t _seed;
-
-        inline hash_type hash(const void* key, uint32_t len, uint32_t seed) const {
-                const uint64_t m = 0xc6a4a7935bd1e995;
-                const int r = 47;
-
-                uint64_t h = seed ^ (len * m);
-
-                const uint64_t * data = (const uint64_t *)key;
-                const uint64_t * end = data + (len/8);
-
-                while(data != end)
-                {
-                        uint64_t k = *data++;
-
-                        k *= m;
-                        k ^= k >> r;
-                        k *= m;
-
-                        h ^= k;
-                        h *= m;
-                }
-
-                const unsigned char * data2 = (const unsigned char*)data;
-
-                switch(len & 7)
-                {
-                        case 7: h ^= uint64_t(data2[6]) << 48;
-                        case 6: h ^= uint64_t(data2[5]) << 40;
-                        case 5: h ^= uint64_t(data2[4]) << 32;
-                        case 4: h ^= uint64_t(data2[3]) << 24;
-                        case 3: h ^= uint64_t(data2[2]) << 16;
-                        case 2: h ^= uint64_t(data2[1]) << 8;
-                        case 1: h ^= uint64_t(data2[0]);
-                                h *= m;
-                };
-
-                h ^= h >> r;
-                h *= m;
-                h ^= h >> r;
-
-                return h;
-        }
-};
-
-template <typename T>
-struct MurmurHash<std::pair<T, T>> {
-        using hash_type = uint64_t;
-
-        MurmurHash<T> h;
-
-        uint64_t operator() (const std::pair<T, T>& x) const {
-                return h(x.first) ^ h(x.second);
-        }
-};
-
-constexpr static uint32_t round_up_to_next_power_2(uint32_t v) {
-        v--;
-        v |= v >> 1;
-        v |= v >> 2;
-        v |= v >> 4;
-        v |= v >> 8;
-        v |= v >> 16;
-        v++;
-        return v;
-}
-
-constexpr static uint32_t round_up_to_previous_power_2(uint32_t x) {
-        x = x | (x >> 1);
-        x = x | (x >> 2);
-        x = x | (x >> 4);
-        x = x | (x >> 8);
-        x = x | (x >> 16);
-        return x - (x >> 1);
-}
-
-constexpr static bool is_power_2(uint64_t x) {
-        return ((x != 0) && !(x & (x - 1)));
-}
-
 template <typename hash_table_type>
 static constexpr size_t get_max_size_to_fit_l1() {
         // (SizeFactor + 1.1) * max_size * sizeof(Element) Bytes = 16 * 1024 Bytes,
         // where 16 * 1024 Bytes is half of L1 cache and (2 + 1.1) * max_size * 8
         // is the size of a hash table. We calculate that max_size ~ 512.
-        return round_up_to_previous_power_2(16 * 1024 / (sizeof(typename hash_table_type::Element) * (hash_table_type::size_factor + 1.1)));
+        return round_up_to_previous_power_2(16 * 1024 / (sizeof(typename hash_table_type::Element) * (hash_table_type::size_factor)));
 }
 
 template <typename HashTable>
@@ -191,12 +71,13 @@ public:
         using key_type = Key;
         using mapped_type = Value;
         using hash_type = typename Hash::hash_type;
+        using hash_function_type = Hash;
         using Position = uint32_t;
 
 private:
         using TSelf = HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>;
-
         static constexpr hash_type max_hash_value = std::numeric_limits<hash_type>::max();
+        static constexpr size_t size_factor = SizeFactor;
 
 #ifdef PERFORMANCE_STATISTICS
         #pragma message("PERFORMANCE_STATISTICS FOR HASH TABLE IS ON")
@@ -211,20 +92,28 @@ public:
 
         friend Iterator;
 
-        static constexpr size_t size_factor = SizeFactor;
-
         explicit HashMap(const uint64_t max_size = 0) :
                 _empty_element(std::numeric_limits<Key>::max()),
                 _max_size(std::max(round_up_to_next_power_2(max_size), 16u)),
                 _ht_size(_max_size * SizeFactor),
                 //_ht(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value())),
-                _ht(_ht_size, std::make_pair(_empty_element, Value())),
+                _ht(_ht_size + 301, std::make_pair(_empty_element, Value())),
                 _poses(),
                 _hash(),
                 _last_key(_empty_element),
-                _last_position(0) {
+                _last_position(0)
+        {
                 ALWAYS_ASSERT(is_power_2(_ht_size));
                 _poses.reserve(_max_size);
+        }
+
+        static size_t get_max_size_to_fit(uint64_t mem) {
+                // (SizeFactor + 1.1) * max_size * sizeof(Element) + sizeof(Position) * max_size Bytes = 16 * 1024 Bytes,
+                // where 16 * 1024 Bytes is half of L1 cache and (2 + 1.1) * max_size * 8 + 4 * max_size Bytes
+                // is the size of a hash table. We calculate that max_size ~ 560.
+
+                size_t size = round_up_to_previous_power_2( mem / (sizeof(Element) * (size_factor)) );
+                return size;
         }
 
         inline constexpr size_t ht_memory_size() const {
@@ -251,12 +140,15 @@ public:
                 return Iterator(*this, size());
         }
 
-        void reserve(const uint32_t max_size) {
+        void reserve(const uint64_t max_size) {
                 _ht_size = max_size * SizeFactor;
                 ALWAYS_ASSERT(is_power_2(_ht_size));
                 _max_size = max_size;
                 //_ht.resize(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value()));
-                _ht.resize(_ht_size, std::make_pair(_empty_element, Value()));
+
+                // +301 and dummy element are to remove check for the size of _ht in findPosition function
+                _ht.resize(_ht_size + 301, std::make_pair(_empty_element, Value()));
+
                 _poses.reserve(_max_size);
         }
 
@@ -276,6 +168,12 @@ public:
                         resize();
 
                 const Position pos = findPosition(key);
+
+                if (pos + 1 == _ht.size()) {
+                        resize();
+                        return (*this)[key];
+                }
+
                 if (_ht[pos].first == _empty_element) {
                         _ht[pos].first = key;
                         _ht[pos].second = Value();
@@ -291,12 +189,8 @@ public:
 #endif
                 size_t pos = findPosition(key);
                 Element& elem = _ht[pos];
-                if (elem.first != _empty_element) {
-                        value = elem.second;
-                        return true;
-                } else {
-                        return false;
-                }
+                value = elem.second;
+                return elem.first != _empty_element;
         }
 
         inline bool contains(const Key& key) {
@@ -336,6 +230,7 @@ public:
                 std::swap(_last_key, hash_map._last_key);
                 std::swap(_last_position, hash_map._last_position);
                 std::swap(_empty_element, hash_map._empty_element);
+                std::swap(_hash, hash_map._hash);
         }
 
 #ifdef PERFORMANCE_STATISTICS
@@ -382,6 +277,13 @@ private:
                         resize();
 
                 const Position pos = findPosition(key);
+
+                if (pos + 1 == _ht.size()) {
+                        resize();
+                        insertImpl(key, value);
+                        return;
+                }
+
                 if (_ht[pos].first == _empty_element) {
                         _ht[pos].first = key;
                         _ht[pos].second = value;
@@ -397,11 +299,25 @@ private:
                         return _last_position;
                 }
 
-                const Position startPosition = _hash(key) & (_ht_size - 1);
-                for (Position pos = startPosition; pos < _ht.size(); ++pos) {
+                Position pos = _hash(key) & (_ht_size - 1);
+
+#ifdef PERFORMANCE_STATISTICS
+                ++num_probes;
+#endif
+                if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
+                        if (Cache) {
+                                _last_key = key;
+                                _last_position = pos;
+                        }
+                        return pos;
+                }
+
+                while (true) {
+                        ++pos;
 #ifdef PERFORMANCE_STATISTICS
                         ++num_probes;
 #endif
+                        // the last element of _ht is always _empty_element
                         if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
                                 if (Cache) {
                                         _last_key = key;
@@ -410,18 +326,6 @@ private:
                                 return pos;
                         }
                 }
-
-                for (Position pos = 0; pos < startPosition; ++pos) {
-                        if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
-                                if (Cache) {
-                                        _last_key = key;
-                                        _last_position = pos;
-                                }
-                                return pos;
-                        }
-                }
-
-                throw std::runtime_error("Hash table overflowed");
         }
 
         Key _empty_element;
@@ -487,7 +391,7 @@ public:
         TSelf& operator=(TSelf& other) = default;
         TSelf& operator=(TSelf&& other) = default;
 
-        void reserve(const uint32_t max_size) {
+        void reserve(const uint64_t max_size) {
                 _ht_size = max_size * SizeFactor;
                 _max_size = max_size;
                 _ht.resize(_ht_size + _max_size * 1.1, std::make_pair(_empty_element.first, Value()));
@@ -769,7 +673,7 @@ private:
 };
 
 //template <typename key_type, typename value_type>
-//using hash_map = HashMap<key_type, value_type, simple_hash<key_type>, true>;
+//using hash_map = HashMap<key_type, value_type, simple_hash<key_type>, true, false>;
 
 //template <typename key_type, typename value_type>
 //using hash_map_with_erase = HashMapWithErase<key_type, value_type, simple_hash<key_type>, true>;
@@ -786,8 +690,12 @@ private:
 //template <typename key_type>
 //using hash_set = HashSet<key_type, xxhash<key_type>, true>;
 
+//template <typename key_type, typename value_type>
+//using hash_map = HashMap<key_type, value_type, MurmurHash<key_type>, true, false>;
+
 template <typename key_type, typename value_type>
-using hash_map = HashMap<key_type, value_type, MurmurHash<key_type>, true, false>;
+using hash_map = HashMap<key_type, value_type, TabularHash<key_type, 3, 2, 10, true>, true, false>;
+
 
 template <typename key_type, typename value_type>
 using hash_map_with_erase = HashMapWithErase<key_type, value_type, MurmurHash<key_type>, true>;
