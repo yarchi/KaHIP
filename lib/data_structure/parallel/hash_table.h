@@ -97,7 +97,7 @@ public:
                 _max_size(std::max(round_up_to_next_power_2(max_size), 16u)),
                 _ht_size(_max_size * SizeFactor),
                 //_ht(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value())),
-                _ht(_ht_size + 301, std::make_pair(_empty_element, Value())),
+                _ht(_ht_size, std::make_pair(_empty_element, Value())),
                 _poses(),
                 _hash(),
                 _last_key(_empty_element),
@@ -145,10 +145,7 @@ public:
                 ALWAYS_ASSERT(is_power_2(_ht_size));
                 _max_size = max_size;
                 //_ht.resize(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value()));
-
-                // +301 and dummy element are to remove check for the size of _ht in findPosition function
-                _ht.resize(_ht_size + 301, std::make_pair(_empty_element, Value()));
-
+                _ht.resize(_ht_size, std::make_pair(_empty_element, Value()));
                 _poses.reserve(_max_size);
         }
 
@@ -168,12 +165,6 @@ public:
                         resize();
 
                 const Position pos = findPosition(key);
-
-                if (pos + 1 == _ht.size()) {
-                        resize();
-                        return (*this)[key];
-                }
-
                 if (_ht[pos].first == _empty_element) {
                         _ht[pos].first = key;
                         _ht[pos].second = Value();
@@ -277,13 +268,6 @@ private:
                         resize();
 
                 const Position pos = findPosition(key);
-
-                if (pos + 1 == _ht.size()) {
-                        resize();
-                        insertImpl(key, value);
-                        return;
-                }
-
                 if (_ht[pos].first == _empty_element) {
                         _ht[pos].first = key;
                         _ht[pos].second = value;
@@ -299,25 +283,23 @@ private:
                         return _last_position;
                 }
 
-                Position pos = _hash(key) & (_ht_size - 1);
+                Position startPosition = _hash(key) & (_ht_size - 1);
 
 #ifdef PERFORMANCE_STATISTICS
                 ++num_probes;
 #endif
-                if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
+                if (_ht[startPosition].first == _empty_element || _ht[startPosition].first == key) {
                         if (Cache) {
                                 _last_key = key;
-                                _last_position = pos;
+                                _last_position = startPosition;
                         }
-                        return pos;
+                        return startPosition;
                 }
 
-                while (true) {
-                        ++pos;
+                for (Position pos = startPosition + 1; pos < _ht.size(); ++pos) {
 #ifdef PERFORMANCE_STATISTICS
                         ++num_probes;
 #endif
-                        // the last element of _ht is always _empty_element
                         if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
                                 if (Cache) {
                                         _last_key = key;
@@ -326,6 +308,18 @@ private:
                                 return pos;
                         }
                 }
+
+                for (Position pos = 0; pos < startPosition; ++pos) {
+                        if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
+                                if (Cache) {
+                                        _last_key = key;
+                                        _last_position = pos;
+                                }
+                                return pos;
+                        }
+                }
+
+                throw std::runtime_error("Hash table overflowed");
         }
 
         Key _empty_element;
