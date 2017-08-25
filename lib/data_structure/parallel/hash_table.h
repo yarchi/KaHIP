@@ -64,7 +64,7 @@ private:
 #undef PERFORMANCE_STATISTICS
 
 template <typename Key, typename Value, typename Hash = xxhash<Key>,
-        bool TGrowable = false, bool Cache = true, size_t SizeFactor = 2>
+        bool TGrowable = false, size_t SizeFactor = 2>
 class HashMap {
 public:
         using Element = std::pair<Key, Value>;
@@ -75,7 +75,7 @@ public:
         using Position = uint32_t;
 
 private:
-        using TSelf = HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>;
+        using TSelf = HashMap<Key, Value, Hash, TGrowable, SizeFactor>;
         static constexpr hash_type max_hash_value = std::numeric_limits<hash_type>::max();
         static constexpr size_t size_factor = SizeFactor;
 
@@ -99,9 +99,7 @@ public:
                 //_ht(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value())),
                 _ht(_ht_size + 301, std::make_pair(_empty_element, Value())),
                 _poses(),
-                _hash(),
-                _last_key(_empty_element),
-                _last_position(0)
+                _hash()
         {
                 ALWAYS_ASSERT(is_power_2(_ht_size));
                 _poses.reserve(_max_size);
@@ -217,9 +215,6 @@ public:
                 }
 
                 _poses.clear();
-
-                _last_key = _empty_element;
-                _last_position = 0;
         }
 
         inline void swap(TSelf& hash_map) {
@@ -227,8 +222,6 @@ public:
                 std::swap(_max_size, hash_map._max_size);
                 _ht.swap(hash_map._ht);
                 _poses.swap(hash_map._poses);
-                std::swap(_last_key, hash_map._last_key);
-                std::swap(_last_position, hash_map._last_position);
                 std::swap(_empty_element, hash_map._empty_element);
                 std::swap(_hash, hash_map._hash);
         }
@@ -295,20 +288,12 @@ private:
 #ifdef PERFORMANCE_STATISTICS
                 ++num_find_pos;
 #endif
-                if (Cache && key == _last_key) {
-                        return _last_position;
-                }
-
                 Position pos = _hash(key) & (_ht_size - 1);
 
 #ifdef PERFORMANCE_STATISTICS
                 ++num_probes;
 #endif
                 if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
-                        if (Cache) {
-                                _last_key = key;
-                                _last_position = pos;
-                        }
                         return pos;
                 }
 
@@ -319,10 +304,42 @@ private:
 #endif
                         // the last element of _ht is always _empty_element
                         if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
-                                if (Cache) {
-                                        _last_key = key;
-                                        _last_position = pos;
-                                }
+                                return pos;
+                        }
+
+                        ++pos;
+#ifdef PERFORMANCE_STATISTICS
+                        ++num_probes;
+#endif
+                        // the last element of _ht is always _empty_element
+                        if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
+                                return pos;
+                        }
+
+                        ++pos;
+#ifdef PERFORMANCE_STATISTICS
+                        ++num_probes;
+#endif
+                        // the last element of _ht is always _empty_element
+                        if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
+                                return pos;
+                        }
+
+                        ++pos;
+#ifdef PERFORMANCE_STATISTICS
+                        ++num_probes;
+#endif
+                        // the last element of _ht is always _empty_element
+                        if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
+                                return pos;
+                        }
+
+                        ++pos;
+#ifdef PERFORMANCE_STATISTICS
+                        ++num_probes;
+#endif
+                        // the last element of _ht is always _empty_element
+                        if (_ht[pos].first == _empty_element || _ht[pos].first == key) {
                                 return pos;
                         }
                 }
@@ -334,25 +351,23 @@ private:
         std::vector<Element> _ht;
         std::vector<Position> _poses;
         Hash _hash;
-        Key _last_key;
-        Position _last_position;
 };
 
 #ifdef PERFORMANCE_STATISTICS
-template <typename Key, typename Value, typename Hash, bool TGrowable, bool Cache, size_t SizeFactor>
-size_t HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>::num_access(0);
+template <typename Key, typename Value, typename Hash, bool TGrowable, size_t SizeFactor>
+size_t HashMap<Key, Value, Hash, TGrowable, SizeFactor>::num_access(0);
 
-template <typename Key, typename Value, typename Hash, bool TGrowable, bool Cache, size_t SizeFactor>
-size_t HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>::num_contain(0);
+template <typename Key, typename Value, typename Hash, bool TGrowable, size_t SizeFactor>
+size_t HashMap<Key, Value, Hash, TGrowable, SizeFactor>::num_contain(0);
 
-template <typename Key, typename Value, typename Hash, bool TGrowable, bool Cache, size_t SizeFactor>
-size_t HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>::overall_max_size(0);
+template <typename Key, typename Value, typename Hash, bool TGrowable, size_t SizeFactor>
+size_t HashMap<Key, Value, Hash, TGrowable, SizeFactor>::overall_max_size(0);
 
-template <typename Key, typename Value, typename Hash, bool TGrowable, bool Cache, size_t SizeFactor>
-size_t HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>::num_probes(0);
+template <typename Key, typename Value, typename Hash, bool TGrowable, size_t SizeFactor>
+size_t HashMap<Key, Value, Hash, TGrowable, SizeFactor>::num_probes(0);
 
-template <typename Key, typename Value, typename Hash, bool TGrowable, bool Cache, size_t SizeFactor>
-size_t HashMap<Key, Value, Hash, TGrowable, Cache, SizeFactor>::num_find_pos(0);
+template <typename Key, typename Value, typename Hash, bool TGrowable, size_t SizeFactor>
+size_t HashMap<Key, Value, Hash, TGrowable, SizeFactor>::num_find_pos(0);
 #endif
 
 template <typename Key, typename Value, typename Hash = xxhash<Key>,
@@ -694,8 +709,10 @@ private:
 //using hash_map = HashMap<key_type, value_type, MurmurHash<key_type>, true, false>;
 
 template <typename key_type, typename value_type>
-using hash_map = HashMap<key_type, value_type, TabularHash<key_type, 3, 2, 10, true>, true, false>;
+using hash_map = HashMap<key_type, value_type, TabularHash<key_type, 5, 2, 10, true>, true>;
 
+//template <typename key_type, typename value_type>
+//using hash_map = HashMap<key_type, value_type, TabularHash<key_type, 0, 2, 10, true>, true>;
 
 template <typename key_type, typename value_type>
 using hash_map_with_erase = HashMapWithErase<key_type, value_type, MurmurHash<key_type>, true>;

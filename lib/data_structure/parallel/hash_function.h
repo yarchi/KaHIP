@@ -174,8 +174,8 @@ public:
         }
 };
 
-template <typename T, bool add_key>
-class TabularHash<T, 3, 2, 10, add_key> {
+template <typename T>
+class TabularHash<T, 3, 2, 10, true> {
 public:
         using hash_type = uint64_t;
 
@@ -200,16 +200,191 @@ public:
                 res ^= table[shifted & 0x3FF];
                 res ^= table[1024 + ((shifted >> 10) & 0x3FF)];
 
-                if (add_key) {
-                        return res ^ (key & 0x7);
-                } else {
-                        return res;
+                return res ^ (key & 0x7);
+        }
+};
+
+template <typename T>
+class TabularHash<T, 3, 2, 10, false> {
+public:
+        using hash_type = uint64_t;
+
+private:
+        constexpr static size_t table_size = 2048;
+
+        T table[table_size];
+
+public:
+        explicit TabularHash(uint32_t seed = 0) {
+                std::uniform_int_distribution<uint32_t> rnd;
+                std::mt19937 mt(seed);
+
+                for (size_t i = 0; i < table_size; ++i) {
+                        table[i] = rnd(mt);
                 }
+        }
+
+        uint64_t operator()(T key) const {
+                uint64_t res = 0;
+                T shifted = key >> 3;
+                res ^= table[shifted & 0x3FF];
+                res ^= table[1024 + ((shifted >> 10) & 0x3FF)];
+
+                return res;
+        }
+};
+
+template <typename T>
+class TabularHash<T, 4, 2, 10, true> {
+public:
+        using hash_type = uint64_t;
+
+private:
+        constexpr static size_t table_size = 2048;
+
+        T table[table_size];
+
+public:
+        explicit TabularHash(uint32_t seed = 0) {
+                std::uniform_int_distribution<uint32_t> rnd;
+                std::mt19937 mt(seed);
+
+                for (size_t i = 0; i < table_size; ++i) {
+                        table[i] = rnd(mt);
+                }
+        }
+
+        uint64_t operator()(T key) const {
+                uint64_t res = 0;
+                T shifted = key >> 4;
+                res ^= table[shifted & 0x3FF];
+                res ^= table[1024 + ((shifted >> 10) & 0x3FF)];
+
+                return res ^ (key & 0xF);
+        }
+};
+
+template <typename T>
+class TabularHash<T, 4, 2, 10, false> {
+public:
+        using hash_type = uint64_t;
+
+private:
+        constexpr static size_t table_size = 2048;
+
+        T table[table_size];
+
+public:
+        explicit TabularHash(uint32_t seed = 0) {
+                std::uniform_int_distribution<uint32_t> rnd;
+                std::mt19937 mt(seed);
+
+                for (size_t i = 0; i < table_size; ++i) {
+                        table[i] = rnd(mt);
+                }
+        }
+
+        uint64_t operator()(T key) const {
+                uint64_t res = 0;
+                T shifted = key >> 4;
+                res ^= table[shifted & 0x3FF];
+                res ^= table[1024 + ((shifted >> 10) & 0x3FF)];
+
+                return res;
+        }
+};
+
+template <typename T>
+class TabularHash<T, 5, 2, 10, true> {
+public:
+        using hash_type = uint64_t;
+
+private:
+        constexpr static size_t table_size = 2048;
+
+        T table[table_size];
+
+public:
+        explicit TabularHash(uint32_t seed = 0) {
+                std::uniform_int_distribution<uint32_t> rnd;
+                std::mt19937 mt(seed);
+
+                for (size_t i = 0; i < table_size; ++i) {
+                        table[i] = rnd(mt);
+                }
+        }
+
+        uint64_t operator()(T key) const {
+                uint64_t res = 0;
+                T shifted = key >> 5;
+                res ^= table[shifted & 0x3FF];
+                res ^= table[1024 + ((shifted >> 10) & 0x3FF)];
+
+                return res ^ (key & 0x1F);
+        }
+};
+
+template <typename T>
+class TabularHash<T, 5, 2, 10, false> {
+public:
+        using hash_type = uint64_t;
+
+private:
+        constexpr static size_t table_size = 2048;
+
+        T table[table_size];
+
+public:
+        explicit TabularHash(uint32_t seed = 0) {
+                std::uniform_int_distribution<uint32_t> rnd;
+                std::mt19937 mt(seed);
+
+                for (size_t i = 0; i < table_size; ++i) {
+                        table[i] = rnd(mt);
+                }
+        }
+
+        uint64_t operator()(T key) const {
+                uint64_t res = 0;
+                T shifted = key >> 5;
+                res ^= table[shifted & 0x3FF];
+                res ^= table[1024 + ((shifted >> 10) & 0x3FF)];
+
+                return res;
         }
 };
 
 template <typename T, bool add_key>
-class TabularHash<T, 2, 2, 10, add_key> {
+class TabularHash<T, 0, 2, 10, add_key> {
+public:
+        using hash_type = uint64_t;
+
+private:
+        constexpr static size_t table_size = 2048;
+
+        T table[table_size];
+
+public:
+        explicit TabularHash(uint32_t seed = 0) {
+                std::uniform_int_distribution<uint32_t> rnd;
+                std::mt19937 mt(seed);
+
+                for (size_t i = 0; i < table_size; ++i) {
+                        table[i] = rnd(mt);
+                }
+        }
+
+        uint64_t operator()(T key) const {
+                uint64_t res = 0;
+                res ^= table[key & 0x3FF];
+                res ^= table[1024 + ((key >> 10) & 0x3FF)];
+
+                return res;
+        }
+};
+
+template <typename T>
+class TabularHash<T, 2, 2, 10, true> {
 public:
         using hash_type = uint64_t;
 
@@ -234,11 +409,37 @@ public:
                 res ^= table[shifted & 0x3FF];
                 res ^= table[1024 + ((shifted >> 10) & 0x3FF)];
 
-                if (add_key) {
-                        return res ^ (key & 0x3);
-                } else {
-                        return res;
+                return res ^ (key & 0x3);
+        }
+};
+
+template <typename T>
+class TabularHash<T, 2, 2, 10, false> {
+public:
+        using hash_type = uint64_t;
+
+private:
+        constexpr static size_t table_size = 2048;
+
+        T table[table_size];
+
+public:
+        explicit TabularHash(uint32_t seed = 0) {
+                std::uniform_int_distribution<uint32_t> rnd;
+                std::mt19937 mt(seed);
+
+                for (size_t i = 0; i < table_size; ++i) {
+                        table[i] = rnd(mt);
                 }
+        }
+
+        uint64_t operator()(T key) const {
+                uint64_t res = 0;
+                T shifted = key >> 2;
+                res ^= table[shifted & 0x3FF];
+                res ^= table[1024 + ((shifted >> 10) & 0x3FF)];
+
+                return res;
         }
 };
 

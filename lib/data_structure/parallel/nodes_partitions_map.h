@@ -2,9 +2,11 @@
 
 #include <type_traits>
 
-#include "data_structure/parallel/hash_table.h"
+#include "data_structure/parallel/hardware.h"
+#include "data_structure/parallel/adaptive_hash_table.h"
 
 namespace parallel {
+
 
 template <typename _key_type, typename _value_type>
 class hash_table_map {
@@ -15,7 +17,8 @@ public:
         using map_type = hash_map<key_type, value_type>;
 
         explicit hash_table_map(uint64_t)
-                :       map(get_max_size_to_fit_l1())
+                :       start_size(get_max_size_to_fit(mem))
+                ,       map(start_size)
         {}
 
         inline bool contains(key_type key, value_type& value) {
@@ -24,36 +27,46 @@ public:
 
         inline void clear() {
                 map.clear();
-                map.reserve(get_max_size_to_fit_l1());
+                map.reserve(start_size);
         }
 
         inline value_type& operator[](key_type key) {
                 return map[key];
         }
 
-        inline size_t ht_memory_size() const {
+        inline size_t memory_size() const {
                 return map.ht_memory_size();
         }
 
-        inline typename map_type::Iterator begin() {
-                return map.begin();
+        inline size_t size() const {
+                return map.size();
         }
 
-        inline typename map_type::Iterator end() {
-                return map.end();
+#ifdef PERFORMANCE_STATISTICS
+        static void reset_statistics() {
+                map_type::reset_statistics();
         }
+
+        static void print_statistics() {
+                map_type::print_statistics();
+        }
+
+        void print_full_statistics() const {
+                map_type::print_full_statistics();
+        }
+#endif
 
 private:
+        //static constexpr uint64_t mem = g_l2_cache_size;
+        static constexpr uint64_t mem = g_l3_cache_size;
+
+        size_t start_size;
         map_type map;
 
         static constexpr size_t size_factor = map_type::size_factor;
 
-        static constexpr size_t get_max_size_to_fit_l1() {
-                // (SizeFactor + 1.1) * max_size * sizeof(Element) + sizeof(Position) * max_size Bytes = 16 * 1024 Bytes,
-                // where 16 * 1024 Bytes is half of L1 cache and (2 + 1.1) * max_size * 8 + 4 * max_size Bytes
-                // is the size of a hash table. We calculate that max_size ~ 560.
-                using element_type = typename map_type::Element;
-                return round_up_to_previous_power_2( 32 * 1024 / (sizeof(element_type) * (size_factor)) );
+        static size_t get_max_size_to_fit(uint64_t mem) {
+                return map_type::get_max_size_to_fit(mem);
         }
 };
 
@@ -64,13 +77,13 @@ public:
         using key_type = _key_type;
         using value_type = _value_type;
 
-        explicit array_map(uint64_t _max_size = 0)
+        explicit array_map(uint64_t _max_size)
                 :       max_size(_max_size)
         {
                 init(max_size);
         }
 
-        inline void init(uint64_t _max_size) {
+        inline void init(uint64_t _max_size, uint64_t) {
                 map.assign(_max_size, non_initialized);
                 accessed.reserve(128);
         }
@@ -102,6 +115,14 @@ public:
                 return map.end();
         }
 
+        inline size_t memory_size() const {
+                return map.size() * sizeof(value_type);
+        }
+
+        inline size_t size() const {
+                return accessed.size();
+        }
+
 private:
         static constexpr value_type non_initialized = std::numeric_limits<value_type>::max();
 
@@ -117,7 +138,8 @@ template <
         typename _key_type,
         typename _value_type,
         uint64_t l1_cache_size = 32 * 1024 * sizeof(char),
-        uint64_t l2_cache_size = 256 * 1024 * sizeof(char)
+        uint64_t l2_cache_size = 256 * 1024 * sizeof(char),
+        uint64_t l3_cache_size = 20480 * 1024 * sizeof(char)
 >
 class cache_aware_map_impl {
 public:
@@ -131,9 +153,10 @@ public:
 
         static_assert(std::is_integral<key_type>::value, "key_type shoud be integral");
 
-        cache_aware_map_impl(uint64_t _max_size)
-                :       small_map(_max_size)
-                ,       max_size(_max_size)
+        cache_aware_map_impl(uint64_t _max_size, uint64_t _start_size)
+                :       small_map(_max_size, _start_size)
+                ,       max_size(_max_size, _start_size)
+                ,       large_map_mem(max_size * sizeof(typename large_map_type::value_type))
                 ,       cur_container(cur_container_type::SMALL)
         {
                 try_swap_containers();
@@ -148,6 +171,7 @@ public:
         }
 
         inline void clear() {
+                cur_container = cur_container_type::SMALL;
                 small_map.clear();
                 large_map.clear();
         }
@@ -164,12 +188,24 @@ public:
                 return large_map[key];
         }
 
-        size_t memory_size() const {
+        inline size_t memory_size() const {
                 if (cur_container == cur_container_type::SMALL) {
-                        return small_map.ht_memory_size();
+                        return small_map.memory_size();
                 } else {
                         return large_map.size() * sizeof(value_type);
                 }
+        }
+
+        inline size_t size() const {
+                if (cur_container == cur_container_type::SMALL) {
+                        return small_map.size();
+                } else {
+                        return large_map.size();
+                }
+        }
+
+        inline size_t is_max_size() const {
+                return small_map.memory_size() >= l2_cache_size / 2;
         }
 private:
         enum class cur_container_type {
@@ -179,12 +215,18 @@ private:
 
         small_map_type small_map;
         large_map_type large_map;
-        std::vector<key_type> accessed;
         uint64_t max_size;
+        const uint64_t large_map_mem;
         cur_container_type cur_container;
 
         inline bool try_swap_containers() {
-                if (cur_container == cur_container_type::SMALL && small_map.ht_memory_size() > l2_cache_size) {
+                if (cur_container == cur_container_type::SMALL) {
+                        uint64_t small_map_mem = small_map.memory_size();
+
+                        if (small_map_mem <= g_l2_cache_size && small_map_mem <= large_map_mem) {
+                                return false;
+                        }
+
                         large_map.init(max_size);
 
                         for (const auto& rec : small_map) {
