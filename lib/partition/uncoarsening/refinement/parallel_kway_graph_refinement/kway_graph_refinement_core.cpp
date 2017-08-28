@@ -966,7 +966,7 @@ inline bool kway_graph_refinement_core::local_move_back_node(thread_data_refinem
                                                              NodeID node,
                                                              PartitionID from,
                                                              PartitionID to) const {
-        (*td.nodes_partitions)[node] = from;
+        td.set_local_partition(node, from);
         NodeWeight this_nodes_weight = td.G.getNodeWeight(node);
 
 //        td.parts_weights[from].get().fetch_add(this_nodes_weight, std::memory_order_relaxed);
@@ -1024,7 +1024,7 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
         td.parts_weights[to] = part_weight + this_nodes_weight;
 
 
-        (*td.nodes_partitions)[node] = to;
+        td.set_local_partition(node, to);
 //        td.parts_weights[from].get().fetch_sub(this_nodes_weight, std::memory_order_relaxed);
 //        td.parts_sizes[to].get().fetch_add(1, std::memory_order_relaxed);
 //        td.parts_sizes[from].get().fetch_sub(1, std::memory_order_relaxed);

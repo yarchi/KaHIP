@@ -419,6 +419,8 @@ struct PartitionConfig
         bool parallel_coarsening_lp = false;
         bool check_cut = false;
         bool fast_contract_clustering = false;
+        bool shuffle_graph = false;
+        bool sort_edges = false;
 };
 
 

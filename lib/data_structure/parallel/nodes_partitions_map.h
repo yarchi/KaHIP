@@ -16,7 +16,7 @@ public:
         using value_type = _value_type;
         using map_type = hash_map<key_type, value_type>;
 
-        explicit hash_table_map(uint64_t)
+        explicit hash_table_map(uint64_t, uint64_t mem)
                 :       start_size(get_max_size_to_fit(mem))
                 ,       map(start_size)
         {}
@@ -58,7 +58,7 @@ public:
 
 private:
         //static constexpr uint64_t mem = g_l2_cache_size;
-        static constexpr uint64_t mem = g_l3_cache_size;
+        //static constexpr uint64_t mem = g_l3_cache_size;
 
         size_t start_size;
         map_type map;

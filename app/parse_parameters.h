@@ -185,6 +185,8 @@ int parse_parameters(int argn, char **argv,
         struct arg_lit *parallel_coarsening_lp               = arg_lit0(NULL, "parallel_coarsening_lp", "(Default: disabled)");
         struct arg_lit *check_cut                            = arg_lit0(NULL, "check_cut", "(Default: disabled)");
         struct arg_lit *fast_contract_clustering             = arg_lit0(NULL, "fast_contract_clustering", "(Default: disabled)");
+        struct arg_lit *shuffle_graph                        = arg_lit0(NULL, "shuffle_graph", "(Default: disabled)");
+        struct arg_lit *sort_edges                           = arg_lit0(NULL, "sort_edges", "(Default: disabled)");
         struct arg_end *end                                  = arg_end(100);
 
         // Define argtable.
@@ -249,6 +251,8 @@ int parse_parameters(int argn, char **argv,
                 parallel_coarsening_lp,
                 check_cut,
                 fast_contract_clustering,
+                shuffle_graph,
+                sort_edges,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -1164,6 +1168,14 @@ int parse_parameters(int argn, char **argv,
         
         if (fast_contract_clustering->count > 0) {
                 partition_config.fast_contract_clustering = true;
+        }
+
+        if (shuffle_graph->count > 0) {
+                partition_config.shuffle_graph = true;
+        }
+
+        if (sort_edges->count > 0) {
+                partition_config.sort_edges = true;
         }
 
         return 0;

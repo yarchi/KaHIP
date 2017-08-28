@@ -32,6 +32,8 @@
 #include <deque>
 #include <iterator>
 
+#undef OUTPUT_GLOBAL_STAT
+
 class kway_stop_rule {
 public:
         kway_stop_rule(PartitionConfig & config) {};
@@ -67,6 +69,7 @@ inline bool kway_simple_stop_rule::search_should_stop(unsigned int min_cut_idx,
         return cur_idx - min_cut_idx > search_limit;
 }
 
+#define TEST_STOPPING_RULE
 #ifndef TEST_STOPPING_RULE
 class kway_adaptive_stop_rule : public kway_stop_rule {
 public:

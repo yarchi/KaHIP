@@ -50,6 +50,7 @@ class complete_boundary {
 
                 void build();
                 void build_from_coarser(complete_boundary * coarser_boundary, NodeID coarser_no_nodes, CoarseMapping * cmapping);
+                void build_from_coarser(complete_boundary* coarser_boundary, std::vector<uint8_t>& bounday_nodes);
 
                 inline void insert(NodeID node, PartitionID insert_node_into, boundary_pair * pair);
                 inline bool contains(NodeID node, PartitionID partition, boundary_pair * pair);
@@ -228,6 +229,54 @@ inline void complete_boundary::build_from_coarser(complete_boundary * coarser_bo
 
         block_pairs::iterator iter; 
         for(iter = m_pairs.begin(); iter != m_pairs.end(); iter++ ) { 
+                data_boundary_pair& value = iter->second;
+                value.edge_cut /= 2;
+        }
+}
+
+inline void complete_boundary::build_from_coarser(complete_boundary* coarser_boundary,
+                                                  std::vector<uint8_t>& bounday_nodes) {
+
+        graph_access & G = *m_graph_ref;
+
+        for(PartitionID block = 0; block < G.get_partition_count(); block++) {
+                m_block_infos[block].block_weight   = 0;
+                m_block_infos[block].block_no_nodes = 0;
+        }
+
+        forall_nodes(G, n) {
+                PartitionID source_partition = G.getPartitionIndex(n);
+                m_block_infos[source_partition].block_no_nodes += 1;
+
+                if( G.getNodeDegree(n) == 0 ) {
+                        m_singletons.push_back(n);
+                }
+
+                if(!bounday_nodes[n]) continue;
+
+                forall_out_edges(G, e, n) {
+                        NodeID targetID = G.getEdgeTarget(e);
+                        PartitionID target_partition = G.getPartitionIndex(targetID);
+                        bool is_cut_edge             = (source_partition != target_partition);
+
+                        if(is_cut_edge) {
+                                boundary_pair bp;
+                                bp.k   = m_graph_ref->get_partition_count();
+                                bp.lhs = source_partition;
+                                bp.rhs = target_partition;
+                                update_lazy_values(&bp);
+                                m_pairs[bp].edge_cut += G.getEdgeWeight(e);
+                                insert(n, source_partition, &bp);
+                        }
+                } endfor
+        } endfor
+
+        for(PartitionID p = 0; p < G.get_partition_count(); p++) {
+                setBlockWeight(p, coarser_boundary->getBlockWeight(p));
+        }
+
+        block_pairs::iterator iter;
+        for(iter = m_pairs.begin(); iter != m_pairs.end(); iter++ ) {
                 data_boundary_pair& value = iter->second;
                 value.edge_cut /= 2;
         }

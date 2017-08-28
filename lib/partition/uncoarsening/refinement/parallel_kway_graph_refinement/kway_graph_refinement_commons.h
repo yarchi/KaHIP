@@ -161,11 +161,17 @@ public:
                 //return nodes_partitions[node] != -1 ? nodes_partitions[node] :  G.getPartitionIndex(node);
         }
 
+        inline void set_local_partition(NodeID id, PartitionID part_id) {
+                (*nodes_partitions)[id] = part_id;
+        }
+
         void partial_reset_thread_data() {
                 m_reset_counter.fetch_add(1, std::memory_order_release);
 
                 if (nodes_partitions.get() == nullptr) {
-                        nodes_partitions = std::make_unique<nodes_partitions_hash_table>(G.number_of_nodes());
+                        ALWAYS_ASSERT(bits_number(G.number_of_nodes() - 1) > 0);
+                        size_t mem_size = get_mem_for_thread(id, config.num_threads);
+                        nodes_partitions =std::make_unique<nodes_partitions_hash_table>(G.number_of_nodes(), mem_size);
                 }
 
                 if (queue.get() == nullptr) {
