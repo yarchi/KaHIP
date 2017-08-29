@@ -87,22 +87,23 @@ int main(int argn, char **argv) {
         timer t;
         if (!partition_config.shuffle_graph && !partition_config.sort_edges) {
                 graph_io::readGraphWeighted(G, graph_filename);
-                //double avg;
-                //double med;
-                //std::tie(avg, med) = average_chain_length(G);
-                //std::cout << "avg median chain len = " << avg << std::endl;
-                //std::cout << "median median chain len = " << med << std::endl;
+                auto hist = parallel::get_bit_diff_hist(G);
+
+                for (const auto& rec : hist) {
+                        std::cout << "num bit diff: " << rec.first << ", count: " << rec.second << std::endl;
+                }
+                std::cout << std::endl;
         } else {
                 ALWAYS_ASSERT(!partition_config.shuffle_graph || !partition_config.sort_edges);
                 if (partition_config.shuffle_graph) {
                         graph_access tmp_G;
                         graph_io::readGraphWeighted(tmp_G, graph_filename);
-                        shuffle_graph(tmp_G, G);
+                        parallel::shuffle_graph(tmp_G, G);
                 }
                 if (partition_config.sort_edges) {
                         graph_access tmp_G;
                         graph_io::readGraphWeighted(tmp_G, graph_filename);
-                        sort_edges(tmp_G, G);
+                        parallel::sort_edges(tmp_G, G);
                 }
         }
         std::cout << "io time: " << t.elapsed()  << std::endl;

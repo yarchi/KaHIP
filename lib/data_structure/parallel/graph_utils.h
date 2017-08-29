@@ -1,9 +1,13 @@
 #pragma once
 
+#include "data_structure/parallel/bits.h"
 #include "data_structure/graph_access.h"
 
 #include <algorithm>
 #include <vector>
+#include <unordered_map>
+
+namespace parallel {
 
 static void shuffle_graph(graph_access& graph, graph_access& shuffled_graph) {
         std::vector<NodeID> nodes_perm;
@@ -22,13 +26,13 @@ static void shuffle_graph(graph_access& graph, graph_access& shuffled_graph) {
                 NodeID node_perm = nodes_perm[node];
                 new_edges[node_perm].reserve(graph.getNodeDegree(node));
                 new_weights[node_perm] = graph.getNodeWeight(node);
-                forall_out_edges(graph, e, node) {
-                        NodeID target = graph.getEdgeTarget(e);
-                        NodeID target_perm = nodes_perm[target];
-                        EdgeWeight weight = graph.getEdgeWeight(e);
+                forall_out_edges(graph, e, node){
+                                        NodeID target = graph.getEdgeTarget(e);
+                                        NodeID target_perm = nodes_perm[target];
+                                        EdgeWeight weight = graph.getEdgeWeight(e);
 
-                        new_edges[node_perm].emplace_back(target_perm, weight);
-                } endfor
+                                        new_edges[node_perm].emplace_back(target_perm, weight);
+                                }endfor
         }
 
         shuffled_graph.start_construction(graph.number_of_nodes(), graph.number_of_edges());
@@ -46,95 +50,49 @@ static void shuffle_graph(graph_access& graph, graph_access& shuffled_graph) {
         shuffled_graph.finish_construction();
 }
 
-template <typename T>
-static void get_deltas(const std::vector<T>& input, std::vector<T>& deltas) {
-//        for (size_t i = 0; i + 1 < input.size(); ++i) {
-//                deltas.push_back(input[i + 1] - input[i]);
-//        }
-
-        size_t res = 0;
-        // 8 elements of size 8 bytes
-        size_t cache_line_size = 8;
-        size_t i = 0;
-        while (i < input.size()) {
-                T start = input[i];
-                T cur = start;
-                while (cur < start + cache_line_size) {
-                        ++res;
-                        ++i;
-                        cur = input[i];
-                }
+static void update_hist(const std::vector<uint32_t>& input, std::unordered_map<uint32_t, uint32_t>& hist,
+                        uint32_t count) {
+        for (size_t i = 0; i + 1 < input.size(); ++i) {
+                uint32_t res = parallel::least_significant_bit(input[i] ^ input[i + 1]);
+                hist[res] += count;
         }
 }
 
-double get_average_chain_length(graph_access& graph, NodeID delta) {
+static std::unordered_map<uint32_t, uint32_t> get_bit_diff_hist(graph_access& graph,
+                                                                const std::vector<uint32_t>* evaluate) {
         std::vector<NodeID> neighbors;
-
-        NodeID total_chain_length = 0;
-        NodeID num_chains = 0;
-
+        std::unordered_map<uint32_t, uint32_t> hist;
         for (NodeID node = 0; node < graph.number_of_nodes(); ++node) {
-                neighbors.clear();
+                uint32_t count = 1;
+                if (evaluate != nullptr) {
+                        count = !(*evaluate)[node];
 
-                neighbors.reserve(graph.getNodeDegree(node));
-
-                forall_out_edges(graph, e, node) {
-                        NodeID target = graph.getEdgeTarget(e);
-                        neighbors.push_back(target);
-                } endfor
-
-                if (neighbors.empty()) {
-                        continue;
-                }
-                std::sort(neighbors.begin(), neighbors.end());
-                NodeID chain_begin = 0;
-                for (size_t i = 0; i + 1 < neighbors.size(); ++i) {
-                        if (neighbors[i + 1] - neighbors[i] > delta) {
-                                ++num_chains;
-                                total_chain_length += neighbors[i] - neighbors[chain_begin];
-                                chain_begin = i + 1;
+                        if (count == 0) {
+                                continue;
                         }
                 }
+
+                neighbors.clear();
+                neighbors.reserve(graph.getNodeDegree(node));
+
+                forall_out_edges(graph, e, node){
+                                        NodeID target = graph.getEdgeTarget(e);
+                                        neighbors.push_back(target);
+                                }endfor
+
+                update_hist(neighbors, hist, count);
         }
 
-        return (total_chain_length + 0.0) / num_chains;
+        return hist;
+};
+
+static std::unordered_map<uint32_t, uint32_t> get_bit_diff_hist(graph_access& graph) {
+        return get_bit_diff_hist(graph, nullptr);
 }
 
-static std::pair<double, double> average_chain_length(graph_access& graph) {
-        std::vector<NodeID> neighbors;
-        std::vector<NodeID> deltas;
-        std::vector<NodeID> medians;
-        medians.reserve(graph.number_of_nodes());
-        size_t total_median = 0;
-        for (NodeID node = 0; node < graph.number_of_nodes(); ++node) {
-                neighbors.clear();
-                deltas.clear();
-
-                neighbors.reserve(graph.getNodeDegree(node));
-                deltas.reserve(graph.getNodeDegree(node));
-
-                forall_out_edges(graph, e, node) {
-                        NodeID target = graph.getEdgeTarget(e);
-                        neighbors.push_back(target);
-                } endfor
-
-                std::sort(neighbors.begin(), neighbors.end());
-                get_deltas(neighbors, deltas);
-                if (!deltas.empty()) {
-                        std::nth_element(deltas.begin(), deltas.begin() + deltas.size() / 2, deltas.end());
-                        NodeID median = deltas[deltas.size() / 2];
-                        medians.push_back(median);
-                        total_median += median;
-                }
-        }
-
-        std::nth_element(medians.begin(), medians.begin() + medians.size() / 2, medians.end());
-
-
-        auto res1 = get_average_chain_length(graph, (total_median + 0.0) / graph.number_of_nodes());
-        auto res2 = get_average_chain_length(graph, medians[medians.size() / 2]);
-
-        return {res1, res2};
+static std::unordered_map<uint32_t, uint32_t> get_bit_diff_hist(graph_access& graph,
+                                                                const std::vector<uint32_t>& evaluate) {
+        return get_bit_diff_hist(graph, &evaluate);
 }
 
 static void sort_edges(graph_access& graph, graph_access& sorted_graph) {
@@ -142,12 +100,12 @@ static void sort_edges(graph_access& graph, graph_access& sorted_graph) {
 
         for (NodeID node = 0; node < graph.number_of_nodes(); ++node) {
                 new_edges[node].reserve(graph.getNodeDegree(node));
-                forall_out_edges(graph, e, node) {
-                        NodeID target = graph.getEdgeTarget(e);
-                        EdgeWeight weight = graph.getEdgeWeight(e);
+                forall_out_edges(graph, e, node){
+                                        NodeID target = graph.getEdgeTarget(e);
+                                        EdgeWeight weight = graph.getEdgeWeight(e);
 
-                        new_edges[node].emplace_back(target, weight);
-                } endfor
+                                        new_edges[node].emplace_back(target, weight);
+                                }endfor
                 std::sort(new_edges[node].begin(), new_edges[node].end());
         }
 
@@ -164,4 +122,6 @@ static void sort_edges(graph_access& graph, graph_access& sorted_graph) {
         }
 
         sorted_graph.finish_construction();
+}
+
 }

@@ -5,6 +5,7 @@
 #include "data_structure/graph_access.h"
 #include "data_structure/parallel/algorithm.h"
 #include "data_structure/parallel/atomics.h"
+#include "data_structure/parallel/graph_utils.h"
 #include "data_structure/parallel/nodes_partitions_map.h"
 #include "data_structure/parallel/hash_table.h"
 #include "data_structure/parallel/spin_lock.h"
@@ -137,6 +138,17 @@ public:
 //                gains.reserve(100);
 //                moved.reserve(100);
 //                start_nodes.reserve(100);
+
+                computed_gain.resize(G.number_of_nodes());
+        }
+
+        ~thread_data_refinement_core() {
+                auto hist = get_bit_diff_hist(G, computed_gain);
+
+                for (const auto& rec : hist) {
+                        std::cout << "num bit diff: " << rec.first << ", count: " << rec.second << std::endl;
+                }
+                std::cout << std::endl;
         }
 
         thread_data_refinement_core(const thread_data_refinement_core& td) = delete;
@@ -224,6 +236,8 @@ public:
                 EdgeWeight max_degree = 0;
                 to = INVALID_PARTITION;
 
+                ++computed_gain[node];
+
                 m_round++;//can become zero again
                 forall_out_edges(G, e, node) {
                         NodeID target = G.getEdgeTarget(e);
@@ -291,5 +305,7 @@ private:
 
         std::vector<round_struct> m_local_degrees;
         uint32_t m_round;
+
+        std::vector<uint32_t> computed_gain;
 };
 }
