@@ -122,6 +122,7 @@ public:
                 size_t total_num_part_accesses = 0;
                 uint32_t total_tried_movements = 0;
                 uint32_t total_accepted_movements = 0;
+                uint32_t total_affected_movements = 0;
                 uint32_t total_scaned_neighbours = 0;
 
                 // time
@@ -166,6 +167,7 @@ public:
                         total_num_part_accesses += m_thread_data[id].get().num_part_accesses;
                         total_tried_movements += m_thread_data[id].get().tried_movements;
                         total_accepted_movements += m_thread_data[id].get().accepted_movements;
+                        total_affected_movements += m_thread_data[id].get().affected_movements;
                         total_scaned_neighbours += m_thread_data[id].get().scaned_neighbours;
                         total_performed_gain += m_thread_data[id].get().performed_gain;
                         total_unperformed_gain += m_thread_data[id].get().unperformed_gain;
@@ -201,6 +203,7 @@ public:
                 stat.total_num_part_accesses = total_num_part_accesses;
                 stat.total_tried_movements = total_tried_movements;
                 stat.total_accepted_movements = total_accepted_movements;
+                stat.total_affected_movements = total_affected_movements;
                 stat.total_scanned_neighbours = total_scaned_neighbours;
                 stat.total_performed_gain = total_performed_gain;
                 stat.total_unperformed_gain = total_unperformed_gain;
@@ -212,6 +215,7 @@ public:
                 std::cout << "Total num part accesses\t" << total_num_part_accesses << std::endl;
                 std::cout << "Total tried moves\t" << total_tried_movements << std::endl;
                 std::cout << "Total accepted moves\t" << total_accepted_movements << std::endl;
+                std::cout << "Total affected moves\t" << total_affected_movements << std::endl;
                 std::cout << "Total scanned neighbours\t" << total_scaned_neighbours << std::endl;
                 std::cout << "Total performed gain\t" << total_performed_gain << std::endl;
                 std::cout << "Total unperformed gain\t" << total_unperformed_gain << std::endl;
@@ -296,6 +300,7 @@ public:
 
                 std::cout << "Total tried moves\t" << stat.total_tried_movements << std::endl;
                 std::cout << "Total accepted moves\t" << stat.total_accepted_movements << std::endl;
+                std::cout << "Total affected moves\t" << stat.total_affected_movements << std::endl;
                 std::cout << "Total scanned neighbours\t" << stat.total_scanned_neighbours << std::endl;
                 std::cout << "Total unperformed gain\t" << stat.total_unperformed_gain << std::endl;
                 std::cout << "Total stop empty queue\t" << stat.total_stop_empty_queue << std::endl;
@@ -348,6 +353,7 @@ public:
                 uint64_t total_num_part_accesses = 0;
                 uint32_t total_tried_movements = 0;
                 uint32_t total_accepted_movements = 0;
+                uint32_t total_affected_movements = 0;
                 uint32_t total_scanned_neighbours = 0;
 
                 int total_performed_gain = 0;
@@ -365,6 +371,7 @@ public:
                         uint64_t num_part_accesses = 0;
                         uint32_t tried_movements = 0;
                         uint32_t accepted_movements = 0;
+                        uint32_t affected_movements = 0;
                         uint32_t scaned_neighbours = 0;
 
                         double total_thread_try_move_time = 0.0;
@@ -385,6 +392,7 @@ public:
                                 total_thread_time += ps.total_thread_time;
                                 tried_movements += ps.tried_movements;
                                 accepted_movements += ps.accepted_movements;
+                                affected_movements += ps.affected_movements;
                                 scaned_neighbours += ps.scaned_neighbours;
                                 total_thread_try_move_time += ps.total_thread_try_move_time;
                                 total_thread_accepted_move_time += ps.total_thread_accepted_move_time;
@@ -415,6 +423,7 @@ public:
                         total_num_part_accesses += stat.total_num_part_accesses;
                         total_tried_movements += stat.total_tried_movements;
                         total_accepted_movements += stat.total_accepted_movements;
+                        total_affected_movements += stat.total_affected_movements;
                         total_scanned_neighbours += stat.total_scanned_neighbours;
                         total_performed_gain += stat.total_performed_gain;
                         total_unperformed_gain += stat.total_unperformed_gain;

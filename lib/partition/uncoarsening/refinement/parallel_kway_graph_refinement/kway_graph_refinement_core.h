@@ -35,6 +35,9 @@ public:
                                                     std::vector<std::future<bool>>& futures,
                                                     bool& is_more_that_5percent_moved) const;
 
+        EdgeWeight apply_moves(thread_data_refinement_core& td, bool compute_touched_partitions,
+                               std::unordered_map<PartitionID, PartitionID>& touched_blocks) const;
+
 private:
         using moved_nodes_hash_map = parallel::hash_map_with_erase<NodeID, std::pair<uint32_t, PartitionID>>;
         using moved_hash_set = parallel::hash_set<NodeID>; // moved by local search
@@ -65,13 +68,19 @@ private:
         void unroll_relaxed_moves(thread_data_refinement_core& td, moved_nodes_hash_map& moved_nodes,
                                   int start, int end, int& cut_improvement) const;
 
+        void unroll_relaxed_moves(thread_data_refinement_core& td,
+                                  std::vector<NodeID>& transpositions,
+                                  std::vector<PartitionID>& from_partitions,
+                                  std::vector<Gain>& gains,
+                                  int& cut_improvement) const;
+
         void relaxed_move_node_back(thread_data_refinement_core& td, NodeID node, PartitionID from,
                                     PartitionID to) const;
 
         inline bool relaxed_move_node(thread_data_refinement_core& td, NodeID node, PartitionID from,
                                       PartitionID to) const;
 
-        void unroll_moves(thread_data_refinement_core& td, int min_cut_index) const;
+        uint32_t unroll_moves(thread_data_refinement_core& td, int min_cut_index) const;
 
         inline bool local_move_back_node(thread_data_refinement_core& td, NodeID node, PartitionID from,
                                          PartitionID to) const;

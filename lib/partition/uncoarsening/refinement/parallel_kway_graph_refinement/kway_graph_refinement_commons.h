@@ -57,6 +57,7 @@ public:
         double total_thread_time;
         uint32_t tried_movements;
         uint32_t accepted_movements;
+        uint32_t affected_movements;
         double total_thread_try_move_time;
         double total_thread_accepted_move_time;
         double total_thread_unroll_move_time;
@@ -105,6 +106,7 @@ public:
                 ,       total_thread_time(0.0)
                 ,       tried_movements(0)
                 ,       accepted_movements(0)
+                ,       affected_movements(0)
                 ,       total_thread_try_move_time(0.0)
                 ,       total_thread_unroll_move_time(0.0)
                 ,       scaned_neighbours(0)
@@ -257,6 +259,58 @@ public:
                         }
                 }
                 endfor
+
+                if (to != INVALID_PARTITION) {
+                        ext_degree = max_degree;
+                } else {
+                        ext_degree = 0;
+                }
+
+                if (m_local_degrees[from].round != m_round) {
+                        m_local_degrees[from].local_degree = 0;
+                }
+
+                return max_degree - m_local_degrees[from].local_degree;
+        }
+
+        inline Gain compute_gain_actual(NodeID node, PartitionID from, PartitionID& to, EdgeWeight& ext_degree) {
+                //ASSERT_TRUE(from == get_local_partition(node));
+                //for all incident partitions compute gain
+                //return max gain and "to" partition
+                EdgeWeight max_degree = 0;
+                to = INVALID_PARTITION;
+
+                m_round++;//can become zero again
+                forall_out_edges(G, e, node) {
+                        NodeID target = G.getEdgeTarget(e);
+                        PartitionID target_partition = G.getPartitionIndex(target);
+
+                        if (m_local_degrees[target_partition].round == m_round) {
+                                m_local_degrees[target_partition].local_degree += G.getEdgeWeight(e);
+                        } else {
+                                m_local_degrees[target_partition].local_degree = G.getEdgeWeight(e);
+                                m_local_degrees[target_partition].round = m_round;
+                        }
+
+
+                        if (target_partition != from && m_local_degrees[target_partition].local_degree >= max_degree) {
+                                if (m_local_degrees[target_partition].local_degree > max_degree) {
+                                        max_degree = m_local_degrees[target_partition].local_degree;
+                                        to = target_partition;
+                                } else {
+                                        //break ties randomly
+#ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
+                                        bool accept = random_functions::nextBool();
+#else
+                                        bool accept = rnd.bit();
+#endif
+                                        if (accept) {
+                                                max_degree = m_local_degrees[target_partition].local_degree;
+                                                to = target_partition;
+                                        }
+                                }
+                        }
+                } endfor
 
                 if (to != INVALID_PARTITION) {
                         ext_degree = max_degree;

@@ -155,7 +155,9 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                 ++td.stop_max_number_of_swaps;
         }
 
-        unroll_moves(td, min_cut_index);
+        uint32_t unrolled_moves = unroll_moves(td, min_cut_index);
+        td.accepted_movements -= unrolled_moves;
+        td.nodes_partitions->clear();
 
         td.transpositions.push_back(sentinel);
         td.from_partitions.push_back(sentinel);
@@ -372,7 +374,7 @@ std::pair<EdgeWeight, uint32_t> kway_graph_refinement_core::gain_recalculation(t
         return std::make_pair(best_total_gain, end - start);
 }
 
-void kway_graph_refinement_core::unroll_moves(thread_data_refinement_core& td, int min_cut_index) const {
+uint32_t kway_graph_refinement_core::unroll_moves(thread_data_refinement_core& td, int min_cut_index) const {
         uint32_t unrolled_moves = 0;
         // unrolled_moves <  td.transpositions.size() - (min_cut_index + 1)
         while (unrolled_moves + min_cut_index + 1 < td.transpositions.size()) {
@@ -384,6 +386,8 @@ void kway_graph_refinement_core::unroll_moves(thread_data_refinement_core& td, i
 
                 ++unrolled_moves;
         }
+
+        return unrolled_moves;
 }
 
 std::pair<EdgeWeight, uint32_t>
@@ -398,8 +402,7 @@ kway_graph_refinement_core::apply_moves(uint32_t num_threads,
 
         moved_nodes_hash_map moved_nodes(get_max_size_to_fit_l1<moved_nodes_hash_map>());
         for (size_t id = 0; id < num_threads; ++id) {
-                overall_gain += apply_moves(threads_data[id].get(), moved_nodes, compute_touched_partitions,
-                                            touched_blocks, reactivated_vertices);
+                overall_gain += apply_moves(threads_data[id].get(), compute_touched_partitions, touched_blocks);
         }
         overall_moved = moved_nodes.size();
         return std::make_pair(overall_gain, overall_moved);
@@ -606,6 +609,99 @@ bool kway_graph_refinement_core::is_moved(moved_nodes_hash_map& moved_nodes, Nod
 //
 //        return std::make_pair(overall_gain, overall_moved);
 //}
+
+EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& td,
+                                                   bool compute_touched_partitions,
+                                                   std::unordered_map<PartitionID, PartitionID>& touched_blocks) const {
+        CLOCK_START;
+        ALWAYS_ASSERT(td.transpositions.size() == td.from_partitions.size());
+        ALWAYS_ASSERT(td.transpositions.size() == td.to_partitions.size());
+        ALWAYS_ASSERT(td.transpositions.size() == td.gains.size());
+        td.transpositions_size += td.transpositions.size();
+
+        auto min_cut_iter = td.min_cut_indices.begin();
+        EdgeWeight cut_improvement = 0;
+        Gain total_expected_gain = 0;
+        std::vector<NodeID> transpositions;
+        std::vector<PartitionID> from_partitions;
+        std::vector<EdgeWeight> gains;
+        uint32_t aff = 0;
+
+        for (int index = 0; index < (int) td.transpositions.size(); ++index) {
+                int min_cut_index = min_cut_iter->first;
+                int next_index = min_cut_iter->second;
+                ++min_cut_iter;
+
+                if (min_cut_index == -1) {
+                        index = next_index;
+                        continue;
+                }
+
+                int best_total_gain = 0;
+                int total_gain = 0;
+                transpositions.reserve(min_cut_index - index + 1);
+                from_partitions.reserve(min_cut_index - index + 1);
+                gains.reserve(min_cut_index - index + 1);
+                transpositions.clear();
+                from_partitions.clear();
+                gains.clear();
+
+                while (index <= min_cut_index) {
+                        NodeID node = td.transpositions[index];
+                        PartitionID expected_from = td.from_partitions[index];
+                        PartitionID expected_to = td.to_partitions[index];
+                        EdgeWeight expected_gain = td.gains[index];
+
+                        PartitionID from = td.G.getPartitionIndex(node);
+                        PartitionID to;
+                        EdgeWeight ext_degree;
+                        EdgeWeight gain = td.compute_gain_actual(node, from, to, ext_degree);
+
+                        if (expected_from != from || expected_to != to || expected_gain != gain) {
+                                ++td.affected_movements;
+                                ++aff;
+                        }
+
+                        if (to == INVALID_PARTITION) {
+                                ALWAYS_ASSERT(aff > 0);
+                                ++index;
+                                continue;
+                        }
+
+                        total_expected_gain += expected_gain;
+
+                        bool success = relaxed_move_node(td, node, from, to);
+
+                        if (success) {
+                                transpositions.push_back(node);
+                                from_partitions.push_back(from);
+                                gains.push_back(gain);
+
+                                if (compute_touched_partitions) {
+                                        touched_blocks[from] = from;
+                                        touched_blocks[to] = to;
+                                }
+
+                                cut_improvement += gain;
+                                total_gain += gain;
+
+                                if (total_gain > best_total_gain || (total_gain == best_total_gain && td.rnd.bit())) {
+                                        best_total_gain = total_gain;
+                                        from_partitions.clear();
+                                        transpositions.clear();
+                                        gains.clear();
+                                }
+                        }
+                        ++index;
+                }
+                unroll_relaxed_moves(td, transpositions, from_partitions, gains, cut_improvement);
+                index = next_index;
+        }
+        td.time_move_nodes += CLOCK_END_TIME;
+        td.unperformed_gain += total_expected_gain - cut_improvement;
+        td.performed_gain += cut_improvement;
+        return cut_improvement;
+}
 
 EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& td, moved_nodes_hash_map& moved_nodes,
                                                    bool compute_touched_partitions,
@@ -942,6 +1038,22 @@ void kway_graph_refinement_core::unroll_relaxed_moves(thread_data_refinement_cor
         }
 }
 
+void kway_graph_refinement_core::unroll_relaxed_moves(thread_data_refinement_core& td,
+                                                      std::vector<NodeID>& transpositions,
+                                                      std::vector<PartitionID>& from_partitions,
+                                                      std::vector<Gain>& gains,
+                                                      int& cut_improvement) const {
+        size_t size = transpositions.size();
+        for (size_t i = 0; i < transpositions.size(); ++i) {
+                size_t index = size - i - 1;
+                NodeID node = transpositions[index];
+                PartitionID from = from_partitions[index];
+                PartitionID to = td.G.getPartitionIndex(node);
+                cut_improvement -= gains[index];
+                relaxed_move_node_back(td, node, from, to);
+        }
+}
+
 void kway_graph_refinement_core::relaxed_move_node_back(thread_data_refinement_core& td, NodeID node, PartitionID from,
                                                         PartitionID to) const {
         ALWAYS_ASSERT(td.G.getPartitionIndex(node) == to);
@@ -966,7 +1078,7 @@ inline bool kway_graph_refinement_core::local_move_back_node(thread_data_refinem
                                                              NodeID node,
                                                              PartitionID from,
                                                              PartitionID to) const {
-        td.set_local_partition(node, from);
+        // td.set_local_partition(node, from);
         NodeWeight this_nodes_weight = td.G.getNodeWeight(node);
 
 //        td.parts_weights[from].get().fetch_add(this_nodes_weight, std::memory_order_relaxed);
