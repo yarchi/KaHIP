@@ -1,5 +1,10 @@
 #include <chrono>
 #include <iostream>
+#include <mutex>
+#include <thread>
+
+static std::mutex time_mutex;
+#define SYNC std::lock_guard<std::mutex> guard(time_mutex)
 
 #define TIME
 
@@ -15,6 +20,10 @@ std::chrono::high_resolution_clock::now()
 std::chrono::time_point<std::chrono::high_resolution_clock> __begin; \
 do {__begin = std::chrono::high_resolution_clock::now();} while (false)
 
+#define CLOCK_END_THREAD_SAFE(message) \
+{SYNC; std::cerr << "thread " << std::this_thread::get_id() << ": " << message << '\t' << std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - __begin).count() \
+<< std::endl;} while (false)
+
 #define CLOCK_END1(message) \
 {std::cout << message << '\t' << std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - __begin).count() \
 << std::endl;} while (false)
@@ -29,7 +38,7 @@ std::chrono::duration<double>(CLOCK - __begin).count()
 #define CLOCK_START_N do {__begin = std::chrono::high_resolution_clock::now();} while (false)
 
 #define PRINT_TIME(message, time) \
-{std::cout << message << '\t' << std::chrono::duration<double>(time).count() \
+{SYNC std::cout << message << '\t' << std::chrono::duration<double>(time).count() \
 << std::endl;} while (false)
 
 #else

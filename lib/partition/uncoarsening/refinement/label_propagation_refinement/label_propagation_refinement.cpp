@@ -711,7 +711,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(PartitionCon
 //                        return lhs.second < rhs.second;
 //                });
                 ips4o::parallel::sort(permutation.begin(), permutation.end(), [&](const Pair& lhs, const Pair& rhs) {
-                        return lhs.second < rhs.second;
+                        return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
                 }, config.num_threads);
                 CLOCK_END("Uncoarsening: Sort");
         }

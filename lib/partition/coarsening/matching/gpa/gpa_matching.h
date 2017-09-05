@@ -39,12 +39,17 @@ class gpa_matching : public matching{
                                 NodeID & no_of_coarse_vertices,
                                 NodePermutationMap & permutation);
         private:
+                std::vector<EdgeRatingType> ratings;
+                std::vector< bool > decision;
+                std::vector<EdgeID> a_matching;
+                std::vector<EdgeID> unpacked_path;
+
                 void init(graph_access & G, 
                           const PartitionConfig & partition_config, 
                           NodePermutationMap & permutation, 
                           Matching & edge_matching,
-                          std::vector<EdgeID>  & edge_permutation,
-                          std::vector<NodeID> & sources); 
+                          std::vector<std::pair<EdgeID, EdgeRatingType>>  & edge_permutation,
+                          std::vector<NodeID> & sources);
 
                 void extract_paths_apply_matching( graph_access & G, 
                                                    std::vector<NodeID> & sources,

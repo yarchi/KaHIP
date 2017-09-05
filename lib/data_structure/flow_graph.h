@@ -58,6 +58,11 @@ public:
                 m_adjacency_lists.resize(nodes);
                 m_num_nodes = nodes;
                 m_num_edges = edges;
+
+                uint32_t avg_deg = m_num_edges / m_num_nodes;
+                for (size_t i = 0; i < m_num_nodes; ++i) {
+                        m_adjacency_lists[i].reserve(std::max(avg_deg, 100u));
+                }
         }
  
         void finish_construction() {};

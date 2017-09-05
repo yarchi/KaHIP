@@ -70,7 +70,7 @@ libkaffpa_files = [   'lib/data_structure/graph_hierarchy.cpp',
                       'lib/partition/coarsening/clustering/node_ordering.cpp',
                       'lib/partition/coarsening/clustering/size_constraint_label_propagation.cpp',
                       'lib/partition/initial_partitioning/initial_partitioning.cpp',
-		      'lib/partition/initial_partitioning/parallel/initial_partitioning.cpp',
+		              'lib/partition/initial_partitioning/parallel/initial_partitioning.cpp',
                       'lib/partition/initial_partitioning/initial_partitioner.cpp',
                       'lib/partition/initial_partitioning/initial_partition_bipartition.cpp',
                       'lib/partition/initial_partitioning/initial_refinement/initial_refinement.cpp',
@@ -100,9 +100,9 @@ libkaffpa_files = [   'lib/data_structure/graph_hierarchy.cpp',
                       'lib/partition/uncoarsening/refinement/kway_graph_refinement/kway_graph_refinement.cpp',
                       'lib/partition/uncoarsening/refinement/kway_graph_refinement/kway_graph_refinement_core.cpp',
                       'lib/partition/uncoarsening/refinement/kway_graph_refinement/kway_graph_refinement_commons.cpp',
-		      'lib/partition/uncoarsening/refinement/kway_graph_refinement/kway_stop_rule.cpp',
-		      'lib/partition/uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.cpp',
-		      'lib/partition/uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_core.cpp',
+		              'lib/partition/uncoarsening/refinement/kway_graph_refinement/kway_stop_rule.cpp',
+		              'lib/partition/uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.cpp',
+		              'lib/partition/uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_core.cpp',
                       'lib/partition/uncoarsening/refinement/cycle_improvements/augmented_Qgraph_fabric.cpp', 
                       'lib/partition/uncoarsening/refinement/cycle_improvements/advanced_models.cpp', 
                       'lib/partition/uncoarsening/refinement/kway_graph_refinement/multitry_kway_fm.cpp', 
@@ -125,7 +125,7 @@ libkaffpa_parallel_async  = ['lib/parallel_mh/parallel_mh_async.cpp',
 if env['program'] == 'kaffpa':
         env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS -D_REENTRANT -U_OPENMP')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')
-        env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
+        env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'tbbmalloc_proxy', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
 if env['program'] == 'kaffpa_test':
         env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')
