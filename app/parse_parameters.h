@@ -94,7 +94,7 @@ int parse_parameters(int argn, char **argv,
         struct arg_dbl *bank_account_factor                  = arg_dbl0(NULL, "bank_account_factor", NULL, "The bank account factor for the scheduler. Default 1.5 (%).");
         struct arg_dbl *flow_region_factor                   = arg_dbl0(NULL, "flow_region_factor", NULL, "If using flow, then the regions found are sized flow_region_factor * imbalance. Default: 4 (%).");
         struct arg_dbl *kway_adaptive_limits_alpha           = arg_dbl0(NULL, "kway_adaptive_limits_alpha", NULL, "This is the factor alpha used for the adaptive stopping criteria. Default: 1.0");
-        struct arg_rex *stop_rule                            = arg_rex0(NULL, "stop_rule", "^(simple|multiplek|strong)$", "VARIANT", REG_EXTENDED, "Stop rule to use. One of {simple, multiplek, strong}. Default: simple" );
+        struct arg_rex *stop_rule                            = arg_rex0(NULL, "stop_rule", "^(simple|multiplek|strong|mem)$", "VARIANT", REG_EXTENDED, "Stop rule to use. One of {simple, multiplek, strong, mem}. Default: simple" );
         struct arg_int *num_vert_stop_factor                 = arg_int0(NULL, "num_vert_stop_factor", NULL, "x*k (for multiple_k stop rule). Default 20.");
         struct arg_rex *kway_search_stop_rule                = arg_rex0(NULL, "kway_stop_rule", "^(simple|adaptive|chernoff_adaptive)$", "VARIANT", REG_EXTENDED, "Stop rule to use during kway_refinement. One of {simple, adaptive, chernoff_adaptive}. Default: simple" );
         struct arg_int *bubbling_iterations                  = arg_int0(NULL, "bubbling_iterations", NULL, "Number of bubbling iterations to perform: Default 1 .");
@@ -253,6 +253,8 @@ int parse_parameters(int argn, char **argv,
                 fast_contract_clustering,
                 shuffle_graph,
                 sort_edges,
+                stop_rule,
+                num_vert_stop_factor,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -964,6 +966,8 @@ int parse_parameters(int argn, char **argv,
                         partition_config.stop_rule = STOP_RULE_MULTIPLE_K;
                 } else if (strcmp("strong", stop_rule->sval[0]) == 0) {
                         partition_config.stop_rule = STOP_RULE_STRONG;
+                } else if (strcmp("mem", stop_rule->sval[0]) == 0) {
+                        partition_config.stop_rule = STOP_RULE_MEM;
                 } else {
                         fprintf(stderr, "Invalid stop rule: \"%s\"\n", stop_rule->sval[0]);
                         exit(0);

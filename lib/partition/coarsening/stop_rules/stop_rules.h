@@ -25,13 +25,14 @@
 
 #include <math.h>
 
+#include "data_structure/parallel/hardware.h"
 #include "partition_config.h"
 
 class stop_rule {
         public:
                 stop_rule() {};
                 virtual ~stop_rule() {};
-                virtual bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices ) = 0;
+                virtual bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem = 0) = 0;
 };
 
 class separator_simple_stop_rule : public stop_rule {
@@ -46,13 +47,13 @@ class separator_simple_stop_rule : public stop_rule {
                 };
 
                 virtual ~separator_simple_stop_rule() {};
-                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices );
+                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem = 0);
 
         private:
                 NodeID num_stop;
 };
 
-inline bool separator_simple_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices ) {
+inline bool separator_simple_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
         
         return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
@@ -70,13 +71,13 @@ class simple_stop_rule : public stop_rule {
                         }
                 };
                 virtual ~simple_stop_rule() {};
-                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices );
+                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t );
 
         private:
                 NodeID num_stop;
 };
 
-inline bool simple_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices ) {
+inline bool simple_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
         return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
 }
@@ -87,13 +88,13 @@ class strong_stop_rule : public stop_rule {
                         config.max_vertex_weight = config.upper_bound_partition;
                 };
                 virtual ~strong_stop_rule() {};
-                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices );
+                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem = 0);
 
         private:
                 NodeID num_stop;
 };
 
-inline bool strong_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices ) {
+inline bool strong_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
         return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
 }
@@ -116,18 +117,39 @@ class multiple_k_stop_rule : public stop_rule {
 
                 };
                 virtual ~multiple_k_stop_rule () {};
-                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices );
+                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem = 0);
 
         private:
                 NodeID num_stop;
 };
 
-inline bool multiple_k_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices ) {
+inline bool multiple_k_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
         return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
 }
 
+class mem_stop_rule : public stop_rule {
+public:
+        mem_stop_rule (PartitionConfig & config, NodeID number_of_nodes) {
+                NodeID num_stop = config.num_vert_stop_factor*config.k;
 
+                if(config.disable_max_vertex_weight_constraint) {
+                        config.max_vertex_weight = config.upper_bound_partition;
+                } else {
+                        if(config.initial_partitioning) {
+                                //if we perform initial partitioning we relax this constraint
+                                config.max_vertex_weight = 1.5*((double)config.work_load)/(2*config.num_vert_stop_factor);
+                        } else {
+                                config.max_vertex_weight = (NodeWeight)(1.5*config.work_load/num_stop);
+                        }
+                }
 
+        };
+        virtual ~mem_stop_rule () {};
+        bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem ) {
+                std::cout << "Mem\t" << mem << std::endl;
+                return mem > parallel::g_l3_cache_size / 2;
+        }
+};
 
 #endif /* end of include guard: STOP_RULES_SZ45JQS6 */

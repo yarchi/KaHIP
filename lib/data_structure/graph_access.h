@@ -226,6 +226,13 @@ class graph_access {
                 int build_from_metis(int n, int* xadj, int* adjncy);
                 int build_from_metis_weighted(int n, int* xadj, int* adjncy, int * vwgt, int* adjwgt);
 
+                size_t mem() const {
+                        return graphref->m_nodes.size() * sizeof(Node) +
+                               graphref->m_edges.size() * sizeof(Edge) +
+                               graphref->m_refinement_node_props.size() * sizeof(refinementNode) +
+                               graphref->m_coarsening_edge_props.size() * sizeof(coarseningEdge);
+                }
+
                 //void set_node_queue_index(NodeID node, Count queue_index); 
                 //Count get_node_queue_index(NodeID node);
 

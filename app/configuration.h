@@ -593,6 +593,7 @@ inline void configuration::fastsocialmultitry( PartitionConfig & partition_confi
         partition_config.kway_all_boundary_nodes_refinement = true;
         //if(partition_config.k > 8) {
         partition_config.quotient_graph_refinement_disabled     = true;
+        partition_config.stop_rule = STOP_RULE_MEM;
 }
 
 inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partition_config) {

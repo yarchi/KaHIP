@@ -34,7 +34,7 @@ initial_partition_bipartition::~initial_partition_bipartition() {
 
 }
 
-void initial_partition_bipartition::initial_partition( const PartitionConfig & config, 
+void initial_partition_bipartition::initial_partition( const PartitionConfig & config,
                                                        const unsigned int seed,  
                                                        graph_access & G, int* partition_map) {
         graph_partitioner gp;
@@ -58,6 +58,10 @@ void initial_partition_bipartition::initial_partition( const PartitionConfig & c
         rec_config.parallel_coarsening_lp = false;
         rec_config.lp_before_local_search = false;
         rec_config.fast_contract_clustering = false;
+
+        if (rec_config.stop_rule == STOP_RULE_MEM) {
+                rec_config.stop_rule = STOP_RULE_MULTIPLE_K;
+        }
 
 	if( config.cluster_coarsening_during_ip == true) {
 		rec_config.matching_type             = CLUSTER_COARSENING;
