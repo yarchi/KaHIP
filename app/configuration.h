@@ -586,14 +586,13 @@ inline void configuration::fastsocialmultitry( PartitionConfig & partition_confi
         eco(partition_config);
         standardsnw(partition_config);
 //        partition_config.label_propagation_refinement = true;
-//        partition_config.cluster_coarsening_during_ip = true;
+        partition_config.cluster_coarsening_during_ip = true;
         partition_config.balance_factor               = 0;
 
         partition_config.fastmultitry = true;
         partition_config.kway_all_boundary_nodes_refinement = true;
         //if(partition_config.k > 8) {
         partition_config.quotient_graph_refinement_disabled     = true;
-        partition_config.stop_rule = STOP_RULE_MEM;
 }
 
 inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partition_config) {

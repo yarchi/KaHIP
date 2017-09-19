@@ -172,8 +172,8 @@ class random_functions {
                 }
 
         private:
-                static int m_seed;
-                static MersenneTwister m_mt;
+                thread_local static int m_seed;
+                thread_local static MersenneTwister m_mt;
 };
 
 #endif /* end of include guard: RANDOM_FUNCTIONS_RMEPKWYT */

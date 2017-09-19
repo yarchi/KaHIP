@@ -51,6 +51,12 @@ void initial_partition_bipartition::initial_partition( const PartitionConfig & c
 	rec_config.graph_allready_partitioned       = false;
         rec_config.label_propagation_refinement     = false;
 
+        if( config.cluster_coarsening_during_ip == true) {
+                rec_config.matching_type             = CLUSTER_COARSENING;
+                rec_config.cluster_coarsening_factor = 12;
+                rec_config.ensemble_clusterings      = false;
+        }
+
         // turn off parallel mode
         rec_config.parallel_multitry_kway = false;
         rec_config.parallel_initial_partitioning = false;
@@ -59,15 +65,14 @@ void initial_partition_bipartition::initial_partition( const PartitionConfig & c
         rec_config.lp_before_local_search = false;
         rec_config.fast_contract_clustering = false;
 
+        if (rec_config.fastmultitry) {
+                rec_config.fastmultitry = false;
+                rec_config.quotient_graph_refinement_disabled = false;
+        }
+
         if (rec_config.stop_rule == STOP_RULE_MEM) {
                 rec_config.stop_rule = STOP_RULE_MULTIPLE_K;
         }
-
-	if( config.cluster_coarsening_during_ip == true) {
-		rec_config.matching_type             = CLUSTER_COARSENING;
-		rec_config.cluster_coarsening_factor = 12;
-		rec_config.ensemble_clusterings      = false;
-	}
 
         std::streambuf* backup;
         std::ofstream ofs;

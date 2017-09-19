@@ -147,7 +147,6 @@ public:
         };
         virtual ~mem_stop_rule () {};
         bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem ) {
-                std::cout << "Mem\t" << mem << std::endl;
                 return mem > parallel::g_l3_cache_size / 2;
         }
 };

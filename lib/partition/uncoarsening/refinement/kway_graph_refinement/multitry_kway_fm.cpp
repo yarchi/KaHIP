@@ -65,8 +65,8 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
         config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
 
         int overall_improvement = 0;
-        while (true) {
-        //for (unsigned i = 0; i < rounds; i++) {
+        //while (true) {
+        for (unsigned i = 0; i < rounds; i++) {
                 CLOCK_START;
                 boundary_starting_nodes start_nodes;
                 boundary.setup_start_nodes_all(G, start_nodes);

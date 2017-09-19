@@ -5,6 +5,7 @@
 #include "initial_partitioning/initial_partition_bipartition.h"
 #include "initial_partitioning/parallel/initial_partitioning.h"
 #include "quality_metrics.h"
+#include "random_functions.h"
 #include "tools/macros_assertions.h"
 #include "timer.h"
 
@@ -70,6 +71,7 @@ void initial_partitioning::perform_initial_partitioning(const PartitionConfig& c
 
         auto task = [&] (uint32_t id) {
                 if (id > 0) {
+                        random_functions::setSeed(id + config.seed);
                         graph_access my_graph;
                         G.copy(my_graph);
                         return task_impl(my_graph, id);

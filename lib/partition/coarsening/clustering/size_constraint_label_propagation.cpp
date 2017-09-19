@@ -444,8 +444,7 @@ void size_constraint_label_propagation::remap_cluster_ids_fast(const PartitionCo
                 return;
         }
 
-        std::vector<NodeWeight> cluster_map(G.number_of_edges());
-
+        std::vector<NodeWeight> cluster_map(G.number_of_nodes());
         forall_nodes(G, node) {
                 PartitionID cur_cluster = cluster_id[node];
                 cluster_map[cur_cluster] = 1;
