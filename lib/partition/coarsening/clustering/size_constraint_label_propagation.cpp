@@ -37,8 +37,7 @@
 
 #include "size_constraint_label_propagation.h"
 
-#include <parallel/algorithm>
-#include <omp.h>
+#include <ips4o/ips4o.hpp>
 
 size_constraint_label_propagation::size_constraint_label_propagation() {
                 
@@ -370,17 +369,13 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
 
         parallel::g_thread_pool.Clear();
         parallel::Unpin();
-        omp_set_dynamic(false);
-        omp_set_num_threads(config.num_threads);
         {
                 CLOCK_START;
-                __gnu_parallel::sort(permutation.begin(), permutation.end(),
-                                     [&](const pair_type& lhs, const pair_type& rhs) {
-                                             return lhs.second < rhs.second;
-                                     });
+                ips4o::parallel::sort(permutation.begin(), permutation.end(), [&](const pair_type& lhs, const pair_type& rhs) {
+                        return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
+                }, config.num_threads);
                 CLOCK_END("Sort");
         }
-        omp_set_num_threads(0);
         parallel::PinToCore(0);
         parallel::g_thread_pool.Resize(config.num_threads - 1);
         CLOCK_END("Parallel init of permutations lp");
