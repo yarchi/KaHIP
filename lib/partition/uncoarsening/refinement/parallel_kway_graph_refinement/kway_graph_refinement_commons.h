@@ -5,6 +5,7 @@
 #include "data_structure/graph_access.h"
 #include "data_structure/parallel/algorithm.h"
 #include "data_structure/parallel/atomics.h"
+#include "data_structure/parallel/fast_set.h"
 #include "data_structure/parallel/nodes_partitions_map.h"
 #include "data_structure/parallel/hash_table.h"
 #include "data_structure/parallel/spin_lock.h"
@@ -17,9 +18,22 @@
 
 namespace parallel {
 class thread_data_refinement_core : public parallel::thread_config {
+private:
+        struct gain_data_type {
+                Gain m_gain;
+                EdgeWeight m_ext_degree;
+                fast_set<EdgeWeight> m_ext_degrees;
+
+                gain_data_type(Gain gain, EdgeWeight m_ext_degree, PartitionID k)
+                        :       m_gain(gain)
+                        ,       m_ext_degree(m_ext_degree)
+                        ,       m_ext_degrees(k)
+                {}
+        };
 public:
         //using nodes_partitions_hash_table = parallel::hash_map<NodeID, PartitionID>;
         using nodes_partitions_hash_table = parallel::cache_aware_map<NodeID, PartitionID>;
+        using nodes_gain_index_hash_table = parallel::hash_map<NodeID, NodeID>;
         //using nodes_partitions_hash_table = std::unordered_map<NodeID, PartitionID>;
         //using nodes_partitions_hash_table = std::vector<int>;
         //using nodes_partitions_hash_table = std::map<NodeID, PartitionID>;
@@ -44,6 +58,8 @@ public:
 
         boundary_starting_nodes start_nodes;
         std::unique_ptr<nodes_partitions_hash_table> nodes_partitions;
+        std::unique_ptr<nodes_gain_index_hash_table> node_gain_index;
+        std::vector<fast_set<EdgeWeight>> ext_degrees;
         std::unique_ptr<refinement_pq> queue;
         std::vector<std::pair<int, int>> min_cut_indices;
         std::vector<NodeID> transpositions;
@@ -102,6 +118,7 @@ public:
                 ,       upper_bound_gain_improvement(0)
                 ,       num_threads_finished(_num_threads_finished)
                 ,       nodes_partitions(nullptr)
+                ,       node_gain_index(nullptr)
                 ,       queue(nullptr)
                 ,       total_thread_time(0.0)
                 ,       tried_movements(0)
@@ -173,7 +190,8 @@ public:
                 if (nodes_partitions.get() == nullptr) {
                         ALWAYS_ASSERT(bits_number(G.number_of_nodes() - 1) > 0);
                         size_t mem_size = get_mem_for_thread(id, config.num_threads);
-                        nodes_partitions =std::make_unique<nodes_partitions_hash_table>(G.number_of_nodes(), mem_size);
+                        nodes_partitions = std::make_unique<nodes_partitions_hash_table>(G.number_of_nodes(), mem_size);
+                        node_gain_index = std::make_unique<nodes_gain_index_hash_table>(128);
                 }
 
                 if (queue.get() == nullptr) {
@@ -192,6 +210,9 @@ public:
 
                 // ht
                 nodes_partitions->clear();
+                node_gain_index->clear();
+                ext_degrees.clear();
+                ext_degrees.reserve(128);
 
                 //nodes_partitions.reserve(131072);
 
@@ -217,6 +238,62 @@ public:
                 moved.clear();
 
                 partial_reset_thread_data();
+        }
+
+        // update gain data for move of neighbor from partitio neighbor_from to partition neighbor_to
+        inline void update_gain(NodeID node, NodeID neighbor, EdgeWeight edge_weight,
+                                PartitionID neighbor_from, PartitionID neighbor_to) {
+                NodeID index = (*node_gain_index)[node];
+
+                ext_degrees[index][neighbor_to] += edge_weight;
+                ext_degrees[index][neighbor_from] -= edge_weight;
+
+                if (ext_degrees[index][neighbor_from] == 0) {
+                        ext_degrees[index].remove(neighbor_from);
+                }
+        }
+
+        inline Gain compute_gain_cached(NodeID node, PartitionID& to, EdgeWeight& ext_degree) {
+                NodeID index = (*node_gain_index)[node];
+                PartitionID from = get_local_partition(node);
+
+                EdgeWeight max_degree = 0;
+                to = INVALID_PARTITION;
+                for (PartitionID part_id : ext_degrees[index]) {
+                        if (part_id == from) {
+                                continue;
+                        }
+
+                        EdgeWeight ext_degree = ext_degrees[index][part_id];
+                        if (ext_degree > max_degree || (ext_degree == max_degree && rnd.bit())) {
+                                max_degree = ext_degree;
+                                to = part_id;
+                        }
+                }
+
+                if (to != INVALID_PARTITION) {
+                        ext_degree = max_degree;
+                } else {
+                        ext_degree = 0;
+                }
+
+                return max_degree - ext_degrees[index][from];
+        }
+
+        inline Gain compute_gain(NodeID node, PartitionID& to, EdgeWeight& ext_degree) {
+                PartitionID from = get_local_partition(node);
+                NodeID index = ext_degrees.size();
+
+                Gain gain = compute_gain(node, from, to, ext_degree);
+                ext_degrees.emplace_back(config.k);
+
+                for (uint32_t k = 0; k < config.k; ++k) {
+                        if (m_local_degrees[k].round == m_round) {
+                                ext_degrees[index].insert(k, m_local_degrees[k].local_degree);
+                        }
+                }
+                (*node_gain_index)[node] = index;
+                return gain;
         }
 
         inline Gain compute_gain(NodeID node, PartitionID from, PartitionID& to, EdgeWeight& ext_degree) {
@@ -257,8 +334,7 @@ public:
                                         }
                                 }
                         }
-                }
-                endfor
+                } endfor
 
                 if (to != INVALID_PARTITION) {
                         ext_degree = max_degree;
@@ -325,7 +401,9 @@ public:
                 return max_degree - m_local_degrees[from].local_degree;
         }
 
-private:
+public:
+        static constexpr NodeID gain_data_offset = 2;
+
         AtomicWrapper<uint32_t>& m_reset_counter;
 
         inline bool is_all_data_reseted() const {

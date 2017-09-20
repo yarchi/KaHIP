@@ -157,7 +157,11 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
 
         uint32_t unrolled_moves = unroll_moves(td, min_cut_index);
         td.accepted_movements -= unrolled_moves;
+
+        // clear local thread hash tables with gain and move data
         td.nodes_partitions->clear();
+        td.node_gain_index->clear();
+        td.ext_degrees.clear();
 
         td.transpositions.push_back(sentinel);
         td.from_partitions.push_back(sentinel);
@@ -930,8 +934,7 @@ void kway_graph_refinement_core::init_queue_with_boundary(thread_data_refinement
                         PartitionID max_gainer;
                         EdgeWeight ext_degree;
                         //compute gain
-                        PartitionID from = td.get_local_partition(node);
-                        Gain gain = td.compute_gain(node, from, max_gainer, ext_degree);
+                        Gain gain = td.compute_gain(node, max_gainer, ext_degree);
                         queue->insert(node, gain);
                         td.moved.push_back(node);
                 }
@@ -1151,11 +1154,11 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
                 NodeID target = td.G.getEdgeTarget(e);
                 PartitionID targets_to;
                 EdgeWeight ext_degree; // the local external degree
-                PartitionID target_from = td.get_local_partition(target);
-
-                Gain gain = td.compute_gain(target, target_from, targets_to, ext_degree);
 
                 if (queue->contains(target)) {
+                        EdgeWeight edge_weight = td.G.getEdgeWeight(e);
+                        td.update_gain(target, node, edge_weight, from, to);
+                        Gain gain = td.compute_gain_cached(target, targets_to, ext_degree);
                         assert(td.moved_idx[target].load(std::memory_order_relaxed));
                         if (ext_degree > 0) {
                                 queue->changeKey(target, gain);
@@ -1163,6 +1166,13 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
                                 queue->deleteNode(target);
                         }
                 } else {
+                        // target was removed from priority queue
+                        if (td.moved_idx[target].load(std::memory_order_relaxed)) {
+                                continue;
+                        }
+
+                        Gain gain = td.compute_gain(target, targets_to, ext_degree);
+
                         if (ext_degree > 0) {
                                 bool expected = false;
                                 if (td.moved_idx[target].compare_exchange_strong(expected, true,
