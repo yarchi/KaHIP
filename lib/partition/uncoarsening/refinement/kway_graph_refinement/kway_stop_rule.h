@@ -749,8 +749,8 @@ private:
 #ifdef IMPROVED_DISTRIBUTION
                 // m_total_gain <= 0
                 // int(1 - m_total_gain) / E[X_1|X_1 >= 1]
-                double expectation = get_expectation();
-                double std_dev = sqrt(m_expected_variance2);
+//                double expectation = get_expectation();
+//                double std_dev = sqrt(m_expected_variance2);
 
 //                double cond_expect = get_conditional_expectation([](Gain gain) {
 //                        return gain;

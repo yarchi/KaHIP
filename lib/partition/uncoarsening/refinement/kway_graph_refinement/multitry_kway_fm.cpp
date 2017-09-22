@@ -224,7 +224,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 std::swap(todolist[random_idx], todolist[idx--]);
                 todolist.pop_back();
         }
-        auto t = CLOCK_END_TIME;
+        //auto t = CLOCK_END_TIME;
         //time_generate_moves += t;
 
         return overall_improvement;

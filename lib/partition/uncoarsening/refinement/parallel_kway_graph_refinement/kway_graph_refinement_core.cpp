@@ -1151,11 +1151,11 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
                 NodeID target = td.G.getEdgeTarget(e);
                 PartitionID targets_to;
                 EdgeWeight ext_degree; // the local external degree
-                PartitionID target_from = td.get_local_partition(target);
-
-                Gain gain = td.compute_gain(target, target_from, targets_to, ext_degree);
 
                 if (queue->contains(target)) {
+                        PartitionID target_from = td.get_local_partition(target);
+                        Gain gain = td.compute_gain(target, target_from, targets_to, ext_degree);
+
                         assert(td.moved_idx[target].load(std::memory_order_relaxed));
                         if (ext_degree > 0) {
                                 queue->changeKey(target, gain);
@@ -1163,6 +1163,14 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
                                 queue->deleteNode(target);
                         }
                 } else {
+                        // target was removed from priority queue
+                        if (td.moved_idx[target].load(std::memory_order_relaxed)) {
+                                continue;
+                        }
+
+                        PartitionID target_from = td.get_local_partition(target);
+                        Gain gain = td.compute_gain(target, target_from, targets_to, ext_degree);
+
                         if (ext_degree > 0) {
                                 bool expected = false;
                                 if (td.moved_idx[target].compare_exchange_strong(expected, true,
