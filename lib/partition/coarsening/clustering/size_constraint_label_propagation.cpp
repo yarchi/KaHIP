@@ -367,12 +367,14 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
                 permutation.emplace_back(node, G.getNodeDegree(node));
         } endfor
 
+        std::random_shuffle(permutation.begin(), permutation.end());
+
         parallel::g_thread_pool.Clear();
         parallel::Unpin();
         {
                 CLOCK_START;
                 ips4o::parallel::sort(permutation.begin(), permutation.end(), [&](const pair_type& lhs, const pair_type& rhs) {
-                        return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
+                        return lhs.second < rhs.second;
                 }, config.num_threads);
                 CLOCK_END("Sort");
         }
