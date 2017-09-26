@@ -135,7 +135,9 @@ class size_constraint_label_propagation : public matching {
                                                     std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                     std::vector<NodeID>& cluster_id,
                                                     std::vector<pair_type>& permutation,
-                                                    NodeID& no_of_blocks);
+                                                    NodeID& no_of_blocks,
+                                                    std::vector<parallel::AtomicWrapper<char>> active,
+                                                    std::vector<parallel::AtomicWrapper<char>> new_active);
 };
 
 

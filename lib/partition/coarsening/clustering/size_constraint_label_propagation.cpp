@@ -72,7 +72,6 @@ void size_constraint_label_propagation::match_internal(const PartitionConfig & p
 
         std::vector<NodeWeight> cluster_id(G.number_of_nodes());
         NodeWeight block_upperbound = ceil(partition_config.upper_bound_partition/(double)partition_config.cluster_coarsening_factor);
-
         if (!partition_config.parallel_coarsening_lp) {
                 label_propagation(partition_config, G, block_upperbound, cluster_id, no_of_coarse_vertices);
         } else {
@@ -220,7 +219,9 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
                                                                        std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                                        std::vector<NodeID>& cluster_id,
                                                                        std::vector<pair_type>& permutation,
-                                                                       NodeID& no_of_blocks
+                                                                       NodeID& no_of_blocks,
+                                                                       std::vector<parallel::AtomicWrapper<char>> active,
+                                                                       std::vector<parallel::AtomicWrapper<char>> new_active
 ) {
         std::vector<std::future<NodeWeight>> futures;
         futures.reserve(parallel::g_thread_pool.NumThreads());
@@ -261,11 +262,17 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
 
                                 for (NodeID index = begin; index != end; ++index) {
                                         NodeID node = permutation[index].first;
+
+                                        if (!active[node].load(std::memory_order_relaxed)) {
+                                                continue;
+                                        }
+                                        active[node].store(false, std::memory_order_relaxed);
+
                                         const PartitionID my_block = cluster_id[node];
                                         //now move the node to the cluster that is most common in the neighborhood
                                         neighbor_parts.clear();
                                         neighbor_parts.reserve(G.getNodeDegree(node));
-                                        forall_out_edges(G, e, node){
+                                        forall_out_edges(G, e, node) {
                                                 NodeID target = G.getEdgeTarget(e);
                                                 NodeID cluster = cluster_id[target];
                                                 hash_map[cluster] += G.getEdgeWeight(e);
@@ -322,6 +329,11 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
                                                         cluster_id[node] = max_block;
 
                                                         ++num_changed_label;
+
+                                                        forall_out_edges(G, e, node) {
+                                                                NodeID target = G.getEdgeTarget(e);
+                                                                new_active[target].store(true, std::memory_order_relaxed);
+                                                        } endfor
                                                 }
                                         }
                                 }
@@ -338,6 +350,7 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
                 std::for_each(futures.begin(), futures.end(), [&](auto& future){
                         num_changed_label_all += future.get();
                 });
+                active.swap(new_active);
                 futures.clear();
         }
         return num_changed_label_all;
@@ -351,6 +364,8 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
 
         CLOCK_START;
         std::vector<parallel::AtomicWrapper<NodeWeight>> cluster_sizes(G.number_of_nodes());
+        std::vector<parallel::AtomicWrapper<char>> active(G.number_of_nodes(), true);
+        std::vector<parallel::AtomicWrapper<char>> new_active(G.number_of_nodes(), false);
 
         forall_nodes(G, node) {
                 cluster_id[node] = node;
@@ -367,24 +382,39 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
                 permutation.emplace_back(node, G.getNodeDegree(node));
         } endfor
 
-        std::random_shuffle(permutation.begin(), permutation.end());
-
         parallel::g_thread_pool.Clear();
         parallel::Unpin();
         {
                 CLOCK_START;
                 ips4o::parallel::sort(permutation.begin(), permutation.end(), [&](const pair_type& lhs, const pair_type& rhs) {
-                        return lhs.second < rhs.second;
+                        return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
                 }, config.num_threads);
                 CLOCK_END("Sort");
         }
         parallel::PinToCore(0);
         parallel::g_thread_pool.Resize(config.num_threads - 1);
+
+        {
+                CLOCK_START;
+                parallel::random rnd(config.seed);
+                size_t i = 0;
+                while (i < permutation.size()) {
+                        size_t end = i;
+                        while (end + 1 < permutation.size() && permutation[end].second == permutation[end + 1].second) {
+                                ++end;
+                        }
+
+                        rnd.shuffle(permutation.begin() + i, permutation.begin() + end + 1);
+                        i = end + 1;
+                }
+                CLOCK_END("Shuffle");
+        }
+
         CLOCK_END("Parallel init of permutations lp");
 
         CLOCK_START_N;
         uint32_t num_changed_label = parallel_label_propagation(config, G, block_upperbound, cluster_sizes, cluster_id,
-                                                                permutation, no_of_blocks);
+                                                                permutation, no_of_blocks, active, new_active);
         CLOCK_END("Main parallel (no queue) lp");
         std::cout << "Improved\t" << num_changed_label << std::endl;
 

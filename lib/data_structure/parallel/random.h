@@ -37,13 +37,32 @@ public:
                         return;
                 }
 
+                std::uniform_int_distribution<uint32_t> rnd;
                 for (size_t i = 0; i < size; ++i) {
-                        std::uniform_int_distribution<uint32_t> rnd(i, size - 1);
-                        size_t rnd_ind = rnd(m_mt);
+                        size_t rnd_ind = i + rnd(m_mt) % (size - i);
                         std::swap(*(begin + i), *(begin + rnd_ind));
                 }
         }
 
+        template <typename iterator_type>
+        inline void shuffle_blocks(iterator_type begin, iterator_type end, size_t block_size = 4) {
+                size_t size = end - begin;
+                if(size < 10 || size < block_size) {
+                        shuffle(begin, end);
+                        return;
+                }
+
+                const size_t distance = 100;
+                std::uniform_int_distribution<uint32_t> rnd(0, distance);
+                for( unsigned int i = 0; i + block_size < size; i++) {
+                        size_t pos_a = i;
+                        size_t pos_b = (pos_a + rnd(m_mt)) % (size - block_size + 1);
+
+                        for (size_t j = 0; j < block_size; ++j) {
+                                std::swap(*(begin + pos_a + j), *(begin + pos_b + j));
+                        }
+                }
+        }
 private:
         std::uniform_int_distribution<uint32_t> m_rnd_bit;
         std::mt19937 m_mt;
