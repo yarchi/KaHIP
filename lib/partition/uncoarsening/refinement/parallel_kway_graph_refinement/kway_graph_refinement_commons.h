@@ -34,7 +34,6 @@ public:
 //        Cvector<AtomicWrapper<NodeWeight>>& parts_weights;
 //        Cvector<AtomicWrapper<NodeWeight>>& parts_sizes;
         Cvector<AtomicWrapper<int>>& moved_count;
-        int upper_bound_gain_improvement;
         AtomicWrapper<uint32_t>& num_threads_finished;
 
         // local thread data
@@ -64,6 +63,7 @@ public:
         uint32_t scaned_neighbours;
         double time_move_nodes;
         uint32_t transpositions_size;
+        int upper_bound_gain;
         int performed_gain;
         int unperformed_gain;
         double time_compute_gain;
@@ -99,7 +99,6 @@ public:
 //                ,       parts_weights(_parts_weights)
 //                ,       parts_sizes(_parts_sizes)
                 ,       moved_count(_moved_count)
-                ,       upper_bound_gain_improvement(0)
                 ,       num_threads_finished(_num_threads_finished)
                 ,       nodes_partitions(nullptr)
                 ,       queue(nullptr)
@@ -112,6 +111,7 @@ public:
                 ,       scaned_neighbours(0)
                 ,       time_move_nodes(0.0)
                 ,       transpositions_size(0)
+                ,       upper_bound_gain(0)
                 ,       performed_gain(0)
                 ,       unperformed_gain(0)
                 ,       time_compute_gain(0.0)
@@ -273,12 +273,14 @@ public:
                 return max_degree - m_local_degrees[from].local_degree;
         }
 
-        inline Gain compute_gain_actual(NodeID node, PartitionID from, PartitionID& to, EdgeWeight& ext_degree) {
+        inline Gain compute_gain_actual(NodeID node, PartitionID from, PartitionID& to, const PartitionID desired_to) {
                 //ASSERT_TRUE(from == get_local_partition(node));
                 //for all incident partitions compute gain
                 //return max gain and "to" partition
                 EdgeWeight max_degree = 0;
                 to = INVALID_PARTITION;
+                bool found_desired_to = false;
+                EdgeWeight desired_to_degree = 0;
 
                 m_round++;//can become zero again
                 forall_out_edges(G, e, node) {
@@ -292,8 +294,11 @@ public:
                                 m_local_degrees[target_partition].round = m_round;
                         }
 
-
                         if (target_partition != from && m_local_degrees[target_partition].local_degree >= max_degree) {
+                                if (target_partition == desired_to) {
+                                        found_desired_to = true;
+                                        desired_to_degree = m_local_degrees[target_partition].local_degree;
+                                }
                                 if (m_local_degrees[target_partition].local_degree > max_degree) {
                                         max_degree = m_local_degrees[target_partition].local_degree;
                                         to = target_partition;
@@ -312,14 +317,12 @@ public:
                         }
                 } endfor
 
-                if (to != INVALID_PARTITION) {
-                        ext_degree = max_degree;
-                } else {
-                        ext_degree = 0;
-                }
-
                 if (m_local_degrees[from].round != m_round) {
                         m_local_degrees[from].local_degree = 0;
+                }
+
+                if (found_desired_to && desired_to_degree == max_degree) {
+                        to = desired_to;
                 }
 
                 return max_degree - m_local_degrees[from].local_degree;

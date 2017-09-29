@@ -196,7 +196,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                                                         abort();
                                                 }
 
-                                                td.upper_bound_gain_improvement += improvement;
+                                                td.upper_bound_gain += improvement;
 
                                                 ALWAYS_ASSERT(td.transpositions.size() > 0);
                                                 td.min_cut_indices.emplace_back(min_cut_index, td.transpositions.size() - 1);
@@ -389,7 +389,7 @@ int multitry_kway_fm::start_more_locallized_search_experimental(PartitionConfig&
                                                 std::cout << "buf error improvement < 0" << std::endl;
                                         }
 
-                                        td.upper_bound_gain_improvement += improvement;
+                                        td.upper_bound_gain += improvement;
 
                                         ALWAYS_ASSERT(td.transpositions.size() > 0);
                                         td.min_cut_indices.emplace_back(min_cut_index, td.transpositions.size() - 1);

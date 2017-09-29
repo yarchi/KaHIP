@@ -133,6 +133,7 @@ public:
                 double total_time_compute_gain = 0.0;
 
                 // gain
+                int total_upper_bound_gain = 0;
                 int total_performed_gain = 0;
                 int total_unperformed_gain = 0;
 
@@ -169,6 +170,7 @@ public:
                         total_accepted_movements += m_thread_data[id].get().accepted_movements;
                         total_affected_movements += m_thread_data[id].get().affected_movements;
                         total_scaned_neighbours += m_thread_data[id].get().scaned_neighbours;
+                        total_upper_bound_gain += m_thread_data[id].get().upper_bound_gain;
                         total_performed_gain += m_thread_data[id].get().performed_gain;
                         total_unperformed_gain += m_thread_data[id].get().unperformed_gain;
                         total_stop_empty_queue += m_thread_data[id].get().stop_empty_queue;
@@ -188,6 +190,7 @@ public:
                         proc_stat.total_thread_accepted_move_time = m_thread_data[id].get().total_thread_accepted_move_time;
                         proc_stat.total_thread_compute_gain_time = m_thread_data[id].get().time_compute_gain;
                         proc_stat.total_thread_unroll_move_time = m_thread_data[id].get().total_thread_unroll_move_time;
+                        proc_stat.upper_bound_gain = m_thread_data[id].get().upper_bound_gain;
                         proc_stat.performed_gain = m_thread_data[id].get().performed_gain;
                         proc_stat.unperformed_gain = m_thread_data[id].get().unperformed_gain;
                         
@@ -205,6 +208,7 @@ public:
                 stat.total_accepted_movements = total_accepted_movements;
                 stat.total_affected_movements = total_affected_movements;
                 stat.total_scanned_neighbours = total_scaned_neighbours;
+                stat.total_upper_bound_gain = total_upper_bound_gain;
                 stat.total_performed_gain = total_performed_gain;
                 stat.total_unperformed_gain = total_unperformed_gain;
                 stat.total_stop_empty_queue = total_stop_empty_queue;
@@ -217,6 +221,7 @@ public:
                 std::cout << "Total accepted moves\t" << total_accepted_movements << std::endl;
                 std::cout << "Total affected moves\t" << total_affected_movements << std::endl;
                 std::cout << "Total scanned neighbours\t" << total_scaned_neighbours << std::endl;
+                std::cout << "Total upperbound gain\t" << total_upper_bound_gain << std::endl;
                 std::cout << "Total performed gain\t" << total_performed_gain << std::endl;
                 std::cout << "Total unperformed gain\t" << total_unperformed_gain << std::endl;
                 std::cout << "Total stop empty queue\t" << total_stop_empty_queue << std::endl;
@@ -268,7 +273,7 @@ public:
                 double full_time = stat.time_setup_start_nodes + stat.time_local_search;
                 std::cout << "Time full search\t" << full_time << " s" << std::endl;
                 std::cout << "Total performed gain\t" << stat.total_performed_gain << std::endl;
-                std::cout << "Time per gain\t" << full_time / stat.total_performed_gain << " sec / gain" << std::endl;
+                std::cout << "Total upperbound gain\t" << stat.total_upper_bound_gain << std::endl;
 
                 std::cout << "Time setup start nodes\t" << stat.time_setup_start_nodes << " s" << std::endl;
                 std::cout << "Time local search\t" << stat.time_local_search << " s" << std::endl;
@@ -356,6 +361,7 @@ public:
                 uint32_t total_affected_movements = 0;
                 uint32_t total_scanned_neighbours = 0;
 
+                int total_upper_bound_gain = 0;
                 int total_performed_gain = 0;
                 int total_unperformed_gain = 0;
 
@@ -378,6 +384,7 @@ public:
                         double total_thread_accepted_move_time = 0.0;
                         double total_thread_compute_gain_time = 0.0;
                         double total_thread_unroll_move_time = 0.0;
+                        int upper_bound_gain = 0;
                         int performed_gain = 0;
                         int unperformed_gain = 0;
                         uint32_t stop_empty_queue = 0;
@@ -398,6 +405,7 @@ public:
                                 total_thread_accepted_move_time += ps.total_thread_accepted_move_time;
                                 total_thread_compute_gain_time += ps.total_thread_compute_gain_time;
                                 total_thread_unroll_move_time += ps.total_thread_unroll_move_time;
+                                upper_bound_gain += ps.upper_bound_gain;
                                 performed_gain += ps.performed_gain;
                                 unperformed_gain += ps.unperformed_gain;
                                 stop_empty_queue += ps.stop_empty_queue;
@@ -425,6 +433,7 @@ public:
                         total_accepted_movements += stat.total_accepted_movements;
                         total_affected_movements += stat.total_affected_movements;
                         total_scanned_neighbours += stat.total_scanned_neighbours;
+                        total_upper_bound_gain += stat.total_upper_bound_gain;
                         total_performed_gain += stat.total_performed_gain;
                         total_unperformed_gain += stat.total_unperformed_gain;
 
