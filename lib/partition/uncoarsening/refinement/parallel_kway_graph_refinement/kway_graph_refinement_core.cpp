@@ -74,7 +74,7 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
         uint32_t movements = 0;
 
         std::unique_ptr<kway_stop_rule> stopping_rule;
-
+        td.config.kway_adaptive_limits_alpha = 10;
         switch (td.config.kway_stop_rule) {
                 case KWAY_SIMPLE_STOP_RULE:
                         stopping_rule = std::make_unique<kway_simple_stop_rule>(td.config);
