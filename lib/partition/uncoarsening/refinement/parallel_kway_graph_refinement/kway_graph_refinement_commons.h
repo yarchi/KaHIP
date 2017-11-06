@@ -122,7 +122,9 @@ public:
                 ,       stop_faction_of_nodes_moved(0)
                 ,       m_reset_counter(_reset_counter)
         {
-                m_local_degrees.resize(config.k);
+                size_t type_size = sizeof(round_struct);
+                m_local_degrees.resize(std::ceil((config.k + 0.0) * type_size / g_cache_line_size) * g_cache_line_size / type_size);
+                ALWAYS_ASSERT(m_local_degrees.size() % type_size == 0);
 
                 for (PartitionID block = 0; block < config.k; ++block) {
                         parts_weights.push_back(boundary.getBlockWeight(block));
