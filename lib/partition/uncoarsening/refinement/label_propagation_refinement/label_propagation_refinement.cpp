@@ -353,11 +353,47 @@ void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const
                                                       Cvector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                       std::unique_ptr<ConcurrentQueue>& queue) {
 
-        forall_nodes(G, node) {
-                cluster_sizes[G.getPartitionIndex(node)].get().fetch_add(G.getNodeWeight(node),
-                                                                         std::memory_order_relaxed);
-        } endfor
+        CLOCK_START;
+        std::atomic<uint32_t> start_node(0);
+        auto task = [&]() {
+                const uint32_t nodes_count = (uint32_t) sqrt(G.number_of_nodes());
+                std::vector<NodeWeight> tmp_cluster_sizes(cluster_sizes.size());
 
+                NodeID begin = start_node.fetch_add(nodes_count, std::memory_order_relaxed);
+
+                while (begin < G.number_of_nodes()) {
+                        NodeID end = std::min(begin + nodes_count, G.number_of_nodes());
+
+                        for (auto node = begin; node != end; ++node) {
+                                tmp_cluster_sizes[G.getPartitionIndex(node)] += G.getNodeWeight(node);
+                        }
+
+                        begin = start_node.fetch_add(nodes_count, std::memory_order_relaxed);
+                }
+
+                return tmp_cluster_sizes;
+        };
+
+        std::vector<std::future<std::vector<NodeWeight>>> futures;
+        futures.reserve(parallel::g_thread_pool.NumThreads());
+        for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
+                futures.emplace_back(parallel::g_thread_pool.Submit(i, task));
+        }
+
+        auto cur_cluster_sizes = task();
+        std::for_each(futures.begin(), futures.end(), [&](auto& future) {
+                auto tmp_cluster_sizes = future.get();
+                for (size_t i = 0; i < cur_cluster_sizes.size(); ++i) {
+                        cur_cluster_sizes[i] += tmp_cluster_sizes[i];
+                }
+        });
+
+        for (size_t i = 0; i < cluster_sizes.size(); ++i) {
+                cluster_sizes[i].get().store(cur_cluster_sizes[i], std::memory_order_relaxed);
+        }
+        CLOCK_END("Init cluster sizes");
+
+        CLOCK_START_N;
         apply_to_range_sync(NodeID(0), G.number_of_nodes(), parallel::g_thread_pool, [&](auto begin, auto end) {
                 Block block(m_block_allocator);
                 block.reserve(100);
@@ -379,6 +415,7 @@ void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const
                         queue->push(std::move(block));
                 }
         });
+        CLOCK_END("Init queue lp");
 }
 
 EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(graph_access& G,
@@ -395,21 +432,21 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
         std::vector<AtomicWrapper<bool>> queue_contains(G.number_of_nodes());
         std::vector<AtomicWrapper<bool>> next_queue_contains(G.number_of_nodes());
 
-        uint32_t block_size = get_block_size(G, config);
-        std::cout << "Uncoarsening: Block size\t" << block_size << std::endl;
+        uint32_t max_block_size = get_block_size(G, config);
+        std::cout << "Uncoarsening: Block size\t" << max_block_size << std::endl;
 
 //        TODO: check what is better with cache_aligned vector or not
 //        std::vector<AtomicWrapper<NodeWeight>> cluster_sizes(config.k);
 
         bool use_edge_unit = config.block_size_unit == BlockSizeUnit::EDGES;
         if (use_edge_unit) {
-                if (G.number_of_nodes() < 10000000) {
-                        seq_init_for_edge_unit(G, block_size, permutation, cluster_sizes, queue);
+                if (G.number_of_nodes() < 100) {
+                        seq_init_for_edge_unit(G, max_block_size, permutation, cluster_sizes, queue);
                 } else {
-                        par_init_for_edge_unit(G, block_size, permutation, cluster_sizes, queue);
+                        par_init_for_edge_unit(G, max_block_size, permutation, cluster_sizes, queue);
                 }
         } else {
-                init_for_node_unit(G, block_size, permutation, cluster_sizes, queue);
+                init_for_node_unit(G, max_block_size, permutation, cluster_sizes, queue);
         }
         CLOCK_END("Uncoarsening: Parallel lp: Init queue lp");
 
@@ -549,7 +586,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                                                                         new_block.push_back(target);
 
                                                                         new_block_size += use_edge_unit ? G.getNodeDegree(target) : 1;
-                                                                        if (new_block_size >= block_size) {
+                                                                        if (new_block_size >= max_block_size) {
                                                                                 next_queue->push(std::move(new_block));
                                                                                 new_block.clear();
                                                                                 new_block.reserve(100);
@@ -574,10 +611,12 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                         //futures.push_back(parallel::g_thread_pool.Submit(process, i + 1));
                 }
 
+                CLOCK_START;
                 num_changed_label += process(0);
                 std::for_each(futures.begin(), futures.end(), [&](auto& future){
                         num_changed_label += future.get();
                 });
+                CLOCK_END(std::string("Iteration ") + std::to_string(j) + " time");
                 //std::cout << "Queue size\t" << total << std::endl;
                 std::swap(queue, next_queue);
                 std::swap(queue_contains, next_queue_contains);

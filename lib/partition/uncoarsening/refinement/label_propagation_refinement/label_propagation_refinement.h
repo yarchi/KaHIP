@@ -61,14 +61,20 @@ private:
         Allocator m_block_allocator;
 
         inline uint32_t get_block_size(graph_access& G, PartitionConfig& config) const {
-                uint32_t block_size = 1000;
                 if (config.block_size_unit == BlockSizeUnit::NODES) {
-                        block_size = std::max((uint32_t) sqrt(G.number_of_nodes()), block_size);
+                        return get_block_size(G.number_of_nodes());
                 }
+
                 if (config.block_size_unit == BlockSizeUnit::EDGES) {
-                        block_size = std::max((uint32_t) sqrt(G.number_of_edges()), block_size);
+                        return get_block_size(G.number_of_edges());
                 }
-                return block_size;
+
+                return get_block_size(1);
+        }
+
+        inline uint32_t get_block_size(uint32_t total) const {
+                uint32_t block_size = 1000;
+                return std::max((uint32_t) sqrt(total), block_size);
         }
 
         std::chrono::system_clock::time_point begin, end;
