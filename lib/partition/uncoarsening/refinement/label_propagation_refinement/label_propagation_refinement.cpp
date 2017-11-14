@@ -356,7 +356,7 @@ void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const
         CLOCK_START;
         std::atomic<uint32_t> start_node(0);
         auto task = [&]() {
-                const uint32_t nodes_count = (uint32_t) sqrt(G.number_of_nodes());
+                const uint32_t nodes_count = std::max<uint32_t>(sqrt(G.number_of_nodes()), 4000);
                 std::vector<NodeWeight> tmp_cluster_sizes(cluster_sizes.size());
 
                 NodeID begin = start_node.fetch_add(nodes_count, std::memory_order_relaxed);
