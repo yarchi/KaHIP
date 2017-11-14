@@ -36,7 +36,8 @@ public:
                                                     bool& is_more_that_5percent_moved) const;
 
         EdgeWeight apply_moves(thread_data_refinement_core& td, bool compute_touched_partitions,
-                               std::unordered_map<PartitionID, PartitionID>& touched_blocks) const;
+                               std::unordered_map<PartitionID, PartitionID>& touched_blocks,
+                               std::vector<NodeID>& reacticated_vertices) const;
 
 private:
         using moved_nodes_hash_map = parallel::hash_map_with_erase<NodeID, std::pair<uint32_t, PartitionID>>;

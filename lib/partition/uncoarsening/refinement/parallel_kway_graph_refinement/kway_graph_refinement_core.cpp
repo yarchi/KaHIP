@@ -408,7 +408,7 @@ kway_graph_refinement_core::apply_moves(uint32_t num_threads,
 
         moved_nodes_hash_map moved_nodes(get_max_size_to_fit_l1<moved_nodes_hash_map>());
         for (size_t id = 0; id < num_threads; ++id) {
-                overall_gain += apply_moves(threads_data[id].get(), compute_touched_partitions, touched_blocks);
+                overall_gain += apply_moves(threads_data[id].get(), compute_touched_partitions, touched_blocks, reactivated_vertices);
         }
         overall_moved = moved_nodes.size();
         return std::make_pair(overall_gain, overall_moved);
@@ -457,7 +457,8 @@ bool kway_graph_refinement_core::is_moved(moved_nodes_hash_map& moved_nodes, Nod
 
 EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& td,
                                                    bool compute_touched_partitions,
-                                                   std::unordered_map<PartitionID, PartitionID>& touched_blocks) const {
+                                                   std::unordered_map<PartitionID, PartitionID>& touched_blocks,
+                                                   std::vector<NodeID>& reactivated_vertices) const {
         CLOCK_START;
         ALWAYS_ASSERT(td.transpositions.size() == td.from_partitions.size());
         ALWAYS_ASSERT(td.transpositions.size() == td.to_partitions.size());
@@ -533,6 +534,12 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
 
                                 if (total_gain > best_total_gain || (total_gain == best_total_gain && (td.rnd.bit() || same_move))) {
                                         best_total_gain = total_gain;
+
+                                        for (auto node : transpositions) {
+                                                reactivated_vertices.push_back(node);
+                                        }
+
+
                                         from_partitions.clear();
                                         transpositions.clear();
                                         gains.clear();

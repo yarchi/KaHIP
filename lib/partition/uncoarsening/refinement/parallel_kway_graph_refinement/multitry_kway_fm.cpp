@@ -36,7 +36,7 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
 
                 m_factory.time_setup_start_nodes += CLOCK_END_TIME;
 
-
+                std::cout << "Iter\t" << i << std::endl;
                 CLOCK_START_N;
                 std::unordered_map<PartitionID, PartitionID> touched_blocks;
                 EdgeWeight improvement = start_more_locallized_search(config, G, boundary, init_neighbors,
@@ -128,6 +128,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 #else
         // we need the external loop for move strategy when conflicted nodes are reactivated for the next
         // parallel phase
+        size_t total_gain = 0;
         while (!m_factory.queue.empty()) {
 #endif
                 auto task = [&](uint32_t id) {
@@ -277,7 +278,16 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                         break;
                 }
 
+                //std::cout << "Reactivated vertices\t" << reactivated_vertices.size() << std::endl;
                 m_factory.get_thread_data(0).rnd.shuffle(reactivated_vertices);
+
+                size_t tg = 0;
+                for (size_t i = 0; i < config.num_threads; ++i) {
+                        tg += m_factory.get_thread_data(0).performed_gain;
+                }
+                std::cout << "Gain improvement\t" << tg - total_gain << std::endl;
+                total_gain = tg;
+
                 for (auto vertex : reactivated_vertices) {
                         m_factory.queue.push(vertex);
                 }
