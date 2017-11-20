@@ -125,7 +125,8 @@ class multiple_k_stop_rule : public stop_rule {
 
 inline bool multiple_k_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
-        return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
+        //return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
+        return contraction_rate >= 1.1;
 }
 
 class mem_stop_rule : public stop_rule {
