@@ -24,8 +24,9 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
         config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
         int overall_improvement = 0;
 
-        for( unsigned i = 0; i < rounds; i++) {
-        //while (true) {
+        //for( unsigned i = 0; i < rounds; i++) {
+        int i = 0;
+        while (true) {
                 CLOCK_START;
 
                 setup_start_nodes_all(G, boundary);
@@ -36,7 +37,7 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
 
                 m_factory.time_setup_start_nodes += CLOCK_END_TIME;
 
-                std::cout << "Iter\t" << i << std::endl;
+                std::cout << "Iter\t" << i++ << std::endl;
                 CLOCK_START_N;
                 std::unordered_map<PartitionID, PartitionID> touched_blocks;
                 EdgeWeight improvement = start_more_locallized_search(config, G, boundary, init_neighbors,
@@ -45,6 +46,10 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
 
                 m_factory.time_local_search += CLOCK_END_TIME;
                 if (improvement == 0) {
+                        break;
+                }
+
+                if (overall_improvement * 0.05 > improvement) {
                         break;
                 }
 
@@ -121,14 +126,13 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
         todolist.resize(it - todolist.begin());
         random_functions::permutate_vector_good(todolist, false);
 #endif
-        int total_gain_improvement = 0;
+        Gain total_gain_improvement = 0;
 
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
         while (!todolist.empty()) {
 #else
         // we need the external loop for move strategy when conflicted nodes are reactivated for the next
         // parallel phase
-        size_t total_gain = 0;
         while (!m_factory.queue.empty()) {
 #endif
                 auto task = [&](uint32_t id) {
@@ -270,6 +274,11 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 std::tie(real_gain_improvement, real_nodes_movement) = refinement_core.apply_moves(num_threads,
                         m_factory.get_all_threads_data(), compute_touched_blocks, touched_blocks, reactivated_vertices);
 
+                ALWAYS_ASSERT(real_gain_improvement >= 0);
+                std::cout << "Gain improvement\t" << real_gain_improvement << std::endl;
+                if (total_gain_improvement * 0.05 > real_gain_improvement) {
+                        break;
+                }
                 total_gain_improvement += real_gain_improvement;
 
                 m_factory.partial_reset_global_data();
@@ -281,20 +290,12 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 //std::cout << "Reactivated vertices\t" << reactivated_vertices.size() << std::endl;
                 m_factory.get_thread_data(0).rnd.shuffle(reactivated_vertices);
 
-                size_t tg = 0;
-                for (size_t i = 0; i < config.num_threads; ++i) {
-                        tg += m_factory.get_thread_data(0).performed_gain;
-                }
-                std::cout << "Gain improvement\t" << tg - total_gain << std::endl;
-                total_gain = tg;
-
                 for (auto vertex : reactivated_vertices) {
                         m_factory.queue.push(vertex);
                 }
 
                 m_factory.time_move_nodes += CLOCK_END_TIME;
 
-                ALWAYS_ASSERT(real_gain_improvement >= 0);
 
                 if (!config.kway_all_boundary_nodes_refinement && is_more_that_5percent_moved) {
                         break;
