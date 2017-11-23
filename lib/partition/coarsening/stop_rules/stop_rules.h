@@ -32,7 +32,8 @@ class stop_rule {
         public:
                 stop_rule() {};
                 virtual ~stop_rule() {};
-                virtual bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem = 0) = 0;
+                virtual bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices,
+                                   EdgeID number_of_finer_edges = 0, EdgeID number_of_coarser_edges = 0, size_t mem = 0) = 0;
 };
 
 class separator_simple_stop_rule : public stop_rule {
@@ -47,13 +48,14 @@ class separator_simple_stop_rule : public stop_rule {
                 };
 
                 virtual ~separator_simple_stop_rule() {};
-                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem = 0);
+                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices,
+                           EdgeID number_of_finer_edges = 0, EdgeID number_of_coarser_edges = 0, size_t mem = 0);
 
         private:
                 NodeID num_stop;
 };
 
-inline bool separator_simple_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
+inline bool separator_simple_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, EdgeID, EdgeID, size_t ) {
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
         
         return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
@@ -71,13 +73,13 @@ class simple_stop_rule : public stop_rule {
                         }
                 };
                 virtual ~simple_stop_rule() {};
-                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t );
+                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, EdgeID, EdgeID, size_t );
 
         private:
                 NodeID num_stop;
 };
 
-inline bool simple_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
+inline bool simple_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, EdgeID, EdgeID, size_t ) {
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
         return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
 }
@@ -88,13 +90,14 @@ class strong_stop_rule : public stop_rule {
                         config.max_vertex_weight = config.upper_bound_partition;
                 };
                 virtual ~strong_stop_rule() {};
-                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem = 0);
+                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices,
+                           EdgeID number_of_finer_edges = 0, EdgeID number_of_coarser_edges = 0, size_t mem = 0);
 
         private:
                 NodeID num_stop;
 };
 
-inline bool strong_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
+inline bool strong_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, EdgeID, EdgeID, size_t ) {
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
         return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
 }
@@ -103,6 +106,7 @@ class multiple_k_stop_rule : public stop_rule {
         public:
                 multiple_k_stop_rule (PartitionConfig & config, NodeID number_of_nodes) {
                         num_stop = config.num_vert_stop_factor*config.k;
+                        num_stop = std::min(num_stop, config.num_vert_stop_factor * 16u);
 
                         if(config.disable_max_vertex_weight_constraint) {
                                 config.max_vertex_weight = config.upper_bound_partition; 
@@ -117,16 +121,17 @@ class multiple_k_stop_rule : public stop_rule {
 
                 };
                 virtual ~multiple_k_stop_rule () {};
-                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem = 0);
+                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices,
+                           EdgeID number_of_finer_edges, EdgeID number_of_coarser_edges, size_t mem = 0);
 
         private:
                 NodeID num_stop;
 };
 
-inline bool multiple_k_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
+inline bool multiple_k_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices,
+                                       EdgeID number_of_finer_edges, EdgeID number_of_coarser_edges, size_t) {
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
-        //return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
-        return contraction_rate >= 1.1;
+        return (contraction_rate >= 1.1 || (number_of_finer_edges + 0.0) / number_of_coarser_edges >= 1.1) && no_of_coarser_vertices >= num_stop;
 }
 
 class mem_stop_rule : public stop_rule {
@@ -147,7 +152,8 @@ public:
 
         };
         virtual ~mem_stop_rule () {};
-        bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem ) {
+        bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices,
+                   EdgeID, EdgeID, size_t mem) {
                 return mem > parallel::g_l3_cache_size / 2;
         }
 };
