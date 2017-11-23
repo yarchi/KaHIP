@@ -72,7 +72,8 @@ void size_constraint_label_propagation::match_internal(const PartitionConfig & p
 
         std::vector<NodeWeight> cluster_id(G.number_of_nodes());
         NodeWeight block_upperbound = ceil(partition_config.upper_bound_partition/(double)partition_config.cluster_coarsening_factor);
-        block_upperbound = ceil(partition_config.upper_bound_partition/(9.0));
+        //block_upperbound = ceil(partition_config.upper_bound_partition/(9.0));
+        block_upperbound = ceil(partition_config.upper_bound_partition/(18.0));
         if (!partition_config.parallel_coarsening_lp) {
                 label_propagation(partition_config, G, block_upperbound, cluster_id, no_of_coarse_vertices);
         } else {
