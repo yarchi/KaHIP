@@ -134,6 +134,7 @@ int main(int argn, char **argv) {
         }
         std::cout << "Blocks\t" << partition_config.k << std::endl;
         std::cout << "Seed\t" << partition_config.seed << std::endl;
+        std::cout << "MLS stop threshold\t" << partition_config.stop_mls_threshold << std::endl;
         srand(partition_config.seed);
         random_functions::setSeed(partition_config.seed);
 

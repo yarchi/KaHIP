@@ -24,9 +24,9 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
         config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
         int overall_improvement = 0;
 
-        //for( unsigned i = 0; i < rounds; i++) {
-        int i = 0;
-        while (true) {
+        for( unsigned i = 0; i < rounds; i++) {
+        //int i = 0;
+        //while (true) {
                 CLOCK_START;
 
                 setup_start_nodes_all(G, boundary);
@@ -37,7 +37,7 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
 
                 m_factory.time_setup_start_nodes += CLOCK_END_TIME;
 
-                std::cout << "Iter\t" << i++ << std::endl;
+                std::cout << "Iter\t" << i << std::endl;
                 CLOCK_START_N;
                 std::unordered_map<PartitionID, PartitionID> touched_blocks;
                 EdgeWeight improvement = start_more_locallized_search(config, G, boundary, init_neighbors,
@@ -49,9 +49,9 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
                         break;
                 }
 
-                if (overall_improvement * 0.05 > improvement) {
-                        break;
-                }
+//                if (overall_improvement * 0.05 > improvement) {
+//                        break;
+//                }
 
                 overall_improvement += improvement;
         }
@@ -276,7 +276,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
 
                 ALWAYS_ASSERT(real_gain_improvement >= 0);
                 std::cout << "Gain improvement\t" << real_gain_improvement << std::endl;
-                if (total_gain_improvement * 0.05 > real_gain_improvement) {
+                if (total_gain_improvement * (config.stop_mls_threshold / 100.0) > real_gain_improvement) {
                         break;
                 }
                 total_gain_improvement += real_gain_improvement;

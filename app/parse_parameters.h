@@ -187,6 +187,7 @@ int parse_parameters(int argn, char **argv,
         struct arg_lit *fast_contract_clustering             = arg_lit0(NULL, "fast_contract_clustering", "(Default: disabled)");
         struct arg_lit *shuffle_graph                        = arg_lit0(NULL, "shuffle_graph", "(Default: disabled)");
         struct arg_lit *sort_edges                           = arg_lit0(NULL, "sort_edges", "(Default: disabled)");
+        struct arg_int *stop_mls_threshold                   = arg_int0(NULL, "stop_mls_threshold", NULL, "Sets percent threshold to stop iteration of MLS");
         struct arg_end *end                                  = arg_end(100);
 
         // Define argtable.
@@ -255,6 +256,7 @@ int parse_parameters(int argn, char **argv,
                 sort_edges,
                 stop_rule,
                 num_vert_stop_factor,
+                stop_mls_threshold,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -1180,6 +1182,10 @@ int parse_parameters(int argn, char **argv,
 
         if (sort_edges->count > 0) {
                 partition_config.sort_edges = true;
+        }
+
+        if (stop_mls_threshold->count > 0) {
+                partition_config.stop_mls_threshold = stop_mls_threshold->ival[0];
         }
 
         return 0;

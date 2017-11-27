@@ -420,6 +420,7 @@ struct PartitionConfig
         bool check_cut = false;
         bool fast_contract_clustering = false;
         bool shuffle_graph = false;
+        uint32_t stop_mls_threshold = 5;
         bool sort_edges = false;
 };
 

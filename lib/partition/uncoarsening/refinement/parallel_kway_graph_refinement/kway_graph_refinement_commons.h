@@ -234,6 +234,10 @@ public:
                         PartitionID target_partition = get_local_partition(target);
                         ++num_part_accesses;
 
+                        if (num_threads_finished.load(std::memory_order_acq_rel) > 0) {
+                                return -1;
+                        }
+
                         if (m_local_degrees[target_partition].round == m_round) {
                                 m_local_degrees[target_partition].local_degree += G.getEdgeWeight(e);
                         } else {
