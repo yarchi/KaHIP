@@ -106,7 +106,7 @@ class multiple_k_stop_rule : public stop_rule {
         public:
                 multiple_k_stop_rule (PartitionConfig & config, NodeID number_of_nodes) {
                         num_stop = config.num_vert_stop_factor*config.k;
-                        num_stop = std::min(num_stop, config.num_vert_stop_factor * 16u);
+                        num_stop = std::min(num_stop, number_of_nodes / (4*config.num_threads));
 
                         if(config.disable_max_vertex_weight_constraint) {
                                 config.max_vertex_weight = config.upper_bound_partition; 
@@ -132,6 +132,8 @@ inline bool multiple_k_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of
                                        EdgeID number_of_finer_edges, EdgeID number_of_coarser_edges, size_t) {
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
         return (contraction_rate >= 1.1 || (number_of_finer_edges + 0.0) / number_of_coarser_edges >= 1.1) && no_of_coarser_vertices >= num_stop;
+        //return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
+
 }
 
 class mem_stop_rule : public stop_rule {
