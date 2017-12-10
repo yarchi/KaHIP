@@ -97,7 +97,7 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                         break;
                 }
 
-                if (td.num_threads_finished.load(std::memory_order_relaxed) > 0) {
+                if (td.num_threads_finished.fetch_add(0, std::memory_order_acq_rel) > 0) {
                         break;
                 }
 
