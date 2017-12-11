@@ -83,7 +83,7 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
                 label_propagation_refinement* lp_refinement = new label_propagation_refinement();
                 complete_boundary boundary(coarsest);
                 EdgeWeight changed = lp_refinement->perform_refinement(cfg, *coarsest, boundary);
-                CLOCK_END("Uncoarsening: Label propagation");
+                CLOCK_END(">> Uncoarsening: Label propagation");
 
                 if (config.check_cut) {
                         EdgeWeight new_cut = qm.edge_cut(*coarsest);
@@ -94,15 +94,20 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
                 }
         }
 
+        CLOCK_START;
         complete_boundary* finer_boundary   = NULL;
         complete_boundary* coarser_boundary = NULL;
         if(!config.label_propagation_refinement) {
                 coarser_boundary = new complete_boundary(coarsest);
                 coarser_boundary->build();
         }
+        CLOCK_END(">> Build boundary");
+
         double factor = config.balance_factor;
         cfg.upper_bound_partition = ((!hierarchy.isEmpty()) * factor +1.0)*config.upper_bound_partition;
+        CLOCK_START_N;
         improvement += (int)refine->perform_refinement(cfg, *coarsest, *coarser_boundary);
+        CLOCK_END(">> Refinement");
 
         NodeID coarser_no_nodes = coarsest->number_of_nodes();
         graph_access* finest    = NULL;
@@ -110,7 +115,9 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
         unsigned int hierarchy_deepth = hierarchy.size();
 
         while(!hierarchy.isEmpty()) {
+                CLOCK_START;
                 graph_access* G = hierarchy.pop_finer_and_project();
+                CLOCK_END("Projection");
 
                 PRINT(std::cout << "log>" << "unrolling graph with " << G->number_of_nodes()<<  std::endl;)
 
@@ -128,7 +135,7 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
                         EdgeWeight changed = label_propagation_refinement().perform_refinement(cfg, *G,
                                                                                                *coarser_boundary,
                                                                                                boundary);
-                        CLOCK_END("Uncoarsening: Label propagation");
+                        CLOCK_END(">> Uncoarsening: Label propagation");
 
                         if (config.check_cut) {
                                 EdgeWeight new_cut = qm.edge_cut(*G);
@@ -138,6 +145,7 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
                         }
                 }
 
+                CLOCK_START_N;
                 if(!config.label_propagation_refinement) {
                         if (!config.lp_before_local_search) {
                                 finer_boundary = new complete_boundary(G);
@@ -148,12 +156,15 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig & config, graph
                                 finer_boundary->build_from_coarser(coarser_boundary, boundary);
                         }
                 }
+                CLOCK_END(">> Build boundary");
 
                 //call refinement
                 double cur_factor = factor/(hierarchy_deepth-hierarchy.size());
                 cfg.upper_bound_partition = ((!hierarchy.isEmpty()) * cur_factor+1.0)*config.upper_bound_partition;
                 PRINT(std::cout <<  "cfg upperbound " <<  cfg.upper_bound_partition  << std::endl;)
+                CLOCK_START_N;
                 improvement += (int)refine->perform_refinement(cfg, *G, *finer_boundary);
+                CLOCK_END(">> Refinement");
                 ASSERT_TRUE(graph_partition_assertions::assert_graph_has_kway_partition(config, *G));
 
                 if(config.use_balance_singletons && !config.label_propagation_refinement) {

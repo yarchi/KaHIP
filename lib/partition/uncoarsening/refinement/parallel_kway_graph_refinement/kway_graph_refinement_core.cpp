@@ -54,7 +54,7 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
 
         init_queue_with_boundary(td, queue);
 
-        if (queue->empty()) {
+        if (queue->empty() || td.num_threads_finished.load(std::memory_order_acq_rel) > 0) {
                 td.transpositions.push_back(sentinel);
                 td.from_partitions.push_back(sentinel);
                 td.to_partitions.push_back(sentinel);
@@ -97,10 +97,6 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                         break;
                 }
 
-                if (td.num_threads_finished.fetch_add(0, std::memory_order_acq_rel) > 0) {
-                        break;
-                }
-
                 uint32_t local_min_cut_index = (uint32_t) (min_cut_index - previously_moved >= 0 ? min_cut_index -
                                                                                                    previously_moved
                                                                                                 : 0);
@@ -122,7 +118,16 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
 #endif
 
                 PartitionID to;
+
+                if (td.num_threads_finished.load(std::memory_order_acq_rel) > 0) {
+                        break;
+                }
+
                 bool successfull = local_move_node(td, node, from, to, queue, gain);
+
+                if (td.num_threads_finished.load(std::memory_order_acq_rel) > 0) {
+                        break;
+                }
 
                 if (successfull) {
                         ++td.accepted_movements;
@@ -772,6 +777,11 @@ void kway_graph_refinement_core::init_queue_with_boundary(thread_data_refinement
                         EdgeWeight ext_degree;
                         //compute gain
                         PartitionID from = td.get_local_partition(node);
+
+                        if (td.num_threads_finished.load(std::memory_order_acq_rel) > 0) {
+                                return;
+                        }
+
                         Gain gain = td.compute_gain(node, from, max_gainer, ext_degree);
                         queue->insert(node, gain);
                         td.moved.push_back(node);
@@ -944,6 +954,10 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
 
         EdgeWeight node_ext_deg;
 
+        if (td.num_threads_finished.load(std::memory_order_acq_rel) > 0) {
+                return false;
+        }
+
         Gain expected_gain = td.compute_gain(node, from, to, node_ext_deg);
 
         ALWAYS_ASSERT(expected_gain == gain);
@@ -995,6 +1009,11 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
 
                 if (queue->contains(target)) {
                         PartitionID target_from = td.get_local_partition(target);
+
+                        if (td.num_threads_finished.load(std::memory_order_acq_rel) > 0) {
+                                return false;
+                        }
+
                         Gain gain = td.compute_gain(target, target_from, targets_to, ext_degree);
 
                         assert(td.moved_idx[target].load(std::memory_order_relaxed));
@@ -1010,6 +1029,11 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
                         }
 
                         PartitionID target_from = td.get_local_partition(target);
+
+                        if (td.num_threads_finished.load(std::memory_order_acq_rel) > 0) {
+                                return false;
+                        }
+
                         Gain gain = td.compute_gain(target, target_from, targets_to, ext_degree);
 
                         if (ext_degree > 0) {
