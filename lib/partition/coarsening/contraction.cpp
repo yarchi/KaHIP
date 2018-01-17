@@ -234,7 +234,7 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
 
         auto handle = new_edges.getHandle();
         size_t num_edges = 0;
-        for (auto it = handle.begin(); it != handle.end(); it++) {
+        for (auto it = handle.begin(); it != handle.end(); ++it) {
                 std::pair<NodeID, NodeID> edge = get_pair_from_uint64((*it).first);
                 auto edge_weight = (*it).second / 2;
                 building_tool[edge.first].emplace_back(edge.second, edge_weight);
