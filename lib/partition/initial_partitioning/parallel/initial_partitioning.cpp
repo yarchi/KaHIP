@@ -11,8 +11,6 @@
 
 #include <fstream>
 
-#include "ittnotify.h"
-
 namespace parallel {
 
 initial_partitioning::initial_partitioning() {
@@ -89,7 +87,6 @@ void initial_partitioning::perform_initial_partitioning(const PartitionConfig& c
         ofs.open("/dev/null");
         std::cout.rdbuf(ofs.rdbuf());
 
-        __itt_resume();
         for (uint32_t id = 0; id < g_thread_pool.NumThreads(); ++id) {
                 futures.push_back(parallel::g_thread_pool.Submit(id, task, id + 1));
         }
@@ -104,7 +101,6 @@ void initial_partitioning::perform_initial_partitioning(const PartitionConfig& c
         std::for_each(futures.begin(), futures.end(), [&](auto& future) {
                 cuts.push_back(future.get());
         });
-        __itt_pause();
         ofs.close();
         std::cout.rdbuf(backup);
 

@@ -335,13 +335,13 @@ int main(int argn, char **argv) {
         std::cout << "Equal\t" << equal << std::endl;
 #endif
         // write the partition to the disc 
-        std::stringstream filename;
-        if(!partition_config.filename_output.compare("")) {
-                filename << "tmppartition" << partition_config.k;
-        } else {
-                filename << partition_config.filename_output;
-        }
-
-        graph_io::writePartition(G, filename.str());
+//        std::stringstream filename;
+//        if(!partition_config.filename_output.compare("")) {
+//                filename << "tmppartition" << partition_config.k;
+//        } else {
+//                filename << partition_config.filename_output;
+//        }
+//
+//        graph_io::writePartition(G, filename.str());
         
 }

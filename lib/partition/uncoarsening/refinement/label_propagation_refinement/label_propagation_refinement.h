@@ -51,6 +51,12 @@ public:
         EdgeWeight perform_refinement(PartitionConfig& config, graph_access& G, complete_boundary& boundary,
                                       std::vector<uint8_t>& bounday_nodes);
 
+        EdgeWeight parallel_label_propagation_many_clusters(const PartitionConfig& config,
+                                                            graph_access& G,
+                                                            const NodeWeight block_upperbound,
+                                                            std::vector<NodeWeight>& cluster_id,
+                                                            NodeID& no_of_blocks);
+
 private:
         //using Allocator = growt::PoolAllocator<NodeID>;
         using Allocator = tbb::scalable_allocator<NodeID>;
@@ -60,7 +66,7 @@ private:
 
         Allocator m_block_allocator;
 
-        inline uint32_t get_block_size(graph_access& G, PartitionConfig& config) const {
+        inline uint32_t get_block_size(graph_access& G, const PartitionConfig& config) const {
                 if (config.block_size_unit == BlockSizeUnit::NODES) {
                         return get_block_size(G.number_of_nodes());
                 }
@@ -94,6 +100,14 @@ private:
                                                          std::vector<std::vector<PartitionID>>& hash_maps,
                                                          std::vector<Pair>& permutation);
 
+        EdgeWeight parallel_label_propagation_with_queue_with_many_clusters(graph_access& G,
+                                                                            const PartitionConfig& config,
+                                                                            const NodeWeight block_upperbound,
+                                                                            std::vector<NodeWeight>& cluster_id,
+                                                                            std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
+                                                                            std::vector<std::vector<PartitionID>>& hash_maps,
+                                                                            std::vector<Pair>& permutation);
+
         EdgeWeight parallel_label_propagation(graph_access& G,
                                               PartitionConfig& config,
                                               parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
@@ -110,6 +124,10 @@ private:
                                     parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                     std::unique_ptr<ConcurrentQueue>& queue);
 
+        void par_init_for_edge_unit(graph_access& G, const uint32_t block_size,
+                                    std::vector<Pair>& permutation,
+                                    std::unique_ptr<ConcurrentQueue>& queue);
+
         void init_for_node_unit(graph_access& G, const uint32_t block_size,
                                 std::vector<Pair>& permutation,
                                 parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
@@ -119,6 +137,10 @@ private:
 
         void parallel_get_boundary_nodes(PartitionConfig& config, graph_access& G,
                                          std::vector<uint8_t>& bounday_nodes);
+
+        void remap_cluster_ids_fast(const PartitionConfig& partition_config, graph_access& G,
+                                    std::vector<NodeWeight>& cluster_id, NodeID& no_of_coarse_vertices,
+                                    bool apply_to_graph = false);
 };
 
 

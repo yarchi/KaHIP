@@ -138,6 +138,17 @@ class size_constraint_label_propagation : public matching {
                                                     NodeID& no_of_blocks,
                                                     std::vector<parallel::AtomicWrapper<char>> active,
                                                     std::vector<parallel::AtomicWrapper<char>> new_active);
+
+                uint32_t parallel_label_propagation_exp(const PartitionConfig& config,
+                                                        graph_access& G,
+                                                        const NodeWeight block_upperbound,
+                                                        std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
+                                                        std::vector<NodeID>& cluster_id,
+                                                        std::vector<pair_type>& permutation,
+                                                        NodeID& no_of_blocks,
+                                                        std::vector<parallel::AtomicWrapper<char>> active,
+                                                        std::vector<parallel::AtomicWrapper<char>> new_active
+                );
 };
 
 
