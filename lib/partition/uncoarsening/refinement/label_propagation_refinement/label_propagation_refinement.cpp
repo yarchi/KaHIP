@@ -920,8 +920,8 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_many_cluster
                 permutation.emplace_back(node, G.getNodeDegree(node));
         } endfor
 
-        //parallel::g_thread_pool.Clear();
-        //parallel::Unpin();
+        parallel::g_thread_pool.Clear();
+        parallel::Unpin();
         {
                 CLOCK_START;
 //                std::sort(permutation.begin(), permutation.end(), [&](const Pair& lhs, const Pair& rhs) {
@@ -932,8 +932,8 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_many_cluster
                 }, config.num_threads);
                 CLOCK_END("Sort");
         }
-        //parallel::PinToCore(0);
-        //parallel::g_thread_pool.Resize(config.num_threads - 1);
+        parallel::PinToCore(0);
+        parallel::g_thread_pool.Resize(config.num_threads - 1);
 
         {
                 CLOCK_START;
