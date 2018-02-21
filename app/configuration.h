@@ -597,7 +597,27 @@ inline void configuration::fastsocialmultitry( PartitionConfig & partition_confi
 
 inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partition_config) {
         fastsocialmultitry(partition_config);
+
+
+        // parallel lp
+        partition_config.block_size_unit = BlockSizeUnit::EDGES;
+
+        // coarsening
+        partition_config.parallel_coarsening_lp = true;
+        partition_config.fast_contract_clustering = true;
+
+        // initial partitioning
+        partition_config.parallel_initial_partitioning = true;
+
+        // parallel lp in refinement
+        partition_config.lp_before_local_search = true;
+        partition_config.parallel_lp = true;
+
+        // parallel k-way multitry local search in refinement
+        partition_config.apply_move_strategy = ApplyMoveStrategy::SKIP;
         partition_config.parallel_multitry_kway = true;
+        partition_config.global_multitry_rounds = 3;
+        partition_config.stop_mls_threshold = 10;
 }
 
 inline void configuration::fastsocial( PartitionConfig & partition_config ) {
@@ -610,7 +630,20 @@ inline void configuration::fastsocial( PartitionConfig & partition_config ) {
 
 inline void configuration::fastsocial_parallel( PartitionConfig & partition_config ) {
         fastsocial(partition_config);
+
+        // parallel lp
+        partition_config.block_size_unit = BlockSizeUnit::EDGES;
+
+        // coarsening
+        partition_config.parallel_coarsening_lp = true;
+        partition_config.fast_contract_clustering = true;
+
+        // initial partitioning
+        partition_config.parallel_initial_partitioning = true;
+
+        // parallel lp in refinement
         partition_config.parallel_lp = true;
+
 }
 
 inline void configuration::ecosocial( PartitionConfig & partition_config ) {

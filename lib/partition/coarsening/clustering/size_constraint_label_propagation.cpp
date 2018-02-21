@@ -387,7 +387,6 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation_exp(const
                                                                        std::vector<parallel::AtomicWrapper<char>> active,
                                                                        std::vector<parallel::AtomicWrapper<char>> new_active
 ) {
-        __itt_resume();
         std::vector<std::unique_ptr<PartitionID[]>> hash_maps(config.num_threads);
         std::vector<std::vector<NodeID>> neighbor_parts_array(config.num_threads);
         parallel::Cvector<parallel::random> rnds;
@@ -486,7 +485,6 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation_exp(const
                 CLOCK_END(std::string("Iteration ") + std::to_string(j) + " time");
                 active.swap(new_active);
         }
-        __itt_pause();
         return 0;
 }
 
