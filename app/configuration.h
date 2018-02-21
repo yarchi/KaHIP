@@ -630,7 +630,6 @@ inline void configuration::fastsocial( PartitionConfig & partition_config ) {
 
 inline void configuration::fastsocial_parallel( PartitionConfig & partition_config ) {
         fastsocial(partition_config);
-
         // parallel lp
         partition_config.block_size_unit = BlockSizeUnit::EDGES;
 
