@@ -605,6 +605,7 @@ inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partitio
         // coarsening
         partition_config.parallel_coarsening_lp = true;
         partition_config.fast_contract_clustering = true;
+        partition_config.stop_rule = STOP_RULE_MULTIPLE_K_STRONG_CONTRACTION;
 
         // initial partitioning
         partition_config.parallel_initial_partitioning = true;
@@ -636,6 +637,7 @@ inline void configuration::fastsocial_parallel( PartitionConfig & partition_conf
         // coarsening
         partition_config.parallel_coarsening_lp = true;
         partition_config.fast_contract_clustering = true;
+        partition_config.stop_rule = STOP_RULE_MULTIPLE_K_STRONG_CONTRACTION;
 
         // initial partitioning
         partition_config.parallel_initial_partitioning = true;

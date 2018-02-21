@@ -34,6 +34,7 @@
 #include "matching/random_matching.h"
 #include "stop_rules/stop_rules.h"
 #include "data_structure/parallel/time.h"
+#include "min_hash/hash_common_neighborhood.h"
 
 coarsening::coarsening() {
 
@@ -66,7 +67,10 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                         coarsening_stop_rule = new multiple_k_stop_rule(copy_of_partition_config, G.number_of_nodes());
                 } else if (partition_config.stop_rule == STOP_RULE_MEM) {
                         coarsening_stop_rule = new mem_stop_rule(copy_of_partition_config, G.number_of_nodes());
-                } else {
+                } else if (partition_config.stop_rule == STOP_RULE_MULTIPLE_K_STRONG_CONTRACTION) {
+                        coarsening_stop_rule = new multiple_k_strong_contraction(copy_of_partition_config, G.number_of_nodes());
+                }
+                else {
                         coarsening_stop_rule = new strong_stop_rule(copy_of_partition_config, G.number_of_nodes());
                 }
         }
@@ -75,6 +79,8 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
 
         unsigned int level    = 0;
         bool contraction_stop = false;
+        bool common_neighborhood_clustering = partition_config.common_neighborhood_clustering;
+
         do {
                 graph_access* coarser = new graph_access();
                 coarse_mapping        = new CoarseMapping();
@@ -92,9 +98,20 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                 CLOCK_START_N;
                 edge_matcher->match(copy_of_partition_config, *finer, edge_matching,
                                     *coarse_mapping, no_of_coarser_vertices, permutation);
-
                 delete edge_matcher;
                 CLOCK_END(">> LP");
+
+                if (common_neighborhood_clustering) {
+                        CLOCK_START;
+                        hash_common_neighborhood().match(copy_of_partition_config, *finer, edge_matching,
+                                                         *coarse_mapping, no_of_coarser_vertices, permutation);
+
+                        std::cout << ">> common_neighborhood_clustering: vertices = " << finer->number_of_nodes() << ", # of coarsed vertices = " << no_of_coarser_vertices << std::endl;
+                        if (finer->number_of_nodes() == no_of_coarser_vertices) {
+                                common_neighborhood_clustering = false;
+                        }
+                        CLOCK_END(">> Hashiing neighbors");
+                }
 
                 CLOCK_START_N;
                 if(partition_config.graph_allready_partitioned) {
@@ -107,15 +124,17 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                 CLOCK_END(">> Contract");
 
                 hierarchy.push_back(finer, coarse_mapping);
-                contraction_stop = coarsening_stop_rule->stop(no_of_finer_vertices, no_of_coarser_vertices, coarser->mem());
-              
+
+                contraction_stop = coarsening_stop_rule->stop(no_of_finer_vertices, *coarser);
+
                 no_of_finer_vertices = no_of_coarser_vertices;
                 std::cout <<  "no of coarser vertices " << no_of_coarser_vertices <<  " and no of edges " <<  coarser->number_of_edges() << std::endl;
 
                 finer = coarser;
 
                 level++;
-        } while( contraction_stop ); 
+
+        } while( contraction_stop);
 
         hierarchy.push_back(finer, NULL); // append the last created level
 

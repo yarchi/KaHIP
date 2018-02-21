@@ -1,11 +1,14 @@
 #pragma once
 
+#include <bitset>
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <random>
 
 #define XXH_PRIVATE_API
 #include "data_structure/parallel/lib/xxhash.h"
+#include "data_structure/parallel/bits.h"
 #include "tools/macros_assertions.h"
 
 namespace parallel {
