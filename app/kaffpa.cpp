@@ -143,18 +143,9 @@ int main(int argn, char **argv) {
 
         std::cout <<  "graph has " <<  G.number_of_nodes() <<  " nodes and " <<  G.number_of_edges() <<  " edges"  << std::endl;
         if (partition_config.label_propagation_refinement) {
-                if (partition_config.parallel_lp) {
-                        std::cout << "Algorithm\tparallel lp" << std::endl;
-                } else {
-                        std::cout << "Algorithm\tsequential lp" << std::endl;
-                }
+                std::cout << "Algorithm\t" << partition_config.configuration << std::endl;
                 std::cout << "Block size\t" << partition_config.block_size << std::endl;
         } else {
-//                if (partition_config.parallel_multitry_kway) {
-//                        std::cout << "Algorithm\tparallel multitry kway" << std::endl;
-//                } else {
-//                        std::cout << "Algorithm\tsequential multitry kway" << std::endl;
-//                }
                 std::cout << "Algorithm\t" << partition_config.configuration + (partition_config.lp_before_local_search ? "_lp" : "") << std::endl;
         }
         std::cout << "Num threads\t" << partition_config.num_threads << std::endl;

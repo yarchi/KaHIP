@@ -422,6 +422,7 @@ struct PartitionConfig
         bool shuffle_graph = false;
         uint32_t stop_mls_threshold = 5;
         bool sort_edges = false;
+        bool common_neighborhood_clustering = false;
 };
 
 

@@ -188,6 +188,7 @@ int parse_parameters(int argn, char **argv,
         struct arg_lit *shuffle_graph                        = arg_lit0(NULL, "shuffle_graph", "(Default: disabled)");
         struct arg_lit *sort_edges                           = arg_lit0(NULL, "sort_edges", "(Default: disabled)");
         struct arg_int *stop_mls_threshold                   = arg_int0(NULL, "stop_mls_threshold", NULL, "Sets percent threshold to stop iteration of MLS");
+        struct arg_lit *common_neighborhood_clustering       = arg_lit0(NULL, "common_neighborhood_clustering", "(Default: disabled)");
         struct arg_end *end                                  = arg_end(100);
 
         // Define argtable.
@@ -257,6 +258,7 @@ int parse_parameters(int argn, char **argv,
                 stop_rule,
                 num_vert_stop_factor,
                 stop_mls_threshold,
+                common_neighborhood_clustering,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -1188,6 +1190,9 @@ int parse_parameters(int argn, char **argv,
                 partition_config.stop_mls_threshold = stop_mls_threshold->ival[0];
         }
 
+        if (common_neighborhood_clustering->count > 0) {
+                partition_config.common_neighborhood_clustering = true;
+        }
         return 0;
 }
 

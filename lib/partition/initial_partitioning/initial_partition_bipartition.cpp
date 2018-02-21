@@ -65,12 +65,15 @@ void initial_partition_bipartition::initial_partition( const PartitionConfig & c
         rec_config.lp_before_local_search = false;
         rec_config.fast_contract_clustering = false;
 
+        // turn off common_neighborhood_clustering
+        rec_config.common_neighborhood_clustering = false;
+
         if (rec_config.fastmultitry) {
                 rec_config.fastmultitry = false;
                 rec_config.quotient_graph_refinement_disabled = false;
         }
 
-        if (rec_config.stop_rule == STOP_RULE_MEM) {
+        if (rec_config.stop_rule == STOP_RULE_MEM || rec_config.stop_rule == STOP_RULE_MULTIPLE_K_STRONG_CONTRACTION) {
                 rec_config.stop_rule = STOP_RULE_MULTIPLE_K;
         }
 

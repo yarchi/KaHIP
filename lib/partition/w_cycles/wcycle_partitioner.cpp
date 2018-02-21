@@ -120,7 +120,9 @@ int wcycle_partitioner::perform_partitioning_recursive( PartitionConfig & partit
                 refine = new label_propagation_refinement();
         }
 
-        if(!m_coarsening_stop_rule->stop(no_of_finer_vertices, no_of_coarser_vertices)) {
+        //if(!m_coarsening_stop_rule->stop(no_of_finer_vertices, no_of_coarser_vertices)) {
+        ALWAYS_ASSERT(coarser->number_of_nodes() == no_of_coarser_vertices);
+        if(!m_coarsening_stop_rule->stop(no_of_finer_vertices, *coarser)) {
 
                 PartitionConfig cfg; cfg = partition_config;
 

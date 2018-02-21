@@ -979,16 +979,16 @@ void label_propagation_refinement::remap_cluster_ids_fast(const PartitionConfig&
 
         std::vector<NodeWeight> cluster_map(G.number_of_nodes());
         forall_nodes(G, node) {
-                                PartitionID cur_cluster = cluster_id[node];
-                                cluster_map[cur_cluster] = 1;
-                        } endfor
+                PartitionID cur_cluster = cluster_id[node];
+                cluster_map[cur_cluster] = 1;
+        } endfor
 
         for (size_t i = 1; i < cluster_map.size(); ++i)
                 cluster_map[i] += cluster_map[i - 1];
 
         forall_nodes(G, node) {
-                                cluster_id[node] = cluster_map[cluster_id[node]] - 1;
-                        } endfor
+                cluster_id[node] = cluster_map[cluster_id[node]] - 1;
+        } endfor
 
         no_of_coarse_vertices = cluster_map.back();
 

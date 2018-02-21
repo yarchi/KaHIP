@@ -32,7 +32,7 @@ class stop_rule {
         public:
                 stop_rule() {};
                 virtual ~stop_rule() {};
-                virtual bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem = 0) = 0;
+                virtual bool stop( NodeID number_of_finer_vertices, graph_access& coarser) = 0;
 };
 
 class separator_simple_stop_rule : public stop_rule {
@@ -47,13 +47,14 @@ class separator_simple_stop_rule : public stop_rule {
                 };
 
                 virtual ~separator_simple_stop_rule() {};
-                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem = 0);
+                bool stop( NodeID number_of_finer_vertices, graph_access& coarser);
 
         private:
                 NodeID num_stop;
 };
 
-inline bool separator_simple_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
+inline bool separator_simple_stop_rule::stop(NodeID no_of_finer_vertices, graph_access& coarser) {
+        NodeID no_of_coarser_vertices = coarser.number_of_nodes();
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
         
         return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
@@ -71,13 +72,14 @@ class simple_stop_rule : public stop_rule {
                         }
                 };
                 virtual ~simple_stop_rule() {};
-                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t );
+                bool stop( NodeID number_of_finer_vertices, graph_access& coarser);
 
         private:
                 NodeID num_stop;
 };
 
-inline bool simple_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
+inline bool simple_stop_rule::stop(NodeID no_of_finer_vertices, graph_access& coarser) {
+        NodeID no_of_coarser_vertices = coarser.number_of_nodes();
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
         return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
 }
@@ -88,13 +90,14 @@ class strong_stop_rule : public stop_rule {
                         config.max_vertex_weight = config.upper_bound_partition;
                 };
                 virtual ~strong_stop_rule() {};
-                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem = 0);
+                bool stop( NodeID number_of_finer_vertices, graph_access& coarser);
 
         private:
                 NodeID num_stop;
 };
 
-inline bool strong_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
+inline bool strong_stop_rule::stop(NodeID no_of_finer_vertices, graph_access& coarser) {
+        NodeID no_of_coarser_vertices = coarser.number_of_nodes();
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
         return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
 }
@@ -102,7 +105,7 @@ inline bool strong_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coa
 class multiple_k_stop_rule : public stop_rule {
         public:
                 multiple_k_stop_rule (PartitionConfig & config, NodeID number_of_nodes) {
-                        num_stop = config.num_vert_stop_factor*config.k;
+                        num_stop = std::min(config.num_vert_stop_factor*config.k, config.num_vert_stop_factor*16u);
 
                         if(config.disable_max_vertex_weight_constraint) {
                                 config.max_vertex_weight = config.upper_bound_partition; 
@@ -117,13 +120,14 @@ class multiple_k_stop_rule : public stop_rule {
 
                 };
                 virtual ~multiple_k_stop_rule () {};
-                bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem = 0);
+                bool stop( NodeID number_of_finer_vertices, graph_access& coarser);
 
         private:
                 NodeID num_stop;
 };
 
-inline bool multiple_k_stop_rule::stop(NodeID no_of_finer_vertices, NodeID no_of_coarser_vertices, size_t ) {
+inline bool multiple_k_stop_rule::stop(NodeID no_of_finer_vertices, graph_access& coarser) {
+        NodeID no_of_coarser_vertices = coarser.number_of_nodes();
         double contraction_rate = 1.0 * no_of_finer_vertices / (double)no_of_coarser_vertices;
         return contraction_rate >= 1.1 && no_of_coarser_vertices >= num_stop;
 }
@@ -146,9 +150,41 @@ public:
 
         };
         virtual ~mem_stop_rule () {};
-        bool stop( NodeID number_of_finer_vertices, NodeID number_of_coarser_vertices, size_t mem ) {
-                return mem > parallel::g_l3_cache_size / 2;
+        bool stop(NodeID, graph_access& coarser) {
+                return coarser.mem() > parallel::g_l3_cache_size / 2;
         }
+};
+
+class multiple_k_strong_contraction : public multiple_k_stop_rule {
+public:
+        multiple_k_strong_contraction(PartitionConfig& _config, NodeID number_of_nodes)
+                :       multiple_k_stop_rule(_config, number_of_nodes)
+                ,       config(_config)
+                ,       attemps_to_contract_more(0)
+        {}
+
+        virtual ~multiple_k_strong_contraction(){
+        }
+
+        bool stop(NodeID number_of_finer_vertices, graph_access& coarser) {
+                bool res = multiple_k_stop_rule::stop(number_of_finer_vertices, coarser);
+
+                if (!res && attemps_to_contract_more < max_attempts &&
+                    ((coarser.number_of_edges() + 0.0) / coarser.number_of_nodes() > 1.5 || coarser.number_of_edges() > 500000)) {
+                        config.cluster_coarsening_factor /= 2;
+                        config.cluster_coarsening_factor = std::max(config.cluster_coarsening_factor, 1);
+
+                        res = true;
+                        ++attemps_to_contract_more;
+                }
+
+                return res;
+        }
+
+private:
+        static constexpr uint32_t max_attempts = 2;
+        PartitionConfig& config;
+        uint32_t attemps_to_contract_more;
 };
 
 #endif /* end of include guard: STOP_RULES_SZ45JQS6 */
