@@ -68,7 +68,7 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                 } else if (partition_config.stop_rule == STOP_RULE_MEM) {
                         coarsening_stop_rule = new mem_stop_rule(copy_of_partition_config, G.number_of_nodes());
                 } else if (partition_config.stop_rule == STOP_RULE_MULTIPLE_K_STRONG_CONTRACTION) {
-                        coarsening_stop_rule = new multiple_k_strong_contraction(copy_of_partition_config, G.number_of_nodes());
+                        coarsening_stop_rule = new multiple_k_strong_contraction(copy_of_partition_config, G.number_of_nodes(), G.number_of_edges());
                 }
                 else {
                         coarsening_stop_rule = new strong_stop_rule(copy_of_partition_config, G.number_of_nodes());
@@ -110,7 +110,7 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                         if (finer->number_of_nodes() == no_of_coarser_vertices) {
                                 common_neighborhood_clustering = false;
                         }
-                        CLOCK_END(">> Hashiing neighbors");
+                        CLOCK_END(">> Hashing neighbors");
                 }
 
                 CLOCK_START_N;

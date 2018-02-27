@@ -105,7 +105,7 @@ inline bool strong_stop_rule::stop(NodeID no_of_finer_vertices, graph_access& co
 class multiple_k_stop_rule : public stop_rule {
         public:
                 multiple_k_stop_rule (PartitionConfig & config, NodeID number_of_nodes) {
-                        num_stop = std::min(config.num_vert_stop_factor*config.k, config.num_vert_stop_factor*16u);
+                        num_stop = config.num_vert_stop_factor*config.k;
 
                         if(config.disable_max_vertex_weight_constraint) {
                                 config.max_vertex_weight = config.upper_bound_partition; 
@@ -157,10 +157,11 @@ public:
 
 class multiple_k_strong_contraction : public multiple_k_stop_rule {
 public:
-        multiple_k_strong_contraction(PartitionConfig& _config, NodeID number_of_nodes)
+        multiple_k_strong_contraction(PartitionConfig& _config, NodeID number_of_nodes, EdgeID _number_of_edges)
                 :       multiple_k_stop_rule(_config, number_of_nodes)
                 ,       config(_config)
                 ,       attemps_to_contract_more(0)
+                ,       number_of_edges(_number_of_edges)
         {}
 
         virtual ~multiple_k_strong_contraction(){
@@ -170,7 +171,9 @@ public:
                 bool res = multiple_k_stop_rule::stop(number_of_finer_vertices, coarser);
 
                 if (!res && attemps_to_contract_more < max_attempts &&
-                    ((coarser.number_of_edges() + 0.0) / coarser.number_of_nodes() > 1.5 || coarser.number_of_edges() > 500000)) {
+                    //((coarser.number_of_edges() + 0.0) / coarser.number_of_nodes() > 1.5 || coarser.number_of_edges() > 500000)
+                    (coarser.number_of_edges() > number_of_edges * 0.001 && coarser.number_of_nodes() > 1000 * config.k)
+                ) {
                         config.cluster_coarsening_factor /= 2;
                         config.cluster_coarsening_factor = std::max(config.cluster_coarsening_factor, 1);
 
@@ -185,6 +188,7 @@ private:
         static constexpr uint32_t max_attempts = 2;
         PartitionConfig& config;
         uint32_t attemps_to_contract_more;
+        const EdgeID number_of_edges;
 };
 
 #endif /* end of include guard: STOP_RULES_SZ45JQS6 */

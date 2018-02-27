@@ -133,6 +133,7 @@ void initial_partitioning::perform_initial_partitioning(const PartitionConfig& c
                 PRINT(std::cout << "log>"             << "final current initial balance " << qm.balance(G) << std::endl;)
         }
         std::cout << "initial cut\t" << best_cut << std::endl;
+
         ASSERT_TRUE(graph_partition_assertions::assert_graph_has_kway_partition(config, G));
 }
 
