@@ -99,7 +99,7 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                 edge_matcher->match(copy_of_partition_config, *finer, edge_matching,
                                     *coarse_mapping, no_of_coarser_vertices, permutation);
                 delete edge_matcher;
-                CLOCK_END(">> LP");
+                CLOCK_END(">> Match or clustering");
 
                 if (common_neighborhood_clustering) {
                         std::cout << "Number of coarse vertices before min_hash = " << no_of_coarser_vertices << std::endl;

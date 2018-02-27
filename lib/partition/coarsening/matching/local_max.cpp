@@ -25,6 +25,17 @@ void local_max_matching::match(const PartitionConfig& partition_config,
                                   << std::endl;
                         abort();
         }
+
+        no_of_coarse_vertices = 0;
+        mapping.resize(G.number_of_edges());
+        for (NodeID i = 0; i < permutation.size(); ++i) {
+                NodeID node = permutation[i];
+                if (node <= edge_matching[node]) {
+                        mapping[edge_matching[node]] = no_of_coarse_vertices;
+                        mapping[node] = no_of_coarse_vertices;
+                        ++no_of_coarse_vertices;
+                }
+        }
 }
 
 void local_max_matching::sequential_match(const PartitionConfig& partition_config,
@@ -33,25 +44,26 @@ void local_max_matching::sequential_match(const PartitionConfig& partition_confi
                                           CoarseMapping& mapping,
                                           NodeID& no_of_coarse_vertices,
                                           NodePermutationMap& permutation) {
+        std::cout << "MAX VERTEX WEIGHT = " << partition_config.max_vertex_weight << std::endl;
         CLOCK_START;
-        std::vector<NodeID> vertex_permutation;
         std::vector<std::pair<NodeID, uint32_t>> max_neighbours;
 
-        vertex_permutation.reserve(G.number_of_nodes());
+        permutation.clear();
+        permutation.reserve(G.number_of_nodes());
         edge_matching.reserve(G.number_of_nodes());
         max_neighbours.reserve(G.number_of_nodes());
 
         for (size_t i = 0; i < G.number_of_nodes(); ++i) {
-                vertex_permutation.push_back(i);
+                permutation.push_back(i);
                 edge_matching.push_back(i);
                 max_neighbours.emplace_back(i, 0);
         }
-        std::random_shuffle(vertex_permutation.begin(), vertex_permutation.end());
+        std::random_shuffle(permutation.begin(), permutation.end());
 
         // need two queues to save max_neighbour in array
         std::unique_ptr<std::queue<NodeID>> node_queue = std::make_unique<std::queue<NodeID>>();
         std::unique_ptr<std::queue<NodeID>> node_queue_next = std::make_unique<std::queue<NodeID>>();
-        for (NodeID node : vertex_permutation) {
+        for (NodeID node : permutation) {
                 node_queue->push(node);
         }
         random rnd(partition_config.seed);
@@ -59,6 +71,7 @@ void local_max_matching::sequential_match(const PartitionConfig& partition_confi
 
         CLOCK_START_N;
         uint32_t round = 0;
+        uint32_t m_none_count = 0;
         while (!node_queue->empty()) {
                 while (!node_queue->empty()) {
                         NodeID node = node_queue->front();
@@ -81,6 +94,7 @@ void local_max_matching::sequential_match(const PartitionConfig& partition_confi
                         }
 
                         if (max_neighbour == m_none) {
+                                m_none_count++;
                                 continue;
                         }
 
@@ -110,6 +124,7 @@ void local_max_matching::sequential_match(const PartitionConfig& partition_confi
                 std::swap(node_queue, node_queue_next);
         }
         CLOCK_END("Coarsening: Matching: Main");
+        std::cout << "m_none_count = " << m_none_count << std::endl;
 }
 
 void local_max_matching::parallel_match(const PartitionConfig& partition_config,
@@ -269,15 +284,15 @@ NodeID
 local_max_matching::find_max_neighbour_sequential(NodeID node, graph_access& G, const PartitionConfig& partition_config,
                                                   Matching& edge_matching, random& rnd) const {
         NodeWeight node_weight = G.getNodeWeight(node);
-        EdgeWeight max_weight = 0;
+        EdgeRatingType max_rating = 0;
         NodeID max_target = m_none;
 
         forall_out_edges(G, e, node) {
                 NodeID target = G.getEdgeTarget(e);
-                EdgeWeight edge_weight = G.getEdgeWeight(e);
+                EdgeRatingType edge_rating = G.getEdgeRating(e);
                 NodeWeight coarser_weight = G.getNodeWeight(target) + node_weight;
 
-                if ((edge_weight > max_weight || (edge_weight == max_weight && rnd.bit())) &&
+                if ((edge_rating > max_rating || (edge_rating == max_rating && rnd.bit())) &&
                     edge_matching[target] == target &&
                     coarser_weight <= partition_config.max_vertex_weight) {
 
@@ -292,7 +307,7 @@ local_max_matching::find_max_neighbour_sequential(NodeID node, graph_access& G, 
                         }
 
                         max_target = target;
-                        max_weight = edge_weight;
+                        max_rating = edge_rating;
                 }
         } endfor
         return max_target;
@@ -302,14 +317,14 @@ NodeID
 local_max_matching::find_max_neighbour_parallel(NodeID node, graph_access& G, const PartitionConfig& partition_config,
                                                 std::vector<AtomicWrapper<int>>& vertex_mark, random& rnd) const {
         NodeWeight node_weight = G.getNodeWeight(node);
-        EdgeWeight max_weight = 0;
+        EdgeRatingType max_rating = 0;
         NodeID max_target = m_none;
         forall_out_edges(G, e, node) {
                 NodeID target = G.getEdgeTarget(e);
-                EdgeWeight edge_weight = G.getEdgeWeight(e);
+                                EdgeRatingType edge_rating = G.getEdgeRating(e);
                 NodeWeight coarser_weight = G.getNodeWeight(target) + node_weight;
 
-                if ((edge_weight > max_weight || (edge_weight == max_weight && rnd.bit())) &&
+                if ((edge_rating > max_rating || (edge_rating == max_rating && rnd.bit())) &&
                     vertex_mark[target].load(std::memory_order_relaxed) != MatchingPhases::MATCHED &&
                     coarser_weight <= partition_config.max_vertex_weight) {
 
@@ -324,7 +339,7 @@ local_max_matching::find_max_neighbour_parallel(NodeID node, graph_access& G, co
                         }
 
                         max_target = target;
-                        max_weight = edge_weight;
+                        max_rating = edge_rating;
                 }
         } endfor
         return max_target;

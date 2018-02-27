@@ -600,6 +600,8 @@ inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partitio
         fastsocialmultitry(partition_config);
 
 
+        partition_config.matching_type = MatchingType::MATCHING_SEQUENTIAL_LOCAL_MAX;
+
         // parallel lp
         partition_config.block_size_unit = BlockSizeUnit::EDGES;
 
