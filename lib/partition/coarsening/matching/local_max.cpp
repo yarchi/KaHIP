@@ -25,17 +25,6 @@ void local_max_matching::match(const PartitionConfig& partition_config,
                                   << std::endl;
                         abort();
         }
-
-        no_of_coarse_vertices = 0;
-        mapping.resize(G.number_of_edges());
-        for (NodeID i = 0; i < permutation.size(); ++i) {
-                NodeID node = permutation[i];
-                if (node <= edge_matching[node]) {
-                        mapping[edge_matching[node]] = no_of_coarse_vertices;
-                        mapping[node] = no_of_coarse_vertices;
-                        ++no_of_coarse_vertices;
-                }
-        }
 }
 
 void local_max_matching::sequential_match(const PartitionConfig& partition_config,
@@ -72,7 +61,7 @@ void local_max_matching::sequential_match(const PartitionConfig& partition_confi
         CLOCK_START_N;
         uint32_t round = 0;
         uint32_t m_none_count = 0;
-        while (!node_queue->empty()) {
+        while (!node_queue->empty() && round < m_max_round) {
                 while (!node_queue->empty()) {
                         NodeID node = node_queue->front();
                         node_queue->pop();
@@ -121,10 +110,24 @@ void local_max_matching::sequential_match(const PartitionConfig& partition_confi
                         }
                 }
                 ++round;
+
                 std::swap(node_queue, node_queue_next);
         }
         CLOCK_END("Coarsening: Matching: Main");
-        std::cout << "m_none_count = " << m_none_count << std::endl;
+
+        CLOCK_START_N;
+        no_of_coarse_vertices = 0;
+        mapping.resize(G.number_of_edges());
+        for (NodeID i = 0; i < permutation.size(); ++i) {
+                NodeID node = permutation[i];
+                if (node <= edge_matching[node]) {
+                        mapping[edge_matching[node]] = no_of_coarse_vertices;
+                        mapping[node] = no_of_coarse_vertices;
+                        ++no_of_coarse_vertices;
+                }
+        }
+        CLOCK_END("Coarsening: Matching: Remap");
+
 }
 
 void local_max_matching::parallel_match(const PartitionConfig& partition_config,
@@ -147,97 +150,68 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
                 randoms.emplace_back(partition_config.seed + id);
         }
 
-        std::vector<NodeID> vertex_permutation;
-        vertex_permutation.reserve(G.number_of_nodes());
+        permutation.clear();
+        permutation.reserve(G.number_of_nodes());
         edge_matching.reserve(G.number_of_nodes());
         for (size_t i = 0; i < G.number_of_nodes(); ++i) {
-                vertex_permutation.push_back(i);
+                permutation.push_back(i);
                 edge_matching.push_back(i);
         }
-        std::random_shuffle(vertex_permutation.begin(), vertex_permutation.end());
+        std::random_shuffle(permutation.begin(), permutation.end());
 
-        const size_t block_size = 100;
-        tbb::concurrent_queue<block_type> node_queue;
+        const size_t block_size = std::max((uint32_t) sqrt(G.number_of_edges()), 1000u);
+        std::unique_ptr<tbb::concurrent_queue<block_type>> node_queue = std::make_unique<tbb::concurrent_queue<block_type>>();
+        std::unique_ptr<tbb::concurrent_queue<block_type>> node_queue_next = std::make_unique<tbb::concurrent_queue<block_type>>();
+
         block_type block;
         block.reserve(block_size);
-        for (auto node : vertex_permutation) {
+        size_t cur_block_size = 0;
+        for (auto node : permutation) {
                 block.push_back(node);
-                if (block.size() >= block_size) {
-                        node_queue.push(std::move(block));
+                cur_block_size += G.getNodeDegree(node);
+                if (cur_block_size >= block_size) {
+                        node_queue->push(std::move(block));
                         block.clear();
                         block.reserve(block_size);
+                        cur_block_size = 0;
                 }
         }
+        if (!block.empty()) {
+                node_queue->push(std::move(block));
+        }
+
 
         CLOCK_END("Coarsening: Matching: Init");
         uint32_t round = 1;
 
         auto task = [&](uint32_t id) {
+                size_t this_thread_block_size = 0;
                 block_type cur_block;
                 block_type next_block;
                 next_block.reserve(block_size);
 
                 auto& rnd = randoms[id].get();
 
-                while (node_queue.try_pop(block)) {
-                        for (NodeID node : block) {
+                while (node_queue->try_pop(cur_block)) {
+                        for (NodeID node : cur_block) {
                                 if (vertex_mark[node].load(std::memory_order_relaxed) == MatchingPhases::MATCHED) {
                                         continue;
                                 }
 
-                                int mark = MatchingPhases::NOT_STARTED;
-                                if (vertex_mark[node].compare_exchange_strong(mark, MatchingPhases::STARTED,
-                                                                              std::memory_order_acquire)) {
-
-                                        uint32_t elem_round = round - 1;
-                                        if (max_neighbours[node].second.compare_exchange_strong(elem_round, round,
-                                                                                                std::memory_order_relaxed)) {
-                                                // find best neighbour for target
-                                                NodeID max_neighbour = find_max_neighbour_parallel(node, G,
-                                                                                                   partition_config,
-                                                                                                   vertex_mark, rnd);
-
-                                                max_neighbours[node].first.store(max_neighbour,
-                                                                                 std::memory_order_relaxed);
-                                        }
-
-                                        vertex_mark[node].store(MatchingPhases::FOUND_LOCAL_MAX,
-                                                                std::memory_order_release);
-                                } else {
-                                        while (vertex_mark[node].load(std::memory_order_acquire) ==
-                                               MatchingPhases::STARTED);
-                                }
-
-                                NodeID max_neighbour = max_neighbours[node].first.load(std::memory_order_relaxed);
+                                NodeID max_neighbour = find_max_neighbour_parallel(node, round, G,
+                                                                                   partition_config,
+                                                                                   max_neighbours,
+                                                                                   vertex_mark, rnd);
                                 if (max_neighbour == m_none) {
                                         continue;
                                 }
 
-                                mark = MatchingPhases::NOT_STARTED;
-                                if (vertex_mark[max_neighbour].compare_exchange_strong(mark, MatchingPhases::STARTED,
-                                                                                       std::memory_order_acq_rel)) {
+                                NodeID max_neighbour_neighbour = find_max_neighbour_parallel(max_neighbour, round, G,
+                                                                                             partition_config,
+                                                                                             max_neighbours,
+                                                                                             vertex_mark, rnd);
 
-                                        uint32_t elem_round = round - 1;
-                                        if (max_neighbours[max_neighbour].second.compare_exchange_strong(elem_round,
-                                                                                                         round,
-                                                                                                         std::memory_order_relaxed)) {
-                                                // find best neighbour of best neighbour
-                                                NodeID max_target_neighbour = find_max_neighbour_parallel(max_neighbour, G,
-                                                                                                          partition_config,
-                                                                                                          vertex_mark, rnd);
-
-                                                max_neighbours[max_neighbour].first.store(max_target_neighbour,
-                                                                                          std::memory_order_relaxed);
-                                        }
-
-                                        vertex_mark[max_neighbour].store(MatchingPhases::FOUND_LOCAL_MAX,
-                                                                         std::memory_order_release);
-                                } else {
-                                        while (vertex_mark[max_neighbour].load(std::memory_order_acquire) ==
-                                               MatchingPhases::STARTED);
-                                }
-
-                                if (max_neighbours[max_neighbour].first.load(std::memory_order_relaxed) == node) {
+                                if (max_neighbour_neighbour == node) {
                                         // match edge
                                         if (node < max_neighbour) {
                                                 edge_matching[node] = max_neighbour;
@@ -251,13 +225,18 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
                                         // put in the other queue vertex !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                                         vertex_mark[node].store(MatchingPhases::NOT_STARTED, std::memory_order_release);
                                         next_block.push_back(node);
-                                        if (next_block.size() >= block_size) {
-                                                node_queue.push(std::move(next_block));
+                                        this_thread_block_size += G.getNodeDegree(node);
+                                        if (this_thread_block_size >= block_size) {
+                                                node_queue_next->push(std::move(next_block));
                                                 next_block.clear();
                                                 next_block.reserve(block_size);
+                                                this_thread_block_size = 0;
                                         }
                                 }
                         }
+                }
+                if (!next_block.empty()) {
+                        node_queue_next->push(std::move(next_block));
                 }
         };
 
@@ -266,18 +245,56 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
         std::vector<std::future<void>> futures;
         futures.reserve(num_threads);
 
-        for (uint32_t id = 1; id < num_threads; ++id) {
-                futures.push_back(g_thread_pool.Submit(id - 1, task, id));
-                //futures.push_back(g_thread_pool.Submit(task, id));
+        while (!node_queue->empty() && round < m_max_round + 1) {
+                futures.clear();
+                for (uint32_t id = 1; id < num_threads; ++id) {
+                        futures.push_back(g_thread_pool.Submit(id - 1, task, id));
+                }
+
+                task(0);
+                std::for_each(futures.begin(), futures.end(), [](auto& future) {
+                        future.get();
+                });
+                node_queue.swap(node_queue_next);
+                ++round;
         }
 
-        task(0);
-        std::for_each(futures.begin(), futures.end(), [](auto& future) {
-                future.get();
-        });
-        ++round;
-
         CLOCK_END("Coarsening: Matching: Main");
+
+        CLOCK_START_N;
+        no_of_coarse_vertices = 0;
+        mapping.resize(G.number_of_edges());
+        for (NodeID i = 0; i < permutation.size(); ++i) {
+                NodeID node = permutation[i];
+                if (node <= edge_matching[node]) {
+                        mapping[edge_matching[node]] = no_of_coarse_vertices;
+                        mapping[node] = no_of_coarse_vertices;
+                        ++no_of_coarse_vertices;
+                }
+        }
+        CLOCK_END("Coarsening: Matching: Remap");
+}
+
+NodeID local_max_matching::find_max_neighbour_parallel(NodeID node, const uint32_t round, graph_access& G,
+                                                const PartitionConfig& partition_config,
+                                                std::vector<std::pair<AtomicWrapper<NodeID>, AtomicWrapper<uint32_t>>>& max_neighbours,
+                                                std::vector<AtomicWrapper<int>>& vertex_mark, random& rnd) const {
+        int mark = MatchingPhases::NOT_STARTED;
+        if (vertex_mark[node].compare_exchange_strong(mark, MatchingPhases::STARTED, std::memory_order_acquire)) {
+
+                uint32_t elem_round = round - 1;
+                if (max_neighbours[node].second.compare_exchange_strong(elem_round, round, std::memory_order_relaxed)) {
+                        // find best neighbour for target
+                        NodeID max_neighbour = find_max_neighbour_parallel(node, G, partition_config, vertex_mark, rnd);
+
+                        max_neighbours[node].first.store(max_neighbour, std::memory_order_relaxed);
+                }
+
+                vertex_mark[node].store(MatchingPhases::FOUND_LOCAL_MAX, std::memory_order_release);
+        } else {
+                while (vertex_mark[node].load(std::memory_order_acquire) == MatchingPhases::STARTED);
+        }
+        return max_neighbours[node].first.load(std::memory_order_relaxed);
 }
 
 NodeID
@@ -287,29 +304,31 @@ local_max_matching::find_max_neighbour_sequential(NodeID node, graph_access& G, 
         EdgeRatingType max_rating = 0;
         NodeID max_target = m_none;
 
-        forall_out_edges(G, e, node) {
-                NodeID target = G.getEdgeTarget(e);
-                EdgeRatingType edge_rating = G.getEdgeRating(e);
-                NodeWeight coarser_weight = G.getNodeWeight(target) + node_weight;
+        forall_out_edges(G, e, node)
+                        {
+                                NodeID target = G.getEdgeTarget(e);
+                                EdgeRatingType edge_rating = G.getEdgeRating(e);
+                                NodeWeight coarser_weight = G.getNodeWeight(target) + node_weight;
 
-                if ((edge_rating > max_rating || (edge_rating == max_rating && rnd.bit())) &&
-                    edge_matching[target] == target &&
-                    coarser_weight <= partition_config.max_vertex_weight) {
+                                if ((edge_rating > max_rating || (edge_rating == max_rating && rnd.bit())) &&
+                                    edge_matching[target] == target &&
+                                    coarser_weight <= partition_config.max_vertex_weight) {
 
-                        if (partition_config.graph_allready_partitioned &&
-                            G.getPartitionIndex(node) != G.getPartitionIndex(target)) {
-                                continue;
+                                        if (partition_config.graph_allready_partitioned &&
+                                            G.getPartitionIndex(node) != G.getPartitionIndex(target)) {
+                                                continue;
+                                        }
+
+                                        if (partition_config.combine &&
+                                            G.getSecondPartitionIndex(node) != G.getSecondPartitionIndex(target)) {
+                                                continue;
+                                        }
+
+                                        max_target = target;
+                                        max_rating = edge_rating;
+                                }
                         }
-
-                        if (partition_config.combine &&
-                            G.getSecondPartitionIndex(node) != G.getSecondPartitionIndex(target)) {
-                                continue;
-                        }
-
-                        max_target = target;
-                        max_rating = edge_rating;
-                }
-        } endfor
+        endfor
         return max_target;
 }
 
@@ -321,7 +340,7 @@ local_max_matching::find_max_neighbour_parallel(NodeID node, graph_access& G, co
         NodeID max_target = m_none;
         forall_out_edges(G, e, node) {
                 NodeID target = G.getEdgeTarget(e);
-                                EdgeRatingType edge_rating = G.getEdgeRating(e);
+                EdgeRatingType edge_rating = G.getEdgeRating(e);
                 NodeWeight coarser_weight = G.getNodeWeight(target) + node_weight;
 
                 if ((edge_rating > max_rating || (edge_rating == max_rating && rnd.bit())) &&

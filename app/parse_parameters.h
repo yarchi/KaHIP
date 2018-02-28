@@ -61,7 +61,7 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *k                                    = arg_int1(NULL, "k", NULL, "Number of blocks to partition the graph.");
         struct arg_rex *edge_rating                          = arg_rex0(NULL, "edge_rating", "^(weight|realweight|expansionstar|expansionstar2|expansionstar2deg|punch|expansionstar2algdist|expansionstar2algdist2|algdist|algdist2|sepmultx|sepaddx|sepmax|seplog|r1|r2|r3|r4|r5|r6|r7|r8)$", "RATING", REG_EXTENDED, "Edge rating to use. One of {weight, expansionstar, expansionstar2, punch, sepmultx, sepaddx, sepmax, seplog, " " expansionstar2deg}. Default: weight"  );
         struct arg_rex *refinement_type                      = arg_rex0(NULL, "refinement_type", "^(fm|fm_flow|flow)$", "TYPE", REG_EXTENDED, "Refinementvariant to use. One of {fm, fm_flow, flow}. Default: fm"  );
-        struct arg_rex *matching_type                        = arg_rex0(NULL, "matching", "^(random|hem|shem|regions|gpa|randomgpa|localmax)$", "TYPE", REG_EXTENDED, "Type of matchings to use during coarsening. One of {random, hem," " shem, regions, gpa, randomgpa, localmax}."  );
+        struct arg_rex *matching_type                        = arg_rex0(NULL, "matching", "^(random|hem|shem|regions|gpa|randomgpa|localmax|parallel_localmax)$", "TYPE", REG_EXTENDED, "Type of matchings to use during coarsening. One of {random, hem," " shem, regions, gpa, randomgpa, localmax, parallel_localmax}."  );
         struct arg_int *mh_pool_size                         = arg_int0(NULL, "mh_pool_size", NULL, "MetaHeuristic Pool Size.");
         struct arg_lit *mh_plain_repetitions                 = arg_lit0(NULL, "mh_plain_repetitions", "");
         struct arg_lit *mh_penalty_for_unconnected           = arg_lit0(NULL, "mh_penalty_for_unconnected", "Add a penalty on the objective function if the computed partition contains blocks that are not connected.");
@@ -265,6 +265,7 @@ int parse_parameters(int argn, char **argv,
                 threads_per_socket,
                 l2_cache_size,
                 l3_cache_size,
+                matching_type,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -1033,6 +1034,10 @@ int parse_parameters(int argn, char **argv,
                         partition_config.matching_type = MATCHING_GPA;
                 } else if (strcmp("randomgpa", matching_type->sval[0]) == 0) {
                         partition_config.matching_type = MATCHING_RANDOM_GPA;
+                } else if (strcmp("localmax", matching_type->sval[0]) == 0) {
+                        partition_config.matching_type = MATCHING_SEQUENTIAL_LOCAL_MAX;
+                } else if (strcmp("parallel_localmax", matching_type->sval[0]) == 0) {
+                        partition_config.matching_type = MATCHING_PARALLEL_LOCAL_MAX;
                 } else {
                         fprintf(stderr, "Invalid matching variant: \"%s\"\n", matching_type->sval[0]);
                         exit(0);

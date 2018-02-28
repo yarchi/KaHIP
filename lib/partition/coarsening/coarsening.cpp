@@ -139,6 +139,11 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
 
                 finer = coarser;
 
+                if (!contraction_stop && copy_of_partition_config.matching_type != CLUSTER_COARSENING) {
+                        contraction_stop = true;
+                        copy_of_partition_config.matching_type = CLUSTER_COARSENING;
+                }
+
                 level++;
 
         } while (contraction_stop);

@@ -18,6 +18,7 @@ public:
 
 private:
         static constexpr NodeID m_none = std::numeric_limits<NodeID>::max();
+        static constexpr uint32_t m_max_round = 2;
 
         using block_type = std::vector<NodeID>;
 
@@ -38,6 +39,11 @@ private:
 
         NodeID find_max_neighbour_sequential(NodeID node, graph_access& G, const PartitionConfig& partition_config,
                                              Matching& vertex_mark, random& rnd) const;
+
+        NodeID find_max_neighbour_parallel(NodeID node, const uint32_t round, graph_access& G,
+                                           const PartitionConfig& partition_config,
+                                           std::vector<std::pair<AtomicWrapper<NodeID>, AtomicWrapper<uint32_t>>>& max_neighbours,
+                                           std::vector<AtomicWrapper<int>>& vertex_mark, random& rnd) const;
 
         NodeID find_max_neighbour_parallel(NodeID node, graph_access& G, const PartitionConfig& partition_config,
                                            std::vector<AtomicWrapper<int>>& vertex_mark, random& rnd) const;
