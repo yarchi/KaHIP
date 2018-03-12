@@ -157,10 +157,11 @@ public:
 
 class multiple_k_strong_contraction : public multiple_k_stop_rule {
 public:
-        multiple_k_strong_contraction(PartitionConfig& _config, NodeID number_of_nodes, EdgeID _number_of_edges)
+        multiple_k_strong_contraction(PartitionConfig& _config, NodeID _number_of_nodes, EdgeID _number_of_edges)
                 :       multiple_k_stop_rule(_config, number_of_nodes)
                 ,       config(_config)
                 ,       attemps_to_contract_more(0)
+                ,       number_of_nodes(_number_of_nodes)
                 ,       number_of_edges(_number_of_edges)
         {}
 
@@ -172,10 +173,12 @@ public:
 
                 if (!res && attemps_to_contract_more < max_attempts &&
                     //((coarser.number_of_edges() + 0.0) / coarser.number_of_nodes() > 1.5 || coarser.number_of_edges() > 500000)
-                    (coarser.number_of_edges() > number_of_edges * 0.001 && coarser.number_of_nodes() > 1000 * config.k)
+                    //(coarser.number_of_edges() > number_of_edges * 0.001 && coarser.number_of_nodes() > 1000 * config.k)
+                    ((coarser.number_of_edges() > number_of_edges * 0.001 || coarser.number_of_edges() > 300000) && coarser.number_of_nodes() > 1000 * config.k)
                 ) {
                         config.cluster_coarsening_factor /= 2;
                         config.cluster_coarsening_factor = std::max(config.cluster_coarsening_factor, 1);
+                        config.accept_small_coarser_graphs = false;
 
                         res = true;
                         ++attemps_to_contract_more;
@@ -188,6 +191,7 @@ private:
         static constexpr uint32_t max_attempts = 2;
         PartitionConfig& config;
         uint32_t attemps_to_contract_more;
+        const NodeID number_of_nodes;
         const EdgeID number_of_edges;
 };
 

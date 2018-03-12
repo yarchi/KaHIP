@@ -113,6 +113,11 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                         CLOCK_END(">> Hashing neighbors");
                 }
 
+                if (!copy_of_partition_config.accept_small_coarser_graphs && no_of_coarser_vertices < copy_of_partition_config.k * 1000) {
+                        std::cout << "Do not accept this clustering. The number of vertices < k * 1000" << std::endl;
+                        break;
+                }
+
                 CLOCK_START_N;
                 if(partition_config.graph_allready_partitioned) {
                         contracter->contract_partitioned(copy_of_partition_config, *finer, *coarser, edge_matching, 
