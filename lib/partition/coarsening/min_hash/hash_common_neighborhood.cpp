@@ -38,18 +38,17 @@ void hash_common_neighborhood::find_vertices_with_common_neighbors(const Partiti
                 cluster_sizes[coarse_mapping[node]] += G.getNodeWeight(node);
         }
 
-        no_of_coarse_vertices = 0;
         for (const auto& bucket : buckets) {
                 size_t i = 0;
                 while (i < bucket.second.size()) {
                         NodeID node = bucket.second[i];
                         NodeID cluster = coarse_mapping[node];
-                        ++no_of_coarse_vertices;
 
                         while (++i < bucket.second.size()) {
                                 NodeID next_node = bucket.second[i];
 
                                 if (G.getNodeWeight(next_node) + cluster_sizes[cluster] <= cluster_upperbound) {
+                                        cluster_sizes[coarse_mapping[next_node]] -= G.getNodeWeight(next_node);
                                         coarse_mapping[next_node] = cluster;
                                         cluster_sizes[cluster] += G.getNodeWeight(next_node);
                                 } else {
@@ -75,4 +74,5 @@ void hash_common_neighborhood::find_vertices_with_common_neighbors(const Partiti
         forall_nodes(G, node){
                                 coarse_mapping[node] = cluster_map[coarse_mapping[node]] - 1;
         } endfor
+        no_of_coarse_vertices = cluster_map.back();
 }

@@ -102,11 +102,12 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                 CLOCK_END(">> LP");
 
                 if (common_neighborhood_clustering) {
+                        std::cout << "Number of coarse vertices before min_hash = " << no_of_coarser_vertices << std::endl;
                         CLOCK_START;
                         hash_common_neighborhood().match(copy_of_partition_config, *finer, edge_matching,
                                                          *coarse_mapping, no_of_coarser_vertices, permutation);
 
-                        std::cout << ">> common_neighborhood_clustering: vertices = " << finer->number_of_nodes() << ", # of coarsed vertices = " << no_of_coarser_vertices << std::endl;
+                        std::cout << ">> common_neighborhood_clustering: finer vertices = " << finer->number_of_nodes() << ", # of coarsed vertices = " << no_of_coarser_vertices << std::endl;
                         if (finer->number_of_nodes() == no_of_coarser_vertices) {
                                 common_neighborhood_clustering = false;
                         }
@@ -114,7 +115,8 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                 }
 
                 if (!copy_of_partition_config.accept_small_coarser_graphs && no_of_coarser_vertices < copy_of_partition_config.k * 1000) {
-                        std::cout << "Do not accept this clustering. The number of vertices < k * 1000" << std::endl;
+                        std::cout << "Do not accept this clustering. The number of vertices " << no_of_coarser_vertices << " < k * " << 1000 << std::endl;
+                        std::cout << "Number of vertices = " << no_of_coarser_vertices << std::endl;
                         break;
                 }
 
@@ -133,7 +135,7 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                 contraction_stop = coarsening_stop_rule->stop(no_of_finer_vertices, *coarser);
 
                 no_of_finer_vertices = no_of_coarser_vertices;
-                std::cout <<  "no of coarser vertices " << no_of_coarser_vertices <<  " and no of edges " <<  coarser->number_of_edges() << std::endl;
+                std::cout <<  "no of coarser vertices " << coarser->number_of_nodes() <<  " and no of edges " <<  coarser->number_of_edges() << std::endl;
 
                 finer = coarser;
 
