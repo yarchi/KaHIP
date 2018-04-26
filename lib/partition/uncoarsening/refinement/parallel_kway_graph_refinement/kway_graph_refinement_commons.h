@@ -62,6 +62,7 @@ public:
         double total_thread_unroll_move_time;
         uint32_t scaned_neighbours;
         double time_move_nodes;
+        double time_move_nodes_change_boundary;
         uint32_t transpositions_size;
         int upper_bound_gain;
         int performed_gain;
@@ -110,6 +111,7 @@ public:
                 ,       total_thread_unroll_move_time(0.0)
                 ,       scaned_neighbours(0)
                 ,       time_move_nodes(0.0)
+                ,       time_move_nodes_change_boundary(0.0)
                 ,       transpositions_size(0)
                 ,       upper_bound_gain(0)
                 ,       performed_gain(0)

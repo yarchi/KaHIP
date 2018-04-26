@@ -1014,7 +1014,9 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(PartitionCon
         forall_nodes(G, node) {
                 permutation.emplace_back(node, G.getNodeDegree(node));
         } endfor
+        CLOCK_END("Uncoarsening: Parallel init of permutations lp");
 
+        CLOCK_START_N;
         parallel::g_thread_pool.Clear();
         parallel::Unpin();
         {
@@ -1029,7 +1031,8 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(PartitionCon
         }
         parallel::PinToCore(0);
         parallel::g_thread_pool.Resize(config.num_threads - 1);
-        CLOCK_END("Uncoarsening: Parallel init of permutations lp");
+        CLOCK_END("Uncoarsening: Sort with pool release");
+
 
         EdgeWeight res = 0;
         CLOCK_START_N;

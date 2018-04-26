@@ -131,6 +131,7 @@ public:
                 double total_accepted = 0.0;
                 double total_unroll = 0.0;
                 double total_time_compute_gain = 0.0;
+                double total_time_move_nodes_change_boundary = 0.0;
 
                 // gain
                 int total_upper_bound_gain = 0;
@@ -171,6 +172,7 @@ public:
                         total_affected_movements += m_thread_data[id].get().affected_movements;
                         total_scaned_neighbours += m_thread_data[id].get().scaned_neighbours;
                         total_upper_bound_gain += m_thread_data[id].get().upper_bound_gain;
+                        total_time_move_nodes_change_boundary += m_thread_data[id].get().time_move_nodes_change_boundary;
                         total_performed_gain += m_thread_data[id].get().performed_gain;
                         total_unperformed_gain += m_thread_data[id].get().unperformed_gain;
                         total_stop_empty_queue += m_thread_data[id].get().stop_empty_queue;
@@ -191,6 +193,7 @@ public:
                         proc_stat.total_thread_compute_gain_time = m_thread_data[id].get().time_compute_gain;
                         proc_stat.total_thread_unroll_move_time = m_thread_data[id].get().total_thread_unroll_move_time;
                         proc_stat.upper_bound_gain = m_thread_data[id].get().upper_bound_gain;
+                        proc_stat.time_move_nodes_change_boundary = m_thread_data[id].get().time_move_nodes_change_boundary;
                         proc_stat.performed_gain = m_thread_data[id].get().performed_gain;
                         proc_stat.unperformed_gain = m_thread_data[id].get().unperformed_gain;
                         
@@ -209,6 +212,7 @@ public:
                 stat.total_affected_movements = total_affected_movements;
                 stat.total_scanned_neighbours = total_scaned_neighbours;
                 stat.total_upper_bound_gain = total_upper_bound_gain;
+                stat.total_time_move_nodes_change_boundary = total_time_move_nodes_change_boundary;
                 stat.total_performed_gain = total_performed_gain;
                 stat.total_unperformed_gain = total_unperformed_gain;
                 stat.total_stop_empty_queue = total_stop_empty_queue;
@@ -216,6 +220,7 @@ public:
                 stat.total_stop_max_number_of_swaps = total_stop_max_number_of_swaps;
                 stat.total_stop_faction_of_nodes_moved = total_stop_faction_of_nodes_moved;
 
+                std::cout << "Time move nodes (change boundary)\t" << total_time_move_nodes_change_boundary<< " s" << std::endl;
                 std::cout << "Total num part accesses\t" << total_num_part_accesses << std::endl;
                 std::cout << "Total tried moves\t" << total_tried_movements << std::endl;
                 std::cout << "Total accepted moves\t" << total_accepted_movements << std::endl;
@@ -282,6 +287,7 @@ public:
                 std::cout << "Time generate moves\t" << stat.time_generate_moves << " s" << std::endl;
                 std::cout << "Time wait\t" << stat.time_wait << " s" << std::endl;
                 std::cout << "Time move nodes\t" << stat.time_move_nodes << " s" << std::endl;
+                std::cout << "Time move nodes (change boundary)\t" << stat.total_time_move_nodes_change_boundary << " s" << std::endl;
                 std::cout << "Time compute gain\t" << stat.total_compute_gain_time << std::endl;
                 std::cout << "Number of partition accesses\t" << stat.total_num_part_accesses << std::endl;
 
@@ -348,6 +354,7 @@ public:
                 double time_wait = 0.0;
                 double time_move_nodes = 0.0;
                 double total_compute_gain_time = 0.0;
+                double total_time_move_nodes_change_boundary = 0.0;
 
                 double avg_thread_time = 0.0;
                 double avg_tried = 0.0;
@@ -384,6 +391,7 @@ public:
                         double total_thread_accepted_move_time = 0.0;
                         double total_thread_compute_gain_time = 0.0;
                         double total_thread_unroll_move_time = 0.0;
+                        double time_move_nodes_change_boundary = 0.0;
                         int upper_bound_gain = 0;
                         int performed_gain = 0;
                         int unperformed_gain = 0;
@@ -405,6 +413,7 @@ public:
                                 total_thread_accepted_move_time += ps.total_thread_accepted_move_time;
                                 total_thread_compute_gain_time += ps.total_thread_compute_gain_time;
                                 total_thread_unroll_move_time += ps.total_thread_unroll_move_time;
+                                time_move_nodes_change_boundary += ps.time_move_nodes_change_boundary;
                                 upper_bound_gain += ps.upper_bound_gain;
                                 performed_gain += ps.performed_gain;
                                 unperformed_gain += ps.unperformed_gain;
@@ -426,6 +435,7 @@ public:
                         time_generate_moves += stat.time_generate_moves;
                         time_wait += stat.time_wait;
                         time_move_nodes += stat.time_move_nodes;
+                        total_time_move_nodes_change_boundary += stat.total_time_move_nodes_change_boundary;
                         total_compute_gain_time += stat.total_compute_gain_time;
 
                         total_num_part_accesses += stat.total_num_part_accesses;

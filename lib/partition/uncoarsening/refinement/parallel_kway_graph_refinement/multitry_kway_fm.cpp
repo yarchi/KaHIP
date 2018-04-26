@@ -277,6 +277,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 ALWAYS_ASSERT(real_gain_improvement >= 0);
                 std::cout << "Gain improvement\t" << real_gain_improvement << std::endl;
                 if (total_gain_improvement * (config.stop_mls_threshold / 100.0) > real_gain_improvement) {
+                        m_factory.time_move_nodes += CLOCK_END_TIME;
                         break;
                 }
                 total_gain_improvement += real_gain_improvement;
@@ -284,6 +285,7 @@ int multitry_kway_fm::start_more_locallized_search(PartitionConfig& config, grap
                 m_factory.partial_reset_global_data();
 
                 if (config.kway_all_boundary_nodes_refinement && real_gain_improvement == 0) {
+                        m_factory.time_move_nodes += CLOCK_END_TIME;
                         break;
                 }
 

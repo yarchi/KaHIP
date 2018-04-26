@@ -868,7 +868,10 @@ inline bool kway_graph_refinement_core::relaxed_move_node(thread_data_refinement
         pair.lhs = from;
         pair.rhs = to;
 
+        CLOCK_START;
         td.boundary.postMovedBoundaryNodeUpdates(node, &pair, true, true);
+        auto t = CLOCK_END_TIME;
+        td.time_move_nodes_change_boundary += t;
 
         td.boundary.setBlockNoNodes(from, td.boundary.getBlockNoNodes(from) - 1);
         td.boundary.setBlockNoNodes(to, td.boundary.getBlockNoNodes(to) + 1);
@@ -924,7 +927,10 @@ void kway_graph_refinement_core::relaxed_move_node_back(thread_data_refinement_c
         pair.rhs = to;
 
         //update all boundaries
+        CLOCK_START;
         td.boundary.postMovedBoundaryNodeUpdates(node, &pair, true, true);
+        auto t = CLOCK_END_TIME;
+        td.time_move_nodes_change_boundary += t;
 
         NodeWeight this_nodes_weight = td.G.getNodeWeight(node);
         td.boundary.setBlockNoNodes(from, td.boundary.getBlockNoNodes(from) + 1);
