@@ -48,8 +48,7 @@ public:
                                               graph_access & G, 
                                               complete_boundary&);
 
-        EdgeWeight perform_refinement(PartitionConfig& config, graph_access& G, complete_boundary& boundary,
-                                      std::vector<uint8_t>& bounday_nodes);
+        EdgeWeight perform_refinement(PartitionConfig & config, graph_access & G);
 
         EdgeWeight parallel_label_propagation_many_clusters(const PartitionConfig& config,
                                                             graph_access& G,
@@ -84,15 +83,9 @@ private:
         }
 
         std::chrono::system_clock::time_point begin, end;
-        EdgeWeight sequential_label_propagation(PartitionConfig & config,
-                                                graph_access & G,
-                                                complete_boundary& boundary,
-                                                std::vector<uint8_t>& bounday_nodes);
+        EdgeWeight sequential_label_propagation(PartitionConfig & config, graph_access & G);
 
-        EdgeWeight parallel_label_propagation(PartitionConfig & config,
-                                              graph_access & G,
-                                              complete_boundary& boundary,
-                                              std::vector<uint8_t>& bounday_nodes);
+        EdgeWeight parallel_label_propagation(PartitionConfig & config, graph_access & G);
 
         EdgeWeight parallel_label_propagation_with_queue(graph_access& G,
                                                          PartitionConfig& config,
@@ -133,10 +126,8 @@ private:
                                 parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                 std::unique_ptr<ConcurrentQueue>& queue);
 
-        void sequential_get_boundary_nodes(graph_access& G, std::vector<uint8_t>& bounday_nodes);
-
-        void parallel_get_boundary_nodes(PartitionConfig& config, graph_access& G,
-                                         std::vector<uint8_t>& bounday_nodes);
+//        void parallel_get_boundary_nodes(PartitionConfig& config, graph_access& G,
+//                                         std::vector<uint8_t>& bounday_nodes);
 
         void remap_cluster_ids_fast(const PartitionConfig& partition_config, graph_access& G,
                                     std::vector<NodeWeight>& cluster_id, NodeID& no_of_coarse_vertices,

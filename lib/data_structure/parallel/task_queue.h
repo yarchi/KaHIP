@@ -11,6 +11,7 @@ template <typename T>
 class thread_container {
 public:
         using iterator = typename std::vector<T>::iterator;
+        using const_iterator = typename std::vector<T>::const_iterator;
 
         explicit thread_container(size_t size = 100) {
                 m_elems.reserve(size);
@@ -26,6 +27,15 @@ public:
                 } else {
                         return false;
                 }
+        }
+
+        inline void reserve(size_t size) {
+                m_elems.reserve(size);
+        }
+
+        inline void concurrent_push_back(const T& elem) {
+                std::lock_guard<spin_lock> guard(m_lock);
+                m_elems.push_back(elem);
         }
 
         inline void push_back(const T& elem) {
@@ -57,10 +67,30 @@ public:
         inline iterator end() {
                 return m_elems.end();
         }
+
+        inline const_iterator begin() const {
+                return m_elems.begin();
+        }
+
+        inline const_iterator end() const {
+                return m_elems.end();
+        }
+
+        template <typename... arg_type>
+        void emplace_back(arg_type... args) {
+                m_elems.emplace_back(std::forward<arg_type>(args)...);
+        }
+
+        template <typename... arg_type>
+        void concurrent_emplace_back(arg_type... args) {
+                std::lock_guard<spin_lock> guard(m_lock);
+                m_elems.emplace_back(std::forward<arg_type>(args)...);
+        }
 private:
         std::vector<T> m_elems;
         double dummy[parallel::g_cache_line_size - sizeof(std::vector<T>)];
-        AtomicWrapper<T> m_counter;
+        AtomicWrapper<size_t> m_counter;
+        spin_lock m_lock;
 };
 
 template <typename T>

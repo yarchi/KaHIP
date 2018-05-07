@@ -39,11 +39,11 @@
 
 std::unique_ptr<multitry_kway_fm> get_multitry_kway_fm_instance(PartitionConfig& config,
                                                                 graph_access& G, complete_boundary& boundary) {
-        if (config.parallel_multitry_kway) {
-                return std::make_unique<parallel::multitry_kway_fm>(config, G, boundary);
-        } else {
+//        if (config.parallel_multitry_kway) {
+//                return std::make_unique<parallel::multitry_kway_fm>(config, G, boundary);
+//        } else {
                 return std::make_unique<multitry_kway_fm>();
-        }
+//        }
 }
 
 multitry_kway_fm::multitry_kway_fm() {

@@ -34,7 +34,6 @@
 using namespace parallel;
 
 label_propagation_refinement::label_propagation_refinement()
-//        :       m_block_allocator(2)
 {
 }
 
@@ -43,51 +42,35 @@ label_propagation_refinement::~label_propagation_refinement() {
 }
 
 EdgeWeight label_propagation_refinement::perform_refinement(PartitionConfig& config, graph_access& G,
-                                                            complete_boundary& boundary) {
+                                                            complete_boundary&) {
 
-        //if (!config.parallel_lp || G.number_of_nodes() < 10000000) {
         std::vector<uint8_t> boundary_nodes;
         if (!config.parallel_lp) {
                 CLOCK_START;
-                auto res = sequential_label_propagation(config, G, boundary, boundary_nodes);
+                auto res = sequential_label_propagation(config, G);
                 CLOCK_END("Uncoarsening: Sequential lp");
 
                 return res;
         } else {
-                // init memory pool for blocks
-//                CLOCK_START;
-//                m_block_allocator.reset();
-//                double size = config.block_size_unit == BlockSizeUnit::EDGES ? G.number_of_edges() : G.number_of_nodes();
-//                uint32_t block_size = get_block_size(G, config);
-//                std::cout << "pool size\t" << (2 * std::ceil(size / block_size) + config.num_threads) * block_size * sizeof(NodeID) << std::endl;
-//                m_block_allocator.init((2 * std::ceil(size / block_size) + 4 * config.num_threads) * block_size * sizeof(NodeID));
-//                CLOCK_END("Uncoarsening: Alloc pool for lp");
-
                 CLOCK_START;
-                auto res = parallel_label_propagation(config, G, boundary, boundary_nodes);
+                auto res = parallel_label_propagation(config, G);
                 CLOCK_END("Uncoarsening: Parallel lp");
 
                 return res;
         }
 }
 
-EdgeWeight label_propagation_refinement::perform_refinement(PartitionConfig& config, graph_access& G,
-                                                            complete_boundary& boundary,
-                                                            std::vector<uint8_t>& boundary_nodes) {
-        CLOCK_START;
-        boundary_nodes.resize(G.number_of_nodes());
-        CLOCK_END("Uncoarsening: Init boundary nodes");
+EdgeWeight label_propagation_refinement::perform_refinement(PartitionConfig& config, graph_access& G) {
 
         if (!config.parallel_lp) {
                 CLOCK_START;
-                auto res = sequential_label_propagation(config, G, boundary, boundary_nodes);
+                auto res = sequential_label_propagation(config, G);
                 CLOCK_END("Uncoarsening: Sequential lp");
 
                 return res;
         } else {
-
                 CLOCK_START;
-                auto res = parallel_label_propagation(config, G, boundary, boundary_nodes);
+                auto res = parallel_label_propagation(config, G);
                 CLOCK_END("Uncoarsening: Parallel lp");
 
                 return res;
@@ -95,11 +78,8 @@ EdgeWeight label_propagation_refinement::perform_refinement(PartitionConfig& con
 }
 
 EdgeWeight label_propagation_refinement::sequential_label_propagation(PartitionConfig & partition_config,
-                                                                      graph_access & G,
-                                                                      complete_boundary& boundary,
-                                                                      std::vector<uint8_t>& boundary_nodes) {
+                                                                      graph_access & G) {
         auto begin = std::chrono::high_resolution_clock::now();
-        //__itt_resume();
         NodeWeight block_upperbound = partition_config.upper_bound_partition;
 
         // in this case the _matching paramter is not used
@@ -227,18 +207,6 @@ EdgeWeight label_propagation_refinement::sequential_label_propagation(PartitionC
         std::cout << "Uncoarsening: Main sequential lp:\t" << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
                   << std::endl;
         std::cout << "Uncoarsening: Improved:\t" << change_counter << std::endl;
-
-        if (!boundary_nodes.empty()) {
-                CLOCK_START;
-                sequential_get_boundary_nodes(G, boundary_nodes);
-                CLOCK_END("Uncoarsening: Build boundary nodes");
-
-                CLOCK_START_N;
-                for (PartitionID part = 0; part < partition_config.k; ++part) {
-                        boundary.setBlockWeight(part, cluster_sizes[part]);
-                }
-                CLOCK_END("Uncoarsening: Update weights of parts in boundary");
-        }
 
         delete Q;
         delete next_Q;
@@ -431,7 +399,6 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                                                                                Cvector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                                                std::vector<std::vector<PartitionID>>& hash_maps,
                                                                                std::vector<Pair>& permutation) {
-        //__itt_resume();
         CLOCK_START;
         const NodeWeight block_upperbound = config.upper_bound_partition;
         auto queue = std::make_unique<ConcurrentQueue>();
@@ -924,9 +891,6 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_many_cluster
         parallel::Unpin();
         {
                 CLOCK_START;
-//                std::sort(permutation.begin(), permutation.end(), [&](const Pair& lhs, const Pair& rhs) {
-//                        return lhs.second < rhs.second;
-//                });
                 ips4o::parallel::sort(permutation.begin(), permutation.end(), [&](const Pair& lhs, const Pair& rhs) {
                         return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
                 }, config.num_threads);
@@ -1000,9 +964,7 @@ void label_propagation_refinement::remap_cluster_ids_fast(const PartitionConfig&
         }
 }
 
-EdgeWeight label_propagation_refinement::parallel_label_propagation(PartitionConfig& config, graph_access& G,
-                                                                    complete_boundary& boundary,
-                                                                    std::vector<uint8_t>& boundary_nodes) {
+EdgeWeight label_propagation_refinement::parallel_label_propagation(PartitionConfig& config, graph_access& G) {
         CLOCK_START;
         std::vector <std::vector<PartitionID>> hash_maps(config.num_threads, std::vector<PartitionID>(config.k));
         Cvector <AtomicWrapper<NodeWeight>> cluster_sizes(config.k);
@@ -1021,9 +983,6 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(PartitionCon
         parallel::Unpin();
         {
                 CLOCK_START;
-//                std::sort(permutation.begin(), permutation.end(), [&](const Pair& lhs, const Pair& rhs) {
-//                        return lhs.second < rhs.second;
-//                });
                 ips4o::parallel::sort(permutation.begin(), permutation.end(), [&](const Pair& lhs, const Pair& rhs) {
                         return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
                 }, config.num_threads);
@@ -1045,82 +1004,56 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(PartitionCon
         }
         CLOCK_END("Uncoarsening: Main parallel (no queue) lp");
 
-        if (!boundary_nodes.empty()) {
-                CLOCK_START_N;
-                parallel_get_boundary_nodes(config, G, boundary_nodes);
-                CLOCK_END("Uncoarsening: Build boundary nodes");
-
-                CLOCK_START_N;
-                for (PartitionID part = 0; part < config.k; ++part) {
-                        boundary.setBlockWeight(part, cluster_sizes[part].get());
-                }
-                CLOCK_END("Uncoarsening: Update weights of parts in boundary");
-        }
-
         std::cout << "Uncoarsening: Improved\t" << res << std::endl;
         return res;
 }
 
-void label_propagation_refinement::sequential_get_boundary_nodes(graph_access& G, std::vector<uint8_t>& boundary_nodes) {
-        forall_nodes(G, n) {
-                PartitionID cur_part = G.getPartitionIndex(n);
-                forall_out_edges(G, e, n) {
-                        NodeID target = G.getEdgeTarget(e);
-                        PartitionID part = G.getPartitionIndex(target);
-                        if (cur_part != part) {
-                                boundary_nodes[n] = (uint8_t) true;
-                                break;
-                        }
-                } endfor
-        } endfor
-}
-
-void label_propagation_refinement::parallel_get_boundary_nodes(PartitionConfig& config, graph_access& G,
-                                                               std::vector<uint8_t>& boundary_nodes) {
-        std::vector<std::future<void>> futures;
-        futures.reserve(parallel::g_thread_pool.NumThreads());
-
-
-        uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
-        block_size = std::max(block_size, 1000u);
-
-        std::atomic<uint32_t> offset(0);
-        auto process = [&](const uint32_t id) {
-                while (true) {
-                        size_t cur_index = offset.load(std::memory_order_relaxed);
-
-                        if (cur_index >= G.number_of_nodes()) {
-                                break;
-                        }
-
-                        uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
-                        uint32_t end = begin + block_size;
-                        end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
-
-                        if (begin >= G.number_of_nodes()) {
-                                break;
-                        }
-
-                        for (NodeID node = begin; node != end; ++node) {
-                                PartitionID cur_part = G.getPartitionIndex(node);
-                                forall_out_edges(G, e, node){
-                                        NodeID target = G.getEdgeTarget(e);
-                                        PartitionID part = G.getPartitionIndex(target);
-                                        if (cur_part != part) {
-                                                boundary_nodes[node] = (uint8_t) true;
-                                                break;
-                                        }
-                                } endfor
-                        }
-                }
-        };
-
-        for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
-                futures.push_back(parallel::g_thread_pool.Submit(i, process, i + 1));
-        }
-
-        process(0);
-        std::for_each(futures.begin(), futures.end(), [&](auto& future){
-                future.get();
-        });
-}
+//void label_propagation_refinement::parallel_get_boundary_nodes(PartitionConfig& config, graph_access& G,
+//                                                               std::vector<uint8_t>& boundary_nodes) {
+//        std::vector<std::future<void>> futures;
+//        futures.reserve(parallel::g_thread_pool.NumThreads());
+//
+//
+//        uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
+//        block_size = std::max(block_size, 1000u);
+//
+//        std::atomic<uint32_t> offset(0);
+//        auto process = [&](const uint32_t id) {
+//                while (true) {
+//                        size_t cur_index = offset.load(std::memory_order_relaxed);
+//
+//                        if (cur_index >= G.number_of_nodes()) {
+//                                break;
+//                        }
+//
+//                        uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+//                        uint32_t end = begin + block_size;
+//                        end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
+//
+//                        if (begin >= G.number_of_nodes()) {
+//                                break;
+//                        }
+//
+//                        for (NodeID node = begin; node != end; ++node) {
+//                                PartitionID cur_part = G.getPartitionIndex(node);
+//                                forall_out_edges(G, e, node){
+//                                        NodeID target = G.getEdgeTarget(e);
+//                                        PartitionID part = G.getPartitionIndex(target);
+//                                        if (cur_part != part) {
+//                                                boundary_nodes[node] = (uint8_t) true;
+//                                                break;
+//                                        }
+//                                } endfor
+//                        }
+//                }
+//        };
+//
+//        for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
+//                futures.push_back(parallel::g_thread_pool.Submit(i, process, i + 1));
+//        }
+//
+//        process(0);
+//        std::for_each(futures.begin(), futures.end(), [&](auto& future){
+//                future.get();
+//        });
+//}

@@ -14,6 +14,12 @@ template <typename T>
 struct simple_hash {
         using hash_type = uint64_t;
 
+        simple_hash()
+        {}
+
+        explicit simple_hash(uint32_t)
+        {}
+
         inline hash_type operator()(const T& x) const {
                 return x;
         }
@@ -24,20 +30,32 @@ struct xxhash {
         static const size_t significant_digits = 64;
         using hash_type = uint64_t;
 
+        explicit xxhash(uint32_t seed = 0)
+                : _seed(seed)
+        {}
+
         inline hash_type operator()(const T& x) const {
-                return XXH64(&x, sizeof(x), 0);
+                return XXH64(&x, sizeof(x), _seed);
         }
+
+private:
+        uint32_t _seed;
 };
 
 template <typename T>
 struct xxhash<std::pair<T, T>> {
         using hash_type = uint64_t;
 
-        xxhash<T> h;
+        explicit xxhash(uint32_t seed = 0)
+                : _h(seed)
+        {}
 
         uint64_t operator()(const std::pair<T, T>& x) const {
-                return h(x.first) ^ h(x.second);
+                return _h(x.first) ^ _h(x.second);
         }
+
+private:
+        xxhash<T> _h;
 };
 
 template <typename Key>

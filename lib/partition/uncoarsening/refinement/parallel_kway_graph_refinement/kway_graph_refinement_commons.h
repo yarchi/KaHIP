@@ -13,9 +13,10 @@
 #include "data_structure/priority_queues/maxNodeHeap.h"
 #include "definitions.h"
 #include "partition/partition_config.h"
-#include "partition/uncoarsening/refinement/quotient_graph_refinement/complete_boundary.h"
+#include "partition/uncoarsening/refinement/parallel_kway_graph_refinement/fast_boundary.h"
 
 namespace parallel {
+
 class thread_data_refinement_core : public parallel::thread_config {
 public:
         //using nodes_partitions_hash_table = parallel::hash_map<NodeID, PartitionID>;
@@ -27,7 +28,7 @@ public:
         // global data
         PartitionConfig& config;
         graph_access& G;
-        complete_boundary& boundary;
+        boundary_type& boundary;
         int step_limit;
         std::vector<AtomicWrapper<bool>>& moved_idx;
 //        Cvector<AtomicWrapper<bool>>& moved_idx;
@@ -81,7 +82,7 @@ public:
                                     uint32_t _seed,
                                     PartitionConfig& _config,
                                     graph_access& _G,
-                                    complete_boundary& _boundary,
+                                    boundary_type& _boundary,
                                     std::vector <AtomicWrapper<bool>>& _moved_idx,
                                     //Cvector<AtomicWrapper<bool>>& _moved_idx,
                                     Cvector<AtomicWrapper<NodeWeight>>& _parts_weights,
@@ -129,8 +130,8 @@ public:
                 ALWAYS_ASSERT(m_local_degrees.size() % type_size == 0);
 
                 for (PartitionID block = 0; block < config.k; ++block) {
-                        parts_weights.push_back(boundary.getBlockWeight(block));
-                        parts_sizes.push_back(boundary.getBlockNoNodes(block));
+                        parts_weights.push_back(boundary.get_block_weight(block));
+                        parts_sizes.push_back(boundary.get_block_size(block));
                 }
 
                 // needed for the computation of internal and external degrees
@@ -190,8 +191,8 @@ public:
                 }
 
                 for (PartitionID block = 0; block < config.k; ++block) {
-                        parts_weights[block] = boundary.getBlockWeight(block);
-                        parts_sizes[block] = boundary.getBlockNoNodes(block);
+                        parts_weights[block] = boundary.get_block_weight(block);
+                        parts_sizes[block] = boundary.get_block_size(block);
                 }
 
                 // ht

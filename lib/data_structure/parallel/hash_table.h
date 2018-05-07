@@ -61,6 +61,50 @@ private:
         Position _offset;
 };
 
+template <typename HashTable>
+class HashTableWithEraseIterator {
+private:
+        using HashMapWithErase = HashTable;
+        using Element = typename HashMapWithErase::Element;
+        using Position = typename HashMapWithErase::Position;
+
+public:
+        HashTableWithEraseIterator(const HashMapWithErase& hm, const Position offset) :
+                _hm(hm),
+                _offset(offset)
+        {
+                get_next();
+        }
+
+        const Element& operator* () {
+                return _hm._ht[_hm._poses[_offset]];
+        }
+
+        HashTableWithEraseIterator& operator++ () {
+                ++_offset;
+                get_next();
+                return *this;
+        }
+
+        bool operator== (const HashTableWithEraseIterator& it) {
+                return _offset == it._offset;
+        }
+
+        bool operator!= (const HashTableWithEraseIterator& it) {
+                return !(*this == it);
+        }
+
+private:
+        const HashMapWithErase& _hm;
+        Position _offset;
+
+        inline void get_next() {
+                while (_offset < _hm._poses.size() && _hm._ht[_hm._poses[_offset]].first == _hm._deleted_element) {
+                        ++_offset;
+                }
+        }
+};
+
 #undef PERFORMANCE_STATISTICS
 
 template <typename Key, typename Value, typename Hash = xxhash<Key>,
@@ -92,7 +136,7 @@ public:
 
         friend Iterator;
 
-        explicit HashMap(const uint64_t max_size = 0) :
+        explicit HashMap(const uint64_t max_size = 1) :
                 _empty_element(std::numeric_limits<Key>::max()),
                 _max_size(std::max(round_up_to_next_power_2(max_size), 16u)),
                 _ht_size(_max_size * SizeFactor),
@@ -383,12 +427,16 @@ private:
         using Position = uint32_t;
 
 public:
+        using Iterator = HashTableWithEraseIterator<TSelf>;
 
-        explicit HashMapWithErase(const uint64_t max_size = 0) :
+        friend Iterator;
+
+        explicit HashMapWithErase(const uint64_t max_size = 1) :
                 _empty_element(std::numeric_limits<Key>::max()),
                 _deleted_element(_empty_element - 1),
+                _max_size(std::max(round_up_to_next_power_2(max_size), 16u)),
                 _ht_size(max_size * SizeFactor),
-                _max_size(max_size),
+                _size(0),
                 _ht(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value())),
                 _poses(),
                 _hash(),
@@ -406,15 +454,23 @@ public:
         TSelf& operator=(TSelf& other) = default;
         TSelf& operator=(TSelf&& other) = default;
 
+        Iterator begin() const {
+                return Iterator(*this, 0);
+        }
+
+        Iterator end() const {
+                return Iterator(*this, _poses.size());
+        }
+
         void reserve(const uint64_t max_size) {
-                _ht_size = max_size * SizeFactor;
-                _max_size = max_size;
-                _ht.resize(_ht_size + _max_size * 1.1, std::make_pair(_empty_element.first, Value()));
+                _max_size = round_up_to_next_power_2(max_size);
+                _ht_size = _max_size * SizeFactor;
+                _ht.resize(_ht_size + _max_size * 1.1, std::make_pair(_empty_element, Value()));
                 _poses.reserve(_max_size);
         }
 
         inline size_t size() const {
-                return _poses.size();
+                return _size;
         }
 
         inline bool empty() const {
@@ -425,6 +481,7 @@ public:
                 const Position pos = findPosition(key);
                 if (_ht[pos].first != _empty_element && _ht[pos].first != _deleted_element) {
                         _ht[pos].first = _deleted_element;
+                        --_size;
                 }
         }
 
@@ -437,12 +494,13 @@ public:
                         _ht[pos].first = key;
                         _ht[pos].second = Value();
                         _poses.push_back(pos);
+                        ++_size;
                 }
 
                 return _ht[pos].second;
         }
 
-        inline bool contains(const Key& key) {
+        inline bool contains(const Key& key) const {
                 // Sometimes findPosition can return _delete_element
                 // which means that in searched until the end of _ht and did not
                 // find element but found _deleted_element. This means that
@@ -471,6 +529,7 @@ public:
 
                 _last_key = _empty_element;
                 _last_position = 0;
+                _size = 0;
         }
 
         inline void swap(TSelf& hash_map) {
@@ -503,10 +562,11 @@ private:
                         _ht[pos].first = key;
                         _ht[pos].second = value;
                         _poses.push_back(pos);
+                        ++_size;
                 }
         }
 
-        inline Position findPosition(const Key& key) {
+        inline Position findPosition(const Key& key) const {
                 if (Cache && key == _last_key) {
                         return _last_position;
                 }
@@ -548,13 +608,14 @@ private:
 
         key_type _empty_element;
         key_type _deleted_element;
-        uint64_t _ht_size;
         uint64_t _max_size;
-        std::vector<Element> _ht;
+        uint64_t _ht_size;
+        uint64_t _size;
+        mutable std::vector<Element> _ht;
         std::vector<Position> _poses;
         Hash _hash;
-        Key _last_key;
-        Position _last_position;
+        mutable Key _last_key;
+        mutable Position _last_position;
 };
 
 template <typename Key, typename Hash = xxhash<Key>, bool TGrowable = false,

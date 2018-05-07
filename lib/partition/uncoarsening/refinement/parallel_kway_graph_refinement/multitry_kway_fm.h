@@ -2,7 +2,6 @@
 
 
 #include "data_structure/parallel/task_queue.h"
-#include "partition/uncoarsening/refinement/kway_graph_refinement/multitry_kway_fm.h"
 #include "partition/uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_commons.h"
 
 #include <tbb/concurrent_queue.h>
@@ -19,7 +18,7 @@ public:
 
         thread_data_factory(PartitionConfig& config,
                             graph_access& G,
-                            complete_boundary& boundary)
+                            boundary_type& boundary)
                 :       num_threads_finished(0)
                 ,       queue(config.num_threads)
                 ,       time_setup_start_nodes(0.0)
@@ -37,8 +36,8 @@ public:
                 ,       m_reset_counter(0)
         {
                 for (PartitionID block = 0; block < G.get_partition_count(); ++block) {
-                        m_parts_weights[block].get().store(boundary.getBlockWeight(block), std::memory_order_relaxed);
-                        m_parts_sizes[block].get().store(boundary.getBlockNoNodes(block), std::memory_order_relaxed);
+                        m_parts_weights[block].get().store(boundary.get_block_weight(block), std::memory_order_relaxed);
+                        m_parts_sizes[block].get().store(boundary.get_block_size(block), std::memory_order_relaxed);
                 }
 
                 m_thread_data.reserve(config.num_threads);
@@ -74,8 +73,8 @@ public:
 
         void partial_reset_global_data() {
                 for (PartitionID block = 0; block < m_G.get_partition_count(); ++block) {
-                        m_parts_weights[block].get().store(m_boundary.getBlockWeight(block), std::memory_order_relaxed);
-                        m_parts_sizes[block].get().store(m_boundary.getBlockNoNodes(block), std::memory_order_relaxed);
+                        m_parts_weights[block].get().store(m_boundary.get_block_weight(block), std::memory_order_relaxed);
+                        m_parts_sizes[block].get().store(m_boundary.get_block_size(block), std::memory_order_relaxed);
                 }
 
                 m_reset_counter.store(0, std::memory_order_relaxed);
@@ -110,6 +109,7 @@ public:
                 std::cout << "Time generate moves\t" << time_generate_moves << " s" << std::endl;
                 std::cout << "Time wait\t" << time_wait << " s" << std::endl;
                 std::cout << "Time move nodes\t" << time_move_nodes << " s" << std::endl;
+                std::cout << "Time reactivate vertices\t" << time_reactivate_vertices << " s" << std::endl;
 
                 stat.time_setup_start_nodes = time_setup_start_nodes;
                 stat.time_local_search = time_local_search;
@@ -117,6 +117,7 @@ public:
                 stat.time_generate_moves = time_generate_moves;
                 stat.time_wait = time_wait;
                 stat.time_move_nodes = time_move_nodes;
+                stat.time_reactivate_vertices = time_reactivate_vertices;
 
                 // vertices and edges
                 size_t total_num_part_accesses = 0;
@@ -287,6 +288,7 @@ public:
                 std::cout << "Time generate moves\t" << stat.time_generate_moves << " s" << std::endl;
                 std::cout << "Time wait\t" << stat.time_wait << " s" << std::endl;
                 std::cout << "Time move nodes\t" << stat.time_move_nodes << " s" << std::endl;
+                std::cout << "Time reactivate vertices\t" << stat.time_reactivate_vertices << " s" << std::endl;
                 std::cout << "Time move nodes (change boundary)\t" << stat.total_time_move_nodes_change_boundary << " s" << std::endl;
                 std::cout << "Time compute gain\t" << stat.total_compute_gain_time << std::endl;
                 std::cout << "Number of partition accesses\t" << stat.total_num_part_accesses << std::endl;
@@ -344,6 +346,7 @@ public:
         double time_generate_moves;
         double time_wait;
         double time_move_nodes;
+        double time_reactivate_vertices;
 
 public:
         struct statistics_type {
@@ -353,6 +356,7 @@ public:
                 double time_generate_moves = 0.0;
                 double time_wait = 0.0;
                 double time_move_nodes = 0.0;
+                double time_reactivate_vertices = 0.0;
                 double total_compute_gain_time = 0.0;
                 double total_time_move_nodes_change_boundary = 0.0;
 
@@ -435,6 +439,7 @@ public:
                         time_generate_moves += stat.time_generate_moves;
                         time_wait += stat.time_wait;
                         time_move_nodes += stat.time_move_nodes;
+                        time_reactivate_vertices += stat.time_reactivate_vertices;
                         total_time_move_nodes_change_boundary += stat.total_time_move_nodes_change_boundary;
                         total_compute_gain_time += stat.total_compute_gain_time;
 
@@ -473,7 +478,7 @@ public:
         PartitionConfig& m_config;
 #endif
         graph_access& m_G;
-        complete_boundary& m_boundary;
+        boundary_type& m_boundary;
 
         // global data
         std::vector<AtomicWrapper<bool>> m_moved_idx;
@@ -484,11 +489,11 @@ public:
         AtomicWrapper<uint32_t> m_reset_counter;
 };
 
-class multitry_kway_fm : public ::multitry_kway_fm {
+class multitry_kway_fm {
 public:
         using thread_data_refinement_core = parallel::thread_data_refinement_core;
 
-        multitry_kway_fm(PartitionConfig& config, graph_access& G, complete_boundary& boundary)
+        multitry_kway_fm(PartitionConfig& config, graph_access& G, boundary_type& boundary)
                 :       m_factory(config, G, boundary)
         {}
 
@@ -500,44 +505,33 @@ public:
                 return thread_data_factory::get_performed_gain();
         }
 
-        virtual ~multitry_kway_fm() {
+        int perform_refinement(PartitionConfig& config, graph_access& G,
+                               boundary_type& boundary, unsigned rounds,
+                               bool init_neighbors, unsigned alpha);
 
-        }
-
-        virtual int perform_refinement(PartitionConfig& config, graph_access& G,
-                                       complete_boundary& boundary, unsigned rounds,
-                                       bool init_neighbors, unsigned alpha) override;
-
-        virtual int perform_refinement_around_parts(PartitionConfig& config,
-                                            graph_access& G,
-                                            complete_boundary& boundary,
-                                            bool init_neighbors,
-                                            unsigned alpha,
-                                            PartitionID& lhs, PartitionID& rhs,
-                                            std::unordered_map <PartitionID, PartitionID>& touched_blocks) override;
+//        int perform_refinement_around_parts(PartitionConfig& config,
+//                                            graph_access& G,
+//                                            boundary_type& boundary,
+//                                            bool init_neighbors,
+//                                            unsigned alpha,
+//                                            PartitionID& lhs, PartitionID& rhs);
 
         void shuffle_task_queue();
 
 private:
         thread_data_factory m_factory;
 
-        int start_more_locallized_search(PartitionConfig& config, graph_access& G,
-                                             complete_boundary& boundary,
-                                             bool init_neighbors,
-                                             bool compute_touched_blocks,
-                                             std::unordered_map<PartitionID, PartitionID>& touched_blocks);
+        int start_more_locallized_search(graph_access& G, PartitionConfig& config, bool init_neighbors);
 
-        int start_more_locallized_search_experimental(PartitionConfig& config, graph_access& G,
-                                                      complete_boundary& boundary,
-                                                      bool init_neighbors,
-                                                      bool compute_touched_blocks,
-                                                      std::unordered_map<PartitionID, PartitionID>& touched_blocks,
+        int start_more_locallized_search_experimental(PartitionConfig& config, graph_access& G, bool init_neighbors,
                                                       std::vector<NodeID>& todolist);
 
-        void setup_start_nodes_around_blocks(graph_access& G, complete_boundary& boundary, PartitionID & lhs,
-                                             PartitionID & rhs);
+//        void setup_start_nodes_around_blocks(graph_access& G, boundary_type& boundary,
+//                                             PartitionID & lhs, PartitionID & rhs);
 
-        void setup_start_nodes_all(graph_access& G, complete_boundary& boundary);
+        void setup_start_nodes_all(graph_access& G, PartitionConfig& config, parallel::fast_sequential_boundary& boundary);
+
+        void setup_start_nodes_all(graph_access& G, PartitionConfig& config, parallel::fast_parallel_boundary& boundary);
 };
 
 }

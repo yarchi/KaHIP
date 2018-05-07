@@ -16,19 +16,19 @@ public:
         spin_lock& operator=(const spin_lock&) = default;
         spin_lock& operator=(spin_lock&&) = default;
 
-        void lock() {
+        inline void lock() {
                 bool expected = false;
                 while (!m_locked.compare_exchange_weak(expected, true, std::memory_order_acquire)) {
                         expected = false;
                 }
         }
 
-        bool try_lock() {
+        inline bool try_lock() {
                 bool expected = false;
                 return m_locked.compare_exchange_strong(expected, true, std::memory_order_acquire);
         }
 
-        void unlock() {
+        inline void unlock() {
                 m_locked.store(false, std::memory_order_release);
         }
 

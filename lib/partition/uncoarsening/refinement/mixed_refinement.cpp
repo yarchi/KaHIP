@@ -82,37 +82,37 @@ EdgeWeight mixed_refinement::perform_refinement(PartitionConfig & config, graph_
                         CLOCK_END("Kway refinement");
                 }
 
-                if(config.fastmultitry) {
-                        CLOCK_START;
-                        std::unique_ptr<multitry_kway_fm> multitry_kway = get_multitry_kway_fm_instance(config, G,
-                                                                                                        boundary);
-                        quality_metrics qm;
-                        EdgeWeight old_cut;
-                        double old_balance;
-                        if (config.check_cut) {
-                                old_cut = qm.edge_cut(G);
-                                old_balance = qm.balance(G);
-                                std::cout << "before cut\t" << old_cut << std::endl;
-                                std::cout << "balance before\t" << old_balance << std::endl;
-                        }
-
-
-                        EdgeWeight improvement = multitry_kway->perform_refinement(config, G, boundary,
-                                                                                 config.global_multitry_rounds, true,
-                                                                                 config.kway_adaptive_limits_alpha);
-                        overall_improvement += improvement;
-
-                        if (config.check_cut) {
-                                EdgeWeight new_cut = qm.edge_cut(G);
-                                double new_balance = qm.balance(G);
-                                std::cout << "after cut\t" << new_cut << std::endl;
-                                std::cout << "after balance\t" << new_balance << std::endl;
-                                std::cout << "improvement\t" << improvement << std::endl;
-                                ALWAYS_ASSERT(old_cut - new_cut == improvement);
-                        }
-
-                        CLOCK_END("Multitry kway refinement");
-                }
+//                if(config.fastmultitry) {
+//                        CLOCK_START;
+//                        std::unique_ptr<multitry_kway_fm> multitry_kway = get_multitry_kway_fm_instance(config, G,
+//                                                                                                        boundary);
+//                        quality_metrics qm;
+//                        EdgeWeight old_cut;
+//                        double old_balance;
+//                        if (config.check_cut) {
+//                                old_cut = qm.edge_cut(G);
+//                                old_balance = qm.balance(G);
+//                                std::cout << "before cut\t" << old_cut << std::endl;
+//                                std::cout << "balance before\t" << old_balance << std::endl;
+//                        }
+//
+//
+//                        EdgeWeight improvement = multitry_kway->perform_refinement(config, G, boundary,
+//                                                                                 config.global_multitry_rounds, true,
+//                                                                                 config.kway_adaptive_limits_alpha);
+//                        overall_improvement += improvement;
+//
+//                        if (config.check_cut) {
+//                                EdgeWeight new_cut = qm.edge_cut(G);
+//                                double new_balance = qm.balance(G);
+//                                std::cout << "after cut\t" << new_cut << std::endl;
+//                                std::cout << "after balance\t" << new_balance << std::endl;
+//                                std::cout << "improvement\t" << improvement << std::endl;
+//                                ALWAYS_ASSERT(old_cut - new_cut == improvement);
+//                        }
+//
+//                        CLOCK_END("Multitry kway refinement");
+//                }
 
                 if(!config.quotient_graph_refinement_disabled) {
                         CLOCK_START;
