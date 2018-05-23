@@ -1,6 +1,7 @@
 [submodule "growt"]
 	path = growt
 	url = https://github.com/TooBiased/growt.git
+	branch = master
 [submodule "ips4o"]
 	path = ips4o
 	url = https://github.com/SaschaWitt/ips4o.git

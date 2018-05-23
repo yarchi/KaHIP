@@ -34,8 +34,8 @@ from subprocess import *
 SYSTEM = platform.uname()[0]
 
 Import('env')
-env.Replace(CC = "gcc-5")
-env.Replace(CXX = "g++-5")
+env.Replace(CC = "gcc")
+env.Replace(CXX = "g++")
 
 #add git revision
 def getGitDesc():
