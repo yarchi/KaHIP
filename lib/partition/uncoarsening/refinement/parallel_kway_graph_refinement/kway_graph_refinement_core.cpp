@@ -29,17 +29,11 @@
 #include "tools/random_functions.h"
 #include "uncoarsening/refinement/kway_graph_refinement/kway_stop_rule.h"
 #include "uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_core.h"
+#include "ittnotify.h"
 
 namespace parallel {
 constexpr unsigned int kway_graph_refinement_core::sentinel;
 constexpr int kway_graph_refinement_core::signed_sentinel;
-
-kway_graph_refinement_core::kway_graph_refinement_core() {
-}
-
-kway_graph_refinement_core::~kway_graph_refinement_core() {
-
-}
 
 std::tuple<EdgeWeight, int, uint32_t>
 kway_graph_refinement_core::single_kway_refinement_round(thread_data_refinement_core& td) {
@@ -194,15 +188,115 @@ EdgeWeight kway_graph_refinement_core::apply_moves(uint32_t num_threads,
                                                    std::vector<NodeID>& reactivated_vertices) const {
 
         EdgeWeight overall_gain = 0;
+        //__itt_resume();
+        CLOCK_START;
+        std::vector<std::future<void>> futures;
+        std::atomic<uint32_t> thread_id(0);
+        std::vector<AtomicWrapper<uint32_t>> offsets(num_threads, 0);
+
+        if (parallel::g_thread_pool.NumThreads() > 0) {
+                CLOCK_START;
+                threads_data[0].get().boundary.begin_movements();
+                threads_data[0].get().time_move_nodes_change_boundary += CLOCK_END_TIME;
+
+                futures = prepare_boundary(num_threads, threads_data, thread_id, offsets);
+        }
+        CLOCK_END("prepare boundary movements 1");
 
         for (size_t id = 0; id < num_threads; ++id) {
-                overall_gain += apply_moves(threads_data[id].get(), reactivated_vertices);
+                overall_gain += apply_moves(threads_data[id].get(), reactivated_vertices, futures);
         }
+
+        CLOCK_START_N;
+        {
+                CLOCK_START;
+                std::for_each(futures.begin(), futures.end(), [&](auto& future) {
+                        future.get();
+                });
+                threads_data[0].get().time_move_nodes_change_boundary += CLOCK_END_TIME;
+        }
+        CLOCK_END("prepare boundary movements 2");
+        //__itt_pause();
         return overall_gain;
 }
 
+std::vector<std::future<void>> kway_graph_refinement_core::prepare_boundary(uint32_t num_threads,
+                                                                            Cvector<thread_data_refinement_core>& threads_data,
+                                                                            std::atomic<uint32_t>& thread_id,
+                                                                            std::vector<AtomicWrapper<uint32_t>>& offsets) const {
+
+        std::vector<std::future<void>> futures;
+        futures.reserve(parallel::g_thread_pool.NumThreads());
+        auto task = [&, num_threads]() {
+                while (true) {
+                        uint32_t cur_thread_id = thread_id.load(std::memory_order_relaxed);
+
+                        if (cur_thread_id >= num_threads) {
+                                break;
+                        }
+                        auto& td = threads_data[cur_thread_id].get();
+
+                        uint32_t i = offsets[cur_thread_id].fetch_add(1, std::memory_order_relaxed);
+                        if (i >= td.min_cut_indices.size()) {
+                                thread_id.compare_exchange_strong(cur_thread_id, cur_thread_id + 1,
+                                                                  std::memory_order_release);
+                                continue;
+                        }
+
+                        if (td.min_cut_indices[i].first == -1) {
+                                continue;
+                        }
+
+                        uint32_t end = (uint32_t) td.min_cut_indices[i].first;
+
+                        uint32_t begin = 0;
+                        if (i > 0) {
+                                begin = (uint32_t) td.min_cut_indices[i - 1].second + 1;
+                        }
+
+                        for (NodeID index = begin; index <= end; ++index) {
+                                NodeID node = td.transpositions[index];
+
+                                td.boundary.add_vertex_to_check(node);
+
+                                if (m_maintain_complete_boundary) {
+                                        forall_out_edges(td.G, e, node){
+                                                NodeID target = td.G.getEdgeTarget(e);
+                                                PartitionID part = td.G.getPartitionIndex(target);
+                                                if (part == td.to_partitions[index] || part == td.from_partitions[index]) {
+                                                        td.boundary.add_vertex_to_check(target);
+                                                }
+                                        } endfor
+                                }
+                        }
+                }
+        };
+
+        {
+                CLOCK_START;
+                for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
+                        futures.push_back(parallel::g_thread_pool.Submit(i, task));
+                }
+                threads_data[0].get().time_move_nodes_change_boundary += CLOCK_END_TIME;
+        }
+
+        return futures;
+}
+
+void kway_graph_refinement_core::update_boundary(thread_data_refinement_core& td) const {
+        CLOCK_START;
+        if (parallel::g_thread_pool.NumThreads() > 0) {
+                CLOCK_START;
+                td.boundary.finish_movements();
+                td.time_move_nodes_change_boundary += CLOCK_END_TIME;
+        }
+        CLOCK_END("update boundary movements");
+}
+
 EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& td,
-                                                   std::vector<NodeID>& reactivated_vertices) const {
+                                                   std::vector<NodeID>& reactivated_vertices,
+                                                   std::vector<std::future<void>>& futures) const {
+        __itt_resume();
         CLOCK_START;
         ALWAYS_ASSERT(td.transpositions.size() == td.from_partitions.size());
         ALWAYS_ASSERT(td.transpositions.size() == td.to_partitions.size());
@@ -251,6 +345,21 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
                                 same_move = false;
                                 ++td.affected_movements;
                                 ++aff;
+                                if (g_thread_pool.NumThreads() > 0 && m_maintain_complete_boundary) {
+                                        CLOCK_START;
+                                        auto task = [&td] (NodeID cur_node, PartitionID to, PartitionID from) {
+                                                forall_out_edges(td.G, e, cur_node) {
+                                                        NodeID target = td.G.getEdgeTarget(e);
+                                                        PartitionID part = td.G.getPartitionIndex(target);
+                                                        if (part == from || part == to) {
+                                                                td.boundary.add_vertex_to_check(target);
+                                                        }
+                                                } endfor
+                                        };
+                                        uint32_t thread_id = td.rnd.random_number(0u, (uint32_t) parallel::g_thread_pool.NumThreads() - 1);
+                                        futures.push_back(parallel::g_thread_pool.Submit(thread_id, task, node, to, from));
+                                        td.time_move_nodes_change_boundary += CLOCK_END_TIME;
+                                }
                         }
 
                         if (to == INVALID_PARTITION) {
@@ -277,13 +386,6 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
                                         for (size_t i = 0; i < transpositions.size(); ++i) {
                                                 NodeID node = transpositions[i];
                                                 reactivated_vertices.push_back(node);
-
-//                                                PartitionID from = from_partitions[i];
-//                                                PartitionID to = td.G.getPartitionIndex(node);
-//                                                CLOCK_START;
-//                                                td.boundary.move(node, from, to);
-//                                                auto t = CLOCK_END_TIME;
-//                                                td.time_move_nodes_change_boundary += t;
                                         }
 
                                         from_partitions.clear();
@@ -297,9 +399,11 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
 
                 index = next_index;
         }
+
         td.time_move_nodes += CLOCK_END_TIME;
         td.unperformed_gain += total_expected_gain - cut_improvement;
         td.performed_gain += cut_improvement;
+        __itt_pause();
         return cut_improvement;
 }
 
@@ -348,10 +452,13 @@ inline bool kway_graph_refinement_core::relaxed_move_node(thread_data_refinement
         }
 
         td.G.setPartitionIndex(node, to);
-        CLOCK_START;
-        td.boundary.move(node, from, to);
-        auto t = CLOCK_END_TIME;
-        td.time_move_nodes_change_boundary += t;
+
+        if (parallel::g_thread_pool.NumThreads() == 0) {
+                CLOCK_START;
+                td.boundary.move(node, from, to);
+                auto t = CLOCK_END_TIME;
+                td.time_move_nodes_change_boundary += t;
+        }
 
         td.boundary.set_block_size(from, td.boundary.get_block_size(from) - 1);
         td.boundary.set_block_size(to, td.boundary.get_block_size(to) + 1);
@@ -382,10 +489,12 @@ void kway_graph_refinement_core::relaxed_move_node_back(thread_data_refinement_c
         ALWAYS_ASSERT(td.G.getPartitionIndex(node) == to);
         td.G.setPartitionIndex(node, from);
 
-        CLOCK_START;
-        td.boundary.move(node, to, from);
-        auto t = CLOCK_END_TIME;
-        td.time_move_nodes_change_boundary += t;
+        if (parallel::g_thread_pool.NumThreads() == 0) {
+                CLOCK_START;
+                td.boundary.move(node, to, from);
+                auto t = CLOCK_END_TIME;
+                td.time_move_nodes_change_boundary += t;
+        }
 
         NodeWeight this_nodes_weight = td.G.getNodeWeight(node);
         td.boundary.set_block_size(from, td.boundary.get_block_size(from) + 1);

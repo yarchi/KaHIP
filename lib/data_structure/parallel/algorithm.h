@@ -207,7 +207,7 @@ public:
                 :       m_elem(std::forward<Args>(args)...)
         {}
 
-
+        CacheAlignedData(CacheAlignedData& other) = default;
         CacheAlignedData(const CacheAlignedData& other) = default;
         CacheAlignedData(CacheAlignedData&& other) = default;
 

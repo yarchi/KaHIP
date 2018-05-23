@@ -5,7 +5,9 @@
 #include "data_structure/parallel/time.h"
 #include "definitions.h"
 
+#include <functional>
 #include <vector>
+#include <utility>
 
 namespace parallel {
 
@@ -205,6 +207,7 @@ public:
                 :       fast_boundary(G, config)
                 ,       m_primary_hash((uint32_t) m_config.seed)
                 ,       m_secondary_hash((uint32_t) m_config.seed + 1)
+                ,       m_second_level_size(m_config.num_threads * m_config.num_threads)
         {}
 
         void move(NodeID vertex, PartitionID from, PartitionID to) {
@@ -255,8 +258,16 @@ public:
                 std::vector<Cvector<thread_container_type>> containers(m_config.num_threads,
                                                                        Cvector<thread_container_type>(m_config.num_threads));
 
+                using std::placeholders::_1;
+                std::function<int32_t(NodeID)> bnd_func;
+                if (parallel::g_thread_pool.NumThreads() == 0) {
+                        bnd_func = std::bind(&fast_parallel_boundary::external_neighbors, this, _1);
+                } else {
+                        bnd_func = std::bind(&fast_parallel_boundary::is_boundary, this, _1);
+                }
+
                 std::atomic<uint32_t> offset(0);
-                auto task_distribute = [this, &containers, &offset, block_size]() {
+                auto task_distribute = [this, &containers, &offset, block_size, &bnd_func]() {
                         uint32_t num_boundary = 0;
                         std::vector<block_data_type> blocks_info(m_blocks_info.size());
                         while (true) {
@@ -276,14 +287,7 @@ public:
 
                                 for (NodeID node = begin; node != end; ++node) {
                                         PartitionID cur_part = m_G.getPartitionIndex(node);
-                                        int32_t num_external_neighbors = 0;
-                                        forall_out_edges(m_G, e, node){
-                                                NodeID target = m_G.getEdgeTarget(e);
-                                                PartitionID part = m_G.getPartitionIndex(target);
-                                                if (cur_part != part) {
-                                                        ++num_external_neighbors;
-                                                }
-                                        } endfor
+                                        int32_t num_external_neighbors = bnd_func(node);
 
                                         ++blocks_info[cur_part].block_size;
                                         blocks_info[cur_part].block_weight += m_G.getNodeWeight(node);
@@ -395,11 +399,18 @@ public:
 
                         if (boundary) {
                                 expected_boundary.push_back(n);
+//                                if (!m_boundaries_per_thread[num_hash_table(n)].get().contains(n)) {
+//                                     std::cout << "! " << n << " ";
+//                                }
+                        } else {
+//                                if (m_boundaries_per_thread[num_hash_table(n)].get().contains(n)) {
+//                                        std::cout << n << " ";
+//                                }
                         }
                 } endfor
                 std::cout << std::endl;
                 std::cout << "check size = " << size << std::endl;
-                if (expected_boundary != this_boundary) {
+                if (expected_boundary == this_boundary) {
                         std::cout << "expected size = " << expected_boundary.size() << std::endl;
                         std::cout << "this size = " << this_boundary.size() << std::endl;
                         ALWAYS_ASSERT(expected_boundary == this_boundary);
@@ -423,14 +434,90 @@ public:
                         future.get();
                 });
         }
+
+        void begin_movements() {
+                if (m_containers.size() != m_config.num_threads) {
+                        m_containers.resize(m_config.num_threads, Cvector<thread_container<NodeID>>(m_second_level_size));
+                }
+        }
+
+        void add_vertex_to_check(NodeID vertex) {
+                uint32_t thread_id = num_hash_table(vertex);
+                uint32_t bucket_id = (uint32_t) m_secondary_hash(vertex) % m_second_level_size;
+                m_containers[thread_id][bucket_id].get().concurrent_emplace_back(vertex);
+        }
+
+        void finish_movements() {
+                auto task = [this](uint32_t thread_id) {
+                        auto& container = m_containers[thread_id];
+                        parallel::HashSet<NodeID, parallel::xxhash<NodeID>, true> processed_vertices(1024u);
+                        for (auto& sub_container : container) {
+                                for (const auto& vertex : sub_container.get()) {
+                                        if (processed_vertices.contains(vertex)) {
+                                                continue;
+                                        }
+                                        processed_vertices.insert(vertex);
+                                        int32_t num_external_neighbors = is_boundary(vertex);
+                                        if (num_external_neighbors > 0) {
+                                                m_boundaries_per_thread[thread_id].get().insert(vertex, num_external_neighbors);
+                                        } else {
+                                                m_boundaries_per_thread[thread_id].get().erase(vertex);
+                                        }
+                                }
+                                sub_container.get().clear();
+                        }
+                        return processed_vertices.size();
+                };
+
+                std::vector<std::future<size_t>> futures;
+                futures.reserve(parallel::g_thread_pool.NumThreads());
+                for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
+                        futures.push_back(parallel::g_thread_pool.Submit(i, task, i + 1));
+                }
+                uint32_t size = task(0);
+
+                std::for_each(futures.begin(), futures.end(), [&](auto& future){
+                        uint32_t sz = future.get();
+                        size += sz;
+                });
+                std::cout << "TOTAL SIZE = " << size << std::endl;
+        }
 private:
         Cvector<hash_map_with_erase_type> m_boundaries_per_thread;
-        //parallel::xxhash<uint32_t> m_primary_hash;
-        parallel::simple_hash<uint32_t> m_primary_hash;
+        std::vector<parallel::Cvector<parallel::thread_container<NodeID>>> m_containers;
+        parallel::xxhash<uint32_t> m_primary_hash;
         parallel::xxhash<uint32_t> m_secondary_hash;
+        uint32_t m_second_level_size;
 
         inline uint32_t num_hash_table(uint32_t vertex) const {
                 return (uint32_t) m_primary_hash(vertex) % m_config.num_threads;
+        }
+
+        inline int32_t external_neighbors(NodeID vertex) const {
+                int32_t num_external_neighbors = 0;
+                PartitionID cur_part = m_G.getPartitionIndex(vertex);
+                forall_out_edges(m_G, e, vertex){
+                        NodeID target = m_G.getEdgeTarget(e);
+                        PartitionID part = m_G.getPartitionIndex(target);
+                        if (cur_part != part) {
+                                ++num_external_neighbors;
+                        }
+                } endfor
+                return num_external_neighbors;
+        }
+
+        inline int32_t is_boundary(NodeID vertex) const {
+                int32_t num_external_neighbors = 0;
+                PartitionID cur_part = m_G.getPartitionIndex(vertex);
+                forall_out_edges(m_G, e, vertex){
+                        NodeID target = m_G.getEdgeTarget(e);
+                        PartitionID part = m_G.getPartitionIndex(target);
+                        if (cur_part != part) {
+                                ++num_external_neighbors;
+                                break;
+                        }
+                } endfor
+                return num_external_neighbors;
         }
 };
 

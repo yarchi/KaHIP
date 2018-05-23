@@ -632,10 +632,14 @@ private:
 public:
         static constexpr size_t size_factor = SizeFactor;
 
-        explicit HashSet(const uint64_t max_size = 0) :
+        using Iterator = HashTableIterator<TSelf>;
+
+        friend Iterator;
+
+        explicit HashSet(const uint64_t max_size = 1) :
                 _empty_element(std::numeric_limits<Key>::max()),
+                _max_size(std::max(round_up_to_next_power_2(max_size), 16u)),
                 _ht_size(max_size * SizeFactor),
-                _max_size(max_size),
                 _ht(_ht_size + _max_size * 1.1, _empty_element),
                 _poses(),
                 _hash(),
@@ -648,8 +652,27 @@ public:
         HashSet(const TSelf&) = default;
         HashSet(TSelf&&) = default;
 
-        TSelf& operator= (TSelf& other) = default;
-        TSelf& operator= (TSelf&& other) = default;
+        TSelf& operator= (const TSelf& other) {
+                _ht_size = other._ht_size;
+                _max_size = other._max_size;
+                _ht = other._ht;
+                _poses = other._poses;
+                _hash = other._hash;
+                _last_key = other._last_key;
+                _last_position = other._last_position;
+                return *this;
+        }
+
+        TSelf& operator= (TSelf&& other) {
+                std::swap(_ht_size, other._ht_size);
+                std::swap(_max_size, other._max_size);
+                _ht.swap(other._ht);
+                _poses.swap(other._poses);
+                std::swap(_hash, other._hash);
+                std::swap(_last_key, other._last_key);
+                std::swap(_last_position, other._last_position);
+                return *this;
+        }
 
         void reserve(const uint32_t max_size) {
                 _ht_size = max_size * SizeFactor;
@@ -658,8 +681,16 @@ public:
                 _poses.reserve(_max_size);
         }
 
-        inline uint64_t size() const {
+        inline size_t size() const {
                 return _poses.size();
+        }
+
+        Iterator begin() const {
+                return Iterator(*this, 0);
+        }
+
+        Iterator end() const {
+                return Iterator(*this, size());
         }
 
         inline bool empty() const {
@@ -739,8 +770,8 @@ private:
         }
 
         const Key _empty_element;
-        uint64_t _ht_size;
         uint64_t _max_size;
+        uint64_t _ht_size;
         std::vector<Element> _ht;
         std::vector<Position> _poses;
         Hash _hash;

@@ -325,14 +325,10 @@ int main(int argn, char **argv) {
         std::cout << "Adaptive better by movement\t" << a_m_better << "\ton\t" << a_m_better_val << std::endl;
         std::cout << "Equal\t" << equal << std::endl;
 #endif
-        // write the partition to the disc 
-//        std::stringstream filename;
-//        if(!partition_config.filename_output.compare("")) {
-//                filename << "tmppartition" << partition_config.k;
-//        } else {
-//                filename << partition_config.filename_output;
-//        }
-//
-//        graph_io::writePartition(G, filename.str());
-        
+        // write the partition to the disc
+        if (!partition_config.filename_output.empty()) {
+                graph_io::writePartition(G, partition_config.filename_output);
+        }
+
+        return 0;
 }

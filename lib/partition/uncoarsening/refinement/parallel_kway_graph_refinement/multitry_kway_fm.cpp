@@ -296,6 +296,11 @@ int multitry_kway_fm::start_more_locallized_search(graph_access& G, PartitionCon
                         break;
                 }
         }
+
+        CLOCK_START_N;
+        refinement_core.update_boundary(m_factory.get_thread_data(0));
+        m_factory.time_move_nodes += CLOCK_END_TIME;
+
         m_factory.reset_global_data();
         ALWAYS_ASSERT(total_gain_improvement >= 0);
         return total_gain_improvement;
