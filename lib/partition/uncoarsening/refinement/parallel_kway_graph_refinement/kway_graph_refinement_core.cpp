@@ -29,7 +29,6 @@
 #include "tools/random_functions.h"
 #include "uncoarsening/refinement/kway_graph_refinement/kway_stop_rule.h"
 #include "uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_core.h"
-#include "ittnotify.h"
 
 namespace parallel {
 constexpr unsigned int kway_graph_refinement_core::sentinel;
@@ -296,7 +295,6 @@ void kway_graph_refinement_core::update_boundary(thread_data_refinement_core& td
 EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& td,
                                                    std::vector<NodeID>& reactivated_vertices,
                                                    std::vector<std::future<void>>& futures) const {
-        __itt_resume();
         CLOCK_START;
         ALWAYS_ASSERT(td.transpositions.size() == td.from_partitions.size());
         ALWAYS_ASSERT(td.transpositions.size() == td.to_partitions.size());
@@ -403,7 +401,6 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
         td.time_move_nodes += CLOCK_END_TIME;
         td.unperformed_gain += total_expected_gain - cut_improvement;
         td.performed_gain += cut_improvement;
-        __itt_pause();
         return cut_improvement;
 }
 

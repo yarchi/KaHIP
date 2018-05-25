@@ -486,7 +486,7 @@ public:
         }
 
         inline Value& operator[] (const Key& key) {
-                if (TGrowable && size() == _max_size / 2)
+                if (TGrowable && _poses.size() == _max_size / 2)
                         resize();
 
                 const Position pos = findPosition(key);
@@ -554,7 +554,7 @@ private:
         }
 
         inline void insertImpl(const Key& key, const Value& value) {
-                if (TGrowable && size() == _max_size / 2)
+                if (TGrowable && _poses.size() == _max_size / 2)
                         resize();
 
                 const Position pos = findPosition(key);
