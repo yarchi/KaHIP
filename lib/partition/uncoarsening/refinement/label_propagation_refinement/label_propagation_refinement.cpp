@@ -269,7 +269,7 @@ void label_propagation_refinement::init_for_node_unit(graph_access& G, const uin
                                                       std::vector<Pair>& permutation,
                                                       Cvector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                       std::unique_ptr<ConcurrentQueue>& queue) {
-        Block block(m_block_allocator);
+        Block block;
         block.reserve(block_size);
         forall_nodes(G, node) {
                 cluster_sizes[G.getPartitionIndex(node)].get().fetch_add(G.getNodeWeight(node),
@@ -292,7 +292,7 @@ void label_propagation_refinement::seq_init_for_edge_unit(graph_access& G, const
                                                       std::vector<Pair>& permutation,
                                                       Cvector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                       std::unique_ptr<ConcurrentQueue>& queue) {
-        Block block(m_block_allocator);
+        Block block;
         for (NodeID node = 0; node < G.number_of_nodes();) {
                 uint32_t cur_block_size = 0;
                 uint32_t size = 0;
@@ -369,27 +369,71 @@ void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const
                                                           std::unique_ptr<ConcurrentQueue>& queue) {
 
         CLOCK_START;
-        apply_to_range_sync(NodeID(0), G.number_of_nodes(), parallel::g_thread_pool, [&](auto begin, auto end) {
-                Block block(m_block_allocator);
+//        apply_to_range_sync(NodeID(0), G.number_of_nodes(), parallel::g_thread_pool, [&](auto begin, auto end) {
+//                Block block(m_block_allocator);
+//                block.reserve(100);
+//                size_t cur_block_size = 0;
+//
+//                for (auto it = begin; it != end; ++it) {
+//                        NodeID node = *it;
+//                        block.push_back(permutation[node].first);
+//                        cur_block_size += permutation[node].second > 0 ? permutation[node].second : 1;
+//                        if (cur_block_size >= block_size) {
+//                                // block is full
+//                                queue->push(std::move(block));
+//                                block.clear();
+//                                block.reserve(100);
+//                                cur_block_size = 0;
+//                        }
+//                }
+//                if (!block.empty()) {
+//                        queue->push(std::move(block));
+//                }
+//        });
+
+        std::atomic<uint32_t> offset(0);
+        const uint32_t nodes_count = std::max<uint32_t>(sqrt(G.number_of_nodes()), 4000u);
+        auto task = [&]() {
+                Block block;
                 block.reserve(100);
                 size_t cur_block_size = 0;
+                NodeID begin = offset.fetch_add(nodes_count, std::memory_order_relaxed);
 
-                for (auto it = begin; it != end; ++it) {
-                        NodeID node = *it;
-                        block.push_back(permutation[node].first);
-                        cur_block_size += permutation[node].second > 0 ? permutation[node].second : 1;
-                        if (cur_block_size >= block_size) {
-                                // block is full
+                while (begin < G.number_of_nodes()) {
+                        NodeID end = std::min(begin + nodes_count, G.number_of_nodes());
+
+                        for (auto node = begin; node != end; ++node) {
+                                block.push_back(permutation[node].first);
+                                cur_block_size += permutation[node].second > 0 ? permutation[node].second : 1;
+                                if (cur_block_size >= block_size) {
+                                        // block is full
+                                        queue->push(std::move(block));
+                                        block.clear();
+                                        block.reserve(100);
+                                        cur_block_size = 0;
+                                }
+                        }
+                        if (!block.empty()) {
                                 queue->push(std::move(block));
                                 block.clear();
                                 block.reserve(100);
                                 cur_block_size = 0;
                         }
+
+                        begin = offset.fetch_add(nodes_count, std::memory_order_relaxed);
                 }
-                if (!block.empty()) {
-                        queue->push(std::move(block));
-                }
+        };
+
+        std::vector<std::future<void>> futures;
+        futures.reserve(parallel::g_thread_pool.NumThreads());
+        for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
+                futures.emplace_back(parallel::g_thread_pool.Submit(i, task));
+        }
+        task();
+        std::for_each(futures.begin(), futures.end(), [&](auto& future) {
+                future.get();
         });
+
         CLOCK_END("Init queue lp");
 }
 
@@ -437,8 +481,8 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                 }
                 auto process = [&](const size_t id) {
                         NodeWeight num_changed_label = 0;
-                        Block cur_block(m_block_allocator);
-                        Block new_block(m_block_allocator);
+                        Block cur_block;
+                        Block new_block;
                         size_t new_block_size = 0;
                         new_block.reserve(100);
 
@@ -738,8 +782,8 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                 auto process = [&](const size_t id) {
                         hash_maps[id].resize(G.number_of_nodes());
                         NodeWeight num_changed_label = 0;
-                        Block cur_block(m_block_allocator);
-                        Block new_block(m_block_allocator);
+                        Block cur_block;
+                        Block new_block;
                         size_t new_block_size = 0;
                         new_block.reserve(100);
 

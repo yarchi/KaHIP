@@ -58,12 +58,12 @@ public:
 
 private:
         //using Allocator = growt::PoolAllocator<NodeID>;
-        using Allocator = tbb::scalable_allocator<NodeID>;
-        using Block = std::vector<NodeID, Allocator>;
+        //using Allocator = tbb::scalable_allocator<NodeID>;
+        using Block = std::vector<NodeID>;
         using ConcurrentQueue = tbb::concurrent_queue<Block>;
         using Pair = std::pair<NodeID, NodeID>;
 
-        Allocator m_block_allocator;
+        //Allocator m_block_allocator;
 
         inline uint32_t get_block_size(graph_access& G, const PartitionConfig& config) const {
                 if (config.block_size_unit == BlockSizeUnit::NODES) {
