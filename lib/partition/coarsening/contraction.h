@@ -25,92 +25,134 @@
 
 
 #include "data_structure/graph_access.h"
+#include "data_structure/parallel/hash_table.h"
 #include "matching/matching.h"
 #include "partition_config.h"
+
+#include "data-structures/definitions.h"
 
 typedef NodeID Regions;
 
 class contraction {
-        public:
-                contraction();
-                virtual ~contraction();
+public:
+        contraction();
 
-                void contract(const PartitionConfig & partition_config, 
-                              graph_access & finer, 
-                              graph_access & coarser, 
-                              const Matching & edge_matching,
-                              const CoarseMapping & coarse_mapping,
-                              const NodeID & no_of_coarse_vertices,
-                              const NodePermutationMap & permutation) const;
+        virtual ~contraction();
 
-                void contract_clustering(const PartitionConfig & partition_config, 
-                              graph_access & finer, 
-                              graph_access & coarser, 
-                              const Matching & edge_matching,
-                              const CoarseMapping & coarse_mapping,
-                              const NodeID & no_of_coarse_vertices,
-                              const NodePermutationMap & permutation) const;
+        void contract(const PartitionConfig& partition_config,
+                      graph_access& finer,
+                      graph_access& coarser,
+                      const Matching& edge_matching,
+                      const CoarseMapping& coarse_mapping,
+                      const NodeID& no_of_coarse_vertices,
+                      const NodePermutationMap& permutation) const;
 
-                void fast_contract_clustering(const PartitionConfig& partition_config,
-                                              graph_access& G,
-                                              graph_access& coarser,
-                                              const Matching&,
-                                              const CoarseMapping& coarse_mapping,
-                                              const NodeID& no_of_coarse_vertices,
-                                              const NodePermutationMap&) const;
+        void contract_clustering(const PartitionConfig& partition_config,
+                                 graph_access& finer,
+                                 graph_access& coarser,
+                                 const Matching& edge_matching,
+                                 const CoarseMapping& coarse_mapping,
+                                 const NodeID& no_of_coarse_vertices,
+                                 const NodePermutationMap& permutation) const;
 
-                void parallel_fast_contract_clustering(const PartitionConfig& partition_config,
-                                                       graph_access& G,
-                                                       graph_access& coarser,
-                                                       const Matching&,
-                                                       const CoarseMapping& coarse_mapping,
-                                                       const NodeID& no_of_coarse_vertices,
-                                                       const NodePermutationMap&) const;
+        void fast_contract_clustering(const PartitionConfig& partition_config,
+                                      graph_access& G,
+                                      graph_access& coarser,
+                                      const Matching&,
+                                      const CoarseMapping& coarse_mapping,
+                                      const NodeID& no_of_coarse_vertices,
+                                      const NodePermutationMap&) const;
+
+        void parallel_fast_contract_clustering(const PartitionConfig& partition_config,
+                                               graph_access& G,
+                                               graph_access& coarser,
+                                               const Matching&,
+                                               const CoarseMapping& coarse_mapping,
+                                               const NodeID& no_of_coarse_vertices,
+                                               const NodePermutationMap&) const;
 
 
-                void contract_partitioned(const PartitionConfig & partition_config,
-                                                   graph_access & G,
-                                                   graph_access & coarser,
-                                                   const Matching & edge_matching,
-                                                   const CoarseMapping & coarse_mapping,
-                                                   const NodeID & no_of_coarse_vertices,
-                                                   const NodePermutationMap & permutation) const;
+        void contract_partitioned(const PartitionConfig& partition_config,
+                                  graph_access& G,
+                                  graph_access& coarser,
+                                  const Matching& edge_matching,
+                                  const CoarseMapping& coarse_mapping,
+                                  const NodeID& no_of_coarse_vertices,
+                                  const NodePermutationMap& permutation) const;
 
-        private:
-                // visits an edge in G (and auxillary graph) and updates/creates and edge in coarser graph 
-                void visit_edge(graph_access & G, 
-                                graph_access & coarser,
-                                std::vector<NodeID> & edge_positions,
-                                const NodeID coarseNode,
-                                const EdgeID e,
-                                const std::vector<NodeID> & new_edge_targets) const;
+private:
+        // visits an edge in G (and auxillary graph) and updates/creates and edge in coarser graph
 
-                inline uint64_t get_uint64_from_pair(NodeID cluster_a, NodeID cluster_b) const {
-                        if (cluster_a > cluster_b) {
-                                std::swap(cluster_a, cluster_b);
-                        }
-                        return ((uint64_t)cluster_a << 32) | cluster_b;
-                }
+        struct edge_type {
+                NodeID source;
+                NodeID target;
+                EdgeWeight weight;
 
-                inline std::pair<NodeID, NodeID> get_pair_from_uint64 (uint64_t data) const {
-                        NodeID first = data >> 32;
-                        NodeID second = data;
-                        return std::make_pair(first, second);
+                edge_type(uint32_t _source, uint32_t _target, NodeWeight _weight)
+                        : source(_source), target(_target), weight(_weight) {}
+
+                bool operator<(const edge_type& other) {
+                        return source < other.source || (source == other.source && target < other.target);
                 }
         };
 
-inline void contraction::visit_edge(graph_access & G, 
-                graph_access & coarser,
-                std::vector<NodeID> & edge_positions,
-                const NodeID coarseNode,
-                const EdgeID e,
-                const std::vector<NodeID> & new_edge_targets) const {
+        void visit_edge(graph_access& G,
+                        graph_access& coarser,
+                        std::vector<NodeID>& edge_positions,
+                        const NodeID coarseNode,
+                        const EdgeID e,
+                        const std::vector<NodeID>& new_edge_targets) const;
+
+        inline uint64_t get_uint64_from_pair(NodeID cluster_a, NodeID cluster_b) const {
+                if (cluster_a > cluster_b) {
+                        std::swap(cluster_a, cluster_b);
+                }
+                return ((uint64_t) cluster_a << 32) | cluster_b;
+        }
+
+        inline std::pair<NodeID, NodeID> get_pair_from_uint64(uint64_t data) const {
+                NodeID first = data >> 32;
+                NodeID second = data;
+                return std::make_pair(first, second);
+        }
+
+        void parallel_fast_construct_coarse_one_threads(const PartitionConfig& partition_config,
+                                                        graph_access& G,
+                                                        graph_access& coarser,
+                                                        const CoarseMapping& coarse_mapping,
+                                                        const NodeID& no_of_coarse_vertices,
+                                                        growt::uaGrow<parallel::xxhash<uint64_t>>& new_edges,
+                                                        double avg_degree,
+                                                        std::vector<NodeWeight>& block_infos) const;
+
+        void parallel_fast_construct_coarse_multiple_threads(const PartitionConfig& partition_config,
+                                                             graph_access& G,
+                                                             graph_access& coarser,
+                                                             const CoarseMapping& coarse_mapping,
+                                                             const NodeID& no_of_coarse_vertices,
+                                                             growt::uaGrow<parallel::xxhash<uint64_t>>& new_edges,
+                                                             double avg_degree,
+                                                             std::vector<NodeWeight>& block_infos) const;
+
+        void parallel_fast_contract_clustering_multiple_threads(const PartitionConfig& partition_config,
+                                                                graph_access& G,
+                                                                graph_access& coarser,
+                                                                const CoarseMapping& coarse_mapping,
+                                                                const NodeID& no_of_coarse_vertices) const;
+};
+
+inline void contraction::visit_edge(graph_access& G,
+                                    graph_access& coarser,
+                                    std::vector<NodeID>& edge_positions,
+                                    const NodeID coarseNode,
+                                    const EdgeID e,
+                                    const std::vector<NodeID>& new_edge_targets) const {
 
         EdgeID new_coarse_edge_target = new_edge_targets[e];
-        if(new_coarse_edge_target == coarseNode) return; //this is the matched edge ... return
+        if (new_coarse_edge_target == coarseNode) return; //this is the matched edge ... return
 
         EdgeID edge_pos = edge_positions[new_coarse_edge_target];
-        if( edge_pos == UNDEFINED_EDGE ) {
+        if (edge_pos == UNDEFINED_EDGE) {
                 //we havent seen this target node before so we need to create an edge
                 EdgeID coarse_edge = coarser.new_edge(coarseNode, new_coarse_edge_target);
                 coarser.setEdgeWeight(coarse_edge, G.getEdgeWeight(e));
@@ -118,11 +160,10 @@ inline void contraction::visit_edge(graph_access & G,
         } else {
                 //we have seen this target node before and we know its postition in our
                 //edge array of the graph. So we update the weight of the edge!
-                EdgeWeight new_edge_weight = coarser.getEdgeWeight(edge_pos) + G.getEdgeWeight(e); 
-                coarser.setEdgeWeight(edge_pos, new_edge_weight);                               
+                EdgeWeight new_edge_weight = coarser.getEdgeWeight(edge_pos) + G.getEdgeWeight(e);
+                coarser.setEdgeWeight(edge_pos, new_edge_weight);
         }
 }
-
 
 
 #endif /* end of include guard: CONTRACTION_VIXZ9K0F */
