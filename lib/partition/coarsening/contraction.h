@@ -103,10 +103,14 @@ private:
                         const EdgeID e,
                         const std::vector<NodeID>& new_edge_targets) const;
 
-        inline uint64_t get_uint64_from_pair(NodeID cluster_a, NodeID cluster_b) const {
+        inline uint64_t get_uint64_from_pair_sorted(NodeID cluster_a, NodeID cluster_b) const {
                 if (cluster_a > cluster_b) {
                         std::swap(cluster_a, cluster_b);
                 }
+                return get_uint64_from_pair_unsorted(cluster_a, cluster_b);
+        }
+
+        inline uint64_t get_uint64_from_pair_unsorted(NodeID cluster_a, NodeID cluster_b) const {
                 return ((uint64_t) cluster_a << 32) | cluster_b;
         }
 
@@ -115,24 +119,6 @@ private:
                 NodeID second = data;
                 return std::make_pair(first, second);
         }
-
-        void parallel_fast_construct_coarse_one_threads(const PartitionConfig& partition_config,
-                                                        graph_access& G,
-                                                        graph_access& coarser,
-                                                        const CoarseMapping& coarse_mapping,
-                                                        const NodeID& no_of_coarse_vertices,
-                                                        growt::uaGrow<parallel::xxhash<uint64_t>>& new_edges,
-                                                        double avg_degree,
-                                                        std::vector<NodeWeight>& block_infos) const;
-
-        void parallel_fast_construct_coarse_multiple_threads(const PartitionConfig& partition_config,
-                                                             graph_access& G,
-                                                             graph_access& coarser,
-                                                             const CoarseMapping& coarse_mapping,
-                                                             const NodeID& no_of_coarse_vertices,
-                                                             growt::uaGrow<parallel::xxhash<uint64_t>>& new_edges,
-                                                             double avg_degree,
-                                                             std::vector<NodeWeight>& block_infos) const;
 
         void parallel_fast_contract_clustering_multiple_threads(const PartitionConfig& partition_config,
                                                                 graph_access& G,

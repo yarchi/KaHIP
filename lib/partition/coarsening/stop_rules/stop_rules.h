@@ -174,11 +174,12 @@ public:
                 if (!res && attemps_to_contract_more < max_attempts &&
                     //((coarser.number_of_edges() + 0.0) / coarser.number_of_nodes() > 1.5 || coarser.number_of_edges() > 500000)
                     //(coarser.number_of_edges() > number_of_edges * 0.001 && coarser.number_of_nodes() > 1000 * config.k)
-                    ((coarser.number_of_edges() > number_of_edges * 0.001 || coarser.number_of_edges() > 300000) && coarser.number_of_nodes() > 1000 * config.k)
+                    //((coarser.number_of_edges() > number_of_edges * 0.001 || coarser.number_of_edges() > 300000) && coarser.number_of_nodes() > 1000 * config.k)
+                    (coarser.number_of_edges() > number_of_edges * 0.001 || coarser.number_of_edges() > 300000)
                 ) {
                         config.cluster_coarsening_factor /= 2;
                         config.cluster_coarsening_factor = std::max(config.cluster_coarsening_factor, 1);
-                        config.accept_small_coarser_graphs = false;
+                        //config.accept_small_coarser_graphs = false;
 
                         res = true;
                         ++attemps_to_contract_more;

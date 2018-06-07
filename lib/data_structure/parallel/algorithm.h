@@ -307,6 +307,7 @@ public:
 
         ~ParallelVector() {
                 parallel_destruction(m_task_consumer, m_ptr, m_size);
+                ::operator delete(m_ptr);
         }
 
         const Type* begin() const {
@@ -362,4 +363,38 @@ static ParallelVector<T, TaskConsumer> Get_parallel_vector(TaskConsumer& task_co
         return ParallelVector<T, TaskConsumer>(task_consumer, size, init_value);
 };
 
+//template<typename Iterator, typename Functor>
+//static void parallel_for_each(Iterator begin, Iterator end, Functor functor) {
+//        std::vector<std::future<void>> futures;
+//        futures.reserve(g_thread_pool.NumThreads());
+//
+//        std::atomic<uint32_t> offset(0);
+//        size_t size = end - begin;
+//        uint32_t block_size = (uint32_t) sqrt(size);
+//        block_size = std::max(block_size, 1000u);
+//        auto task = [&] () {
+//                while (true) {
+//                        uint32_t cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+//                        uint32_t cur_end = cur_begin + block_size;
+//                        cur_end = cur_end <= size ? cur_end : size;
+//
+//                        if (cur_begin >= size) {
+//                                break;
+//                        }
+//
+//                        for (Iterator elem = begin + cur_begin; elem != begin + cur_end; ++elem) {
+//                                functor(*elem);
+//                        }
+//                }
+//        };
+//
+//        for (size_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
+//                futures.push_back(g_thread_pool.Submit(i, task));
+//        }
+//        task();
+//
+//        std::for_each(futures.begin(), futures.end(), [&](auto& future) {
+//                future.get();
+//        });
+//}
 }

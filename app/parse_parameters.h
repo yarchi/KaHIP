@@ -117,7 +117,7 @@ int parse_parameters(int argn, char **argv,
 #ifdef MODE_KAFFPAs
         struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: eco) [strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel]." );
 #else
-        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|fastsocialmultitry|fastsocialmultitry_parallel|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: strong) [strong|eco|fast|fastsocial|fastsocialmultitry|fastsocialmultitry_parallel|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel]." );
+        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|fastsocialmultitry|fastsocialmultitry_parallel|fastsocialmultitry_parallel_fast|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: strong) [strong|eco|fast|fastsocial|fastsocialmultitry|fastsocialmultitry_parallel|fastsocialmultitry_parallel_fast|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel]." );
 #endif
 
         struct arg_dbl *time_limit                           = arg_dbl0(NULL, "time_limit", NULL, "Time limit in s. Default 0s .");
@@ -393,6 +393,8 @@ int parse_parameters(int argn, char **argv,
                         cfg.fastsocialmultitry(partition_config);
                 } else if (strcmp("fastsocialmultitry_parallel", preconfiguration->sval[0]) == 0) {
                         cfg.fastsocialmultitry_parallel(partition_config);
+                } else if (strcmp("fastsocialmultitry_parallel_fast", preconfiguration->sval[0]) == 0) {
+                        cfg.fastsocialmultitry_parallel_fast(partition_config);
                 } else if (strcmp("ecosocial", preconfiguration->sval[0]) == 0) {
                         cfg.ecosocial(partition_config);
                 } else if (strcmp("strongsocial", preconfiguration->sval[0]) == 0) {

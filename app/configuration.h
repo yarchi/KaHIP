@@ -47,7 +47,8 @@ class configuration {
                 void fastsocial( PartitionConfig & config );
                 void fastsocial_parallel( PartitionConfig & config );
                 void fastsocialmultitry( PartitionConfig & config );
-                void fastsocialmultitry_parallel( PartitionConfig & config );
+                void fastsocialmultitry_parallel(PartitionConfig& config);
+                void fastsocialmultitry_parallel_fast(PartitionConfig& partition_config);
                 void ecosocial( PartitionConfig & config );
                 void strongsocial( PartitionConfig & config );
                 void strongsocial_parallel( PartitionConfig& config);
@@ -605,7 +606,6 @@ inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partitio
         // coarsening
         partition_config.parallel_coarsening_lp = true;
         partition_config.fast_contract_clustering = true;
-        partition_config.stop_rule = STOP_RULE_MULTIPLE_K_STRONG_CONTRACTION;
 
         // initial partitioning
         partition_config.parallel_initial_partitioning = true;
@@ -619,6 +619,12 @@ inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partitio
         partition_config.parallel_multitry_kway = true;
         partition_config.global_multitry_rounds = 3;
         partition_config.stop_mls_threshold = 10;
+}
+
+inline void configuration::fastsocialmultitry_parallel_fast(PartitionConfig& partition_config) {
+        fastsocialmultitry_parallel(partition_config);
+        //partition_config.accept_small_coarser_graphs = true;
+        partition_config.stop_rule = STOP_RULE_MULTIPLE_K_STRONG_CONTRACTION;
 }
 
 inline void configuration::fastsocial( PartitionConfig & partition_config ) {
@@ -637,7 +643,6 @@ inline void configuration::fastsocial_parallel( PartitionConfig & partition_conf
         // coarsening
         partition_config.parallel_coarsening_lp = true;
         partition_config.fast_contract_clustering = true;
-        partition_config.stop_rule = STOP_RULE_MULTIPLE_K_STRONG_CONTRACTION;
 
         // initial partitioning
         partition_config.parallel_initial_partitioning = true;

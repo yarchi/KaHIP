@@ -114,11 +114,11 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
                         CLOCK_END(">> Hashing neighbors");
                 }
 
-                if (!copy_of_partition_config.accept_small_coarser_graphs && no_of_coarser_vertices < copy_of_partition_config.k * 1000) {
-                        std::cout << "Do not accept this clustering. The number of vertices " << no_of_coarser_vertices << " < k * " << 1000 << std::endl;
-                        std::cout << "Number of vertices = " << no_of_coarser_vertices << std::endl;
-                        break;
-                }
+//                if (!copy_of_partition_config.accept_small_coarser_graphs && no_of_coarser_vertices < copy_of_partition_config.k * 1000) {
+//                        std::cout << "Do not accept this clustering. The number of vertices " << no_of_coarser_vertices << " < k * " << 1000 << std::endl;
+//                        std::cout << "Number of vertices = " << no_of_coarser_vertices << std::endl;
+//                        break;
+//                }
 
                 CLOCK_START_N;
                 if(partition_config.graph_allready_partitioned) {
@@ -141,7 +141,7 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
 
                 level++;
 
-        } while( contraction_stop);
+        } while (contraction_stop);
 
         hierarchy.push_back(finer, NULL); // append the last created level
 

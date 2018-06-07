@@ -423,7 +423,7 @@ struct PartitionConfig
         uint32_t stop_mls_threshold = 5;
         bool sort_edges = false;
         bool common_neighborhood_clustering = false;
-        bool accept_small_coarser_graphs = true;
+        //bool accept_small_coarser_graphs = false;
 };
 
 

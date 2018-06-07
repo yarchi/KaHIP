@@ -15,6 +15,7 @@ namespace parallel {
 
 template <typename T>
 struct simple_hash {
+        static const size_t significant_digits = 64;
         using hash_type = uint64_t;
 
         simple_hash()

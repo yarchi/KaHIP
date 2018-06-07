@@ -22,8 +22,10 @@
 
 #include "contraction.h"
 #include "data_structure/parallel/time.h"
+#include "data_structure/parallel/thread_pool.h"
 #include "../uncoarsening/refinement/quotient_graph_refinement/complete_boundary.h"
 #include "macros_assertions.h"
+#include "ittnotify.h"
 
 #include <ips4o/ips4o.hpp>
 
@@ -161,7 +163,8 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
                                                     const NodeID& no_of_coarse_vertices,
                                                     const NodePermutationMap&) const {
         if (partition_config.num_threads > 1) {
-                parallel_fast_contract_clustering_multiple_threads(partition_config, G, coarser, coarse_mapping, no_of_coarse_vertices);
+                parallel_fast_contract_clustering_multiple_threads(partition_config, G, coarser, coarse_mapping,
+                                                                   no_of_coarse_vertices);
                 return;
         }
 
@@ -207,7 +210,7 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
 
                                         if (is_cut_edge) {
                                                 EdgeWeight edge_weight = G.getEdgeWeight(e);
-                                                uint64_t key = get_uint64_from_pair(source_cluster, target_cluster);
+                                                uint64_t key = get_uint64_from_pair_sorted(source_cluster, target_cluster);
                                                 handle.insertOrUpdate(key, edge_weight,
                                                                       [](size_t& lhs, const size_t& rhs) {
                                                                               return lhs += rhs;
@@ -239,193 +242,8 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
         });
         CLOCK_END("Construct hash table and aux data");
 
-        if (partition_config.num_threads == 1) {
-                parallel_fast_construct_coarse_one_threads(partition_config, G, coarser, coarse_mapping,
-                                                           no_of_coarse_vertices, new_edges, avg_degree, block_infos);
-        } else {
-                parallel_fast_construct_coarse_multiple_threads(partition_config, G, coarser, coarse_mapping,
-                                                            no_of_coarse_vertices, new_edges, avg_degree, block_infos);
-        }
-}
-
-void contraction::parallel_fast_contract_clustering_multiple_threads(const PartitionConfig& partition_config,
-                                                    graph_access& G,
-                                                    graph_access& coarser,
-                                                    const CoarseMapping& coarse_mapping,
-                                                    const NodeID& no_of_coarse_vertices) const {
-        CLOCK_START;
-        std::vector<NodeWeight> block_infos;
-        block_infos.reserve(no_of_coarse_vertices);
-        const uint32_t num_threads = partition_config.num_threads;
-
-        // build set of new edges
-        double avg_degree = (G.number_of_edges() + 0.0) / G.number_of_nodes();
-        size_t num_cut_edges = std::min<size_t>(avg_degree * no_of_coarse_vertices, G.number_of_edges() / 10);
-        std::cout << "overall ht capacity\t" << num_cut_edges << std::endl;
-        std::cout << "ht capacity\t" << num_cut_edges / num_threads << std::endl;
-
-        using concurrent_ht_type = growt::uaGrow<parallel::xxhash<uint64_t>>;
-        std::vector<concurrent_ht_type> new_edges;
-        new_edges.reserve(num_threads);
-        for (size_t i = 0; i <  num_threads; ++i) {
-                new_edges.emplace_back(1000);
-        }
-        CLOCK_END("Init hash tables");
-
-        CLOCK_START_N;
-        std::atomic<uint32_t> offset(0);
-
-        uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
-        block_size = std::max(block_size, 1000u);
-        std::cout << "block_size\t" << block_size << std::endl;
-        parallel::xxhash<uint32_t> hash;
-
-        auto task = [&]() {
-                std::vector<concurrent_ht_type::Handle> handles;
-                handles.reserve(num_threads);
-                for (size_t i = 0; i < num_threads; ++i) {
-                        handles.push_back(new_edges[i].getHandle());
-                }
-                std::vector<NodeWeight> my_block_infos(no_of_coarse_vertices);
-                std::vector<std::vector<std::pair<uint64_t, EdgeWeight>>> buffers(num_threads);
-
-                while (true) {
-                        uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
-                        uint32_t end = begin + block_size;
-                        end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
-
-                        if (begin >= G.number_of_nodes()) {
-                                break;
-                        }
-
-                        for (NodeID node = begin; node != end; ++node) {
-                                const PartitionID source_cluster = coarse_mapping[node];
-                                my_block_infos[source_cluster] += G.getNodeWeight(node);
-                                concurrent_ht_type::Handle* handle_ptr = nullptr;
-
-                                forall_out_edges(G, e, node) {
-                                        NodeID targetID = G.getEdgeTarget(e);
-                                        PartitionID target_cluster = coarse_mapping[targetID];
-                                        bool is_cut_edge = source_cluster != target_cluster;
-
-                                        if (is_cut_edge) {
-                                                EdgeWeight edge_weight = G.getEdgeWeight(e);
-                                                uint64_t key = get_uint64_from_pair(source_cluster, target_cluster);
-
-                                                if (handle_ptr == nullptr) {
-                                                        handle_ptr = &handles[hash(source_cluster) % num_threads];
-                                                }
-
-                                                handle_ptr->insertOrUpdate(key, edge_weight,
-                                                                      [](size_t& lhs, const size_t& rhs) {
-                                                                              return lhs += rhs;
-                                                                      },
-                                                                      edge_weight);
-                                        }
-                                } endfor
-                        }
-                }
-                return my_block_infos;
-        };
-
-        std::vector<std::future<std::vector<NodeWeight>>> futures;
-        futures.reserve(num_threads - 1);
-        for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
-                futures.push_back(parallel::g_thread_pool.Submit(i, task));
-        }
-
-        auto cur_block_infos = task();
-        for (auto cur_block_size :cur_block_infos) {
-                block_infos.push_back(cur_block_size);
-        }
-
-        std::for_each(futures.begin(), futures.end(), [&](auto& future){
-                auto cur_block_infos = future.get();
-                for (size_t i = 0; i < no_of_coarse_vertices; ++i) {
-                        block_infos[i] += cur_block_infos[i];
-                }
-        });
-        CLOCK_END("Construct hash table and aux data");
-
-        CLOCK_START_N;
-        std::vector<EdgeID> offsets(no_of_coarse_vertices);
-        auto task1 = [&](uint32_t thread_id) {
-                auto handle = new_edges[thread_id].getHandle();
-                EdgeID num_edges = 0;
-                for (auto it = handle.begin(); it != handle.end(); ++it) {
-                        std::pair<NodeID, NodeID> edge = get_pair_from_uint64((*it).first);
-                        ++num_edges;
-                        ++offsets[edge.first];
-                }
-                return num_edges;
-        };
-
-        std::vector<std::future<EdgeID>> futures1;
-        futures1.reserve(num_threads - 1);
-        for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
-                futures1.push_back(parallel::g_thread_pool.Submit(i, task1, i + 1));
-        }
-
-        EdgeID num_edges = task1(0);
-
-        std::for_each(futures1.begin(), futures1.end(), [&](auto& future){
-                num_edges += future.get();
-        });
-        std::cout << "num edges\t" << num_edges << std::endl;
-        CLOCK_END("Calculate offsets");
-
-        CLOCK_START_N;
-        std::vector<Node> nodes(no_of_coarse_vertices);
-        EdgeID cur_prefix = 0;
-        for (size_t i = 0; i < no_of_coarse_vertices; ++i) {
-                EdgeID cur_offset = offsets[i];
-
-                offsets[i] = cur_prefix;
-                nodes[i].firstEdge = cur_prefix;
-                nodes[i].weight = block_infos[i];
-
-                cur_prefix += cur_offset;
-        }
-        CLOCK_END("Calculate prefix sum");
-
-        CLOCK_START_N;
-        std::vector<Edge> edges(num_edges);
-        auto task2 = [&](uint32_t thread_id) {
-                auto handle = new_edges[thread_id].getHandle();
-                for (auto it = handle.begin(); it != handle.end(); ++it) {
-                        std::pair<NodeID, NodeID> edge = get_pair_from_uint64((*it).first);
-                        auto edge_weight = (*it).second;
-                        edges[offsets[edge.first]].target = edge.second;
-                        edges[offsets[edge.first]].weight = edge_weight;
-                        ++offsets[edge.first];
-                }
-        };
-
-        std::vector<std::future<void>> futures2;
-        futures2.reserve(num_threads - 1);
-        for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
-                futures2.push_back(parallel::g_thread_pool.Submit(i, task2, i + 1));
-        }
-
-        task2(0);
-
-        std::for_each(futures2.begin(), futures2.end(), [&](auto& future){
-                future.get();
-        });
-        CLOCK_END("Calculate edges array");
-
-}
-
-void contraction::parallel_fast_construct_coarse_one_threads(const PartitionConfig& partition_config,
-                                                              graph_access& G,
-                                                              graph_access& coarser,
-                                                              const CoarseMapping& coarse_mapping,
-                                                              const NodeID& no_of_coarse_vertices,
-                                                              growt::uaGrow<parallel::xxhash<uint64_t>>& new_edges,
-                                                              double avg_degree,
-                                                              std::vector<NodeWeight>& block_infos) const {
         // construct graph
-        CLOCK_START;
+        CLOCK_START_N;
         std::vector<std::vector<std::pair<PartitionID, EdgeWeight>>> building_tool(no_of_coarse_vertices);
         for (auto& data : building_tool) {
                 data.reserve(avg_degree);
@@ -455,84 +273,250 @@ void contraction::parallel_fast_construct_coarse_one_threads(const PartitionConf
         coarser.finish_construction();
 
         forall_nodes(G, node) {
-                coarser.setPartitionIndex(coarse_mapping[node], G.getPartitionIndex(node));
+                                coarser.setPartitionIndex(coarse_mapping[node], G.getPartitionIndex(node));
 
-                if(partition_config.combine) {
-                        coarser.setSecondPartitionIndex(coarse_mapping[node], G.getSecondPartitionIndex(node));
-                }
-        } endfor
+                                if(partition_config.combine) {
+                                        coarser.setSecondPartitionIndex(coarse_mapping[node], G.getSecondPartitionIndex(node));
+                                }
+                        } endfor
         CLOCK_END("Construct graph");
 }
 
-void contraction::parallel_fast_construct_coarse_multiple_threads(const PartitionConfig& partition_config,
+void contraction::parallel_fast_contract_clustering_multiple_threads(const PartitionConfig& partition_config,
                                                     graph_access& G,
                                                     graph_access& coarser,
                                                     const CoarseMapping& coarse_mapping,
-                                                    const NodeID& no_of_coarse_vertices,
-                                                    growt::uaGrow<parallel::xxhash<uint64_t>>& new_edges,
-                                                    double avg_degree,
-                                                    std::vector<NodeWeight>& block_infos) const {
-        // construct graph
+                                                    const NodeID& no_of_coarse_vertices) const {
         CLOCK_START;
-        std::vector<edge_type> edges;
-        edges.reserve(avg_degree * no_of_coarse_vertices);
+        const uint32_t num_threads = partition_config.num_threads;
 
-        size_t num_edges = 0;
-        {
-                CLOCK_START;
-                auto handle = new_edges.getHandle();
+        // build set of new edges
+        double avg_degree = (G.number_of_edges() + 0.0) / G.number_of_nodes();
+        size_t num_cut_edges = std::min<size_t>(avg_degree * no_of_coarse_vertices, G.number_of_edges() / 10);
+        std::cout << "overall ht capacity\t" << num_cut_edges << std::endl;
+        std::cout << "ht capacity\t" << num_cut_edges / num_threads << std::endl;
+
+        using concurrent_ht_type = growt::uaGrow<parallel::MurmurHash<uint64_t>>;
+        std::unique_ptr<concurrent_ht_type[], void(*)(concurrent_ht_type*)> new_edges(
+                reinterpret_cast<concurrent_ht_type*>(::operator new(sizeof(concurrent_ht_type) * num_threads)),
+                [](concurrent_ht_type* p) {
+                        ::operator delete(p);
+                }
+        );
+
+        parallel::submit_for_all([&](uint32_t thread_id) {
+                new (&new_edges[thread_id]) concurrent_ht_type(2 * num_cut_edges / num_threads);
+        });
+        CLOCK_END("Init hash tables");
+
+        CLOCK_START_N;
+        std::atomic<uint32_t> offset(0);
+
+        uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
+        block_size = std::max(block_size, 1000u);
+        std::cout << "block_size\t" << block_size << std::endl;
+
+        auto task_with_buffers = [&](uint32_t) {
+                std::vector<concurrent_ht_type::Handle> handles;
+                handles.reserve(num_threads);
+                for (size_t i = 0; i < num_threads; ++i) {
+                        handles.push_back(new_edges[i].getHandle());
+                }
+                std::vector<NodeWeight> my_block_infos(no_of_coarse_vertices);
+                std::vector<std::vector<std::pair<uint64_t, EdgeWeight>>> buffers(num_threads);
+                const uint32_t max_buffer_size = 10000;
+                for (auto& buffer : buffers) {
+                        buffer.reserve(max_buffer_size);
+                }
+
+                auto empty_buffer_task = [&](auto& handle, auto& buffer) {
+                        for (const auto& elem : buffer) {
+                                uint64_t key = elem.first;
+                                EdgeWeight edge_weight = elem.second;
+                                handle.insertOrUpdate(key, edge_weight,
+                                                      [](size_t& lhs, const size_t& rhs) {
+                                                              return lhs += rhs;
+                                                      },
+                                                      edge_weight);
+                        }
+                        buffer.clear();
+                };
+
+                while (true) {
+                        uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                        uint32_t end = begin + block_size;
+                        end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
+
+                        if (begin >= G.number_of_nodes()) {
+                                break;
+                        }
+
+                        for (NodeID node = begin; node != end; ++node) {
+                                const PartitionID source_cluster = coarse_mapping[node];
+                                my_block_infos[source_cluster] += G.getNodeWeight(node);
+                                uint32_t ht_num = num_threads;
+
+                                forall_out_edges(G, e, node) {
+                                        NodeID targetID = G.getEdgeTarget(e);
+                                        PartitionID target_cluster = coarse_mapping[targetID];
+                                        bool is_cut_edge = source_cluster != target_cluster;
+
+                                        if (is_cut_edge) {
+                                                if (ht_num == num_threads) {
+                                                        ht_num = source_cluster % ht_num;
+                                                }
+                                                EdgeWeight edge_weight = G.getEdgeWeight(e);
+                                                uint64_t key = get_uint64_from_pair_unsorted(source_cluster, target_cluster);
+                                                buffers[ht_num].emplace_back(key, edge_weight);
+                                        }
+                                } endfor
+
+                                if (ht_num != num_threads && buffers[ht_num].size() >= max_buffer_size) {
+                                        empty_buffer_task(handles[ht_num], buffers[ht_num]);
+                                }
+                        }
+                }
+
+                for (size_t i = 0; i < num_threads; ++i) {
+                        empty_buffer_task(handles[i], buffers[i]);
+                }
+
+                return my_block_infos;
+        };
+
+        auto task_without_buffers = [&](uint32_t) {
+                std::vector<concurrent_ht_type::Handle> handles;
+                handles.reserve(num_threads);
+                for (size_t i = 0; i < num_threads; ++i) {
+                        handles.push_back(new_edges[i].getHandle());
+                }
+                std::vector<NodeWeight> my_block_infos(no_of_coarse_vertices);
+                std::vector<std::vector<std::pair<uint64_t, EdgeWeight>>> buffers(num_threads);
+
+                while (true) {
+                        uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                        uint32_t end = begin + block_size;
+                        end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
+
+                        if (begin >= G.number_of_nodes()) {
+                                break;
+                        }
+
+                        for (NodeID node = begin; node != end; ++node) {
+                                const PartitionID source_cluster = coarse_mapping[node];
+                                my_block_infos[source_cluster] += G.getNodeWeight(node);
+                                concurrent_ht_type::Handle* handle_ptr = nullptr;
+
+                                forall_out_edges(G, e, node) {
+                                        NodeID targetID = G.getEdgeTarget(e);
+                                        PartitionID target_cluster = coarse_mapping[targetID];
+                                        bool is_cut_edge = source_cluster != target_cluster;
+
+                                        if (is_cut_edge) {
+                                                EdgeWeight edge_weight = G.getEdgeWeight(e);
+                                                uint64_t key = get_uint64_from_pair_unsorted(source_cluster, target_cluster);
+
+                                                if (handle_ptr == nullptr) {
+                                                        handle_ptr = &handles[source_cluster % num_threads];
+                                                }
+
+                                                handle_ptr->insertOrUpdate(key, edge_weight,
+                                                                           [](size_t& lhs, const size_t& rhs) {
+                                                                                   return lhs += rhs;
+                                                                           },
+                                                                           edge_weight);
+                                        }
+                                } endfor
+                        }
+                }
+                return my_block_infos;
+        };
+
+        auto task = task_without_buffers;
+
+        std::vector<NodeWeight> block_infos;
+        block_infos.reserve(no_of_coarse_vertices);
+        parallel::submit_for_all(task, [&](auto& block_infos, auto&& cur_block_infos) {
+                if (block_infos.empty()) {
+                        block_infos.swap(cur_block_infos);
+                } else {
+                        for (size_t i = 0; i < no_of_coarse_vertices; ++i) {
+                                block_infos[i] += cur_block_infos[i];
+                        }
+                }
+        }, block_infos);
+
+        CLOCK_END("Construct hash table and aux data");
+
+        CLOCK_START_N;
+        std::vector<EdgeID> offsets(no_of_coarse_vertices);
+        auto task1 = [&](uint32_t thread_id) {
+                auto handle = new_edges[thread_id].getHandle();
+                EdgeID num_edges = 0;
                 for (auto it = handle.begin(); it != handle.end(); ++it) {
-                        std::pair < NodeID, NodeID > edge = get_pair_from_uint64((*it).first);
-                        auto edge_weight = (*it).second / 2;
-                        //building_tool[edge.first].emplace_back(edge.second, edge_weight);
-                        //building_tool[edge.second].emplace_back(edge.first, edge_weight);
+                        std::pair<NodeID, NodeID> edge = get_pair_from_uint64((*it).first);
                         ++num_edges;
-                        edges.emplace_back(edge.first, edge.second, edge_weight);
-                        edges.emplace_back(edge.second, edge.first, edge_weight);
+                        ++offsets[edge.first];
                 }
-                CLOCK_END("Building tool");
-                CLOCK_START_N;
-                parallel::g_thread_pool.Clear();
-                parallel::Unpin();
+                return num_edges;
+        };
 
-                ips4o::parallel::sort(edges.begin(), edges.end(), [&](const edge_type& lhs, const edge_type& rhs) {
-                        return lhs.source < rhs.source || (lhs.source == rhs.source && lhs.target < rhs.target);
-                }, partition_config.num_threads);
 
-                parallel::PinToCore(0);
-                parallel::g_thread_pool.Resize(partition_config.num_threads - 1);
-                CLOCK_END("Sort edges");
+        EdgeID num_edges = parallel::submit_for_all(task1,
+                                                    [](EdgeID num_edges, EdgeID cur_num_edges) {
+                                                            return num_edges + cur_num_edges;
+                                                    }, 0u);
+        std::cout << "num edges\t" << num_edges << std::endl;
+        CLOCK_END("Calculate offsets");
+
+        CLOCK_START_N;
+        std::vector<Node> nodes(no_of_coarse_vertices + 1);
+        EdgeID cur_prefix = 0;
+        for (size_t i = 0; i < no_of_coarse_vertices; ++i) {
+                EdgeID cur_offset = offsets[i];
+
+                offsets[i] = cur_prefix;
+                nodes[i].firstEdge = cur_prefix;
+                nodes[i].weight = block_infos[i];
+
+                cur_prefix += cur_offset;
         }
+        nodes.back().firstEdge = cur_prefix;
+        CLOCK_END("Calculate prefix sum");
 
-        {
-                CLOCK_START;
-                coarser.start_construction(no_of_coarse_vertices, 2 * num_edges);
-                size_t i = 0;
-                while (i < edges.size()) {
-                        NodeID node = coarser.new_node();
-                        coarser.setNodeWeight(node, block_infos[node]);
-                        NodeID cur_source = edges[i].source;
-                        while (node == cur_source && i < edges.size()) {
-                                NodeID target = edges[i].target;
-                                EdgeWeight weight = edges[i].weight;
-                                EdgeID e = coarser.new_edge(node, target);
-                                coarser.setEdgeWeight(e, weight);
-                                ++i;
-                                cur_source = edges[i].source;
-                        }
+        CLOCK_START_N;
+        std::vector<Edge> edges(num_edges);
+        auto task2 = [&](uint32_t thread_id) {
+                auto handle = new_edges[thread_id].getHandle();
+                for (auto it = handle.begin(); it != handle.end(); ++it) {
+                        std::pair<NodeID, NodeID> edge = get_pair_from_uint64((*it).first);
+                        auto edge_weight = (*it).second;
+                        edges[offsets[edge.first]].target = edge.second;
+                        edges[offsets[edge.first]].weight = edge_weight;
+                        ++offsets[edge.first];
                 }
-                coarser.finish_construction();
+        };
 
-                forall_nodes(G, node){
-                        coarser.setPartitionIndex(coarse_mapping[node], G.getPartitionIndex(node));
+        parallel::submit_for_all(task2);
 
-                        if (partition_config.combine) {
-                                coarser.setSecondPartitionIndex(coarse_mapping[node], G.getSecondPartitionIndex(node));
-                        }
-                } endfor
-                CLOCK_END("Coarser");
-        }
-        CLOCK_END("Construct graph");
+        coarser.start_construction(nodes, edges);
+        ALWAYS_ASSERT(!partition_config.graph_allready_partitioned);
+//        forall_nodes(G, node) {
+//                coarser.setPartitionIndex(coarse_mapping[node], G.getPartitionIndex(node));
+//
+//                if(partition_config.combine) {
+//                        coarser.setSecondPartitionIndex(coarse_mapping[node], G.getSecondPartitionIndex(node));
+//                }
+//        } endfor
+
+        CLOCK_END("Calculate edges array");
+
+        CLOCK_START_N;
+        auto task_clean_ht = [&](uint32_t thread_id) {
+                new_edges[thread_id].~concurrent_ht_type();
+        };
+        parallel::submit_for_all(task_clean_ht);
+        CLOCK_END("Clean hash tables");
 }
 
 void contraction::fast_contract_clustering(const PartitionConfig& partition_config,
@@ -564,7 +548,7 @@ void contraction::fast_contract_clustering(const PartitionConfig& partition_conf
                         bool is_cut_edge = source_cluster != target_cluster;
 
                         if (is_cut_edge) {
-                                new_edges[get_uint64_from_pair(source_cluster, target_cluster)] += G.getEdgeWeight(e);
+                                new_edges[get_uint64_from_pair_sorted(source_cluster, target_cluster)] += G.getEdgeWeight(e);
                         }
                 } endfor
         } endfor
@@ -683,6 +667,3 @@ void contraction::contract_partitioned(const PartitionConfig & partition_config,
         //this also resizes the edge fields ... 
         coarser.finish_construction();
 }
-
-
-

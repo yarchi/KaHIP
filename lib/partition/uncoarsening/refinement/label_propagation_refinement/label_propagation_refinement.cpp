@@ -25,25 +25,17 @@
 #include "label_propagation_refinement.h"
 #include "partition/coarsening/clustering/node_ordering.h"
 
-//#include <parallel/algorithm>
-//
-//#include <omp.h>
-
 #include <ips4o/ips4o.hpp>
 
 using namespace parallel;
 
-label_propagation_refinement::label_propagation_refinement()
-{
+label_propagation_refinement::label_propagation_refinement() {
 }
 
 label_propagation_refinement::~label_propagation_refinement() {
-
 }
 
-EdgeWeight label_propagation_refinement::perform_refinement(PartitionConfig& config, graph_access& G,
-                                                            complete_boundary&) {
-
+EdgeWeight label_propagation_refinement::perform_refinement(PartitionConfig& config, graph_access& G, complete_boundary&) {
         std::vector<uint8_t> boundary_nodes;
         if (!config.parallel_lp) {
                 CLOCK_START;
@@ -212,8 +204,6 @@ EdgeWeight label_propagation_refinement::sequential_label_propagation(PartitionC
         delete next_Q;
         delete Q_contained;
         delete next_Q_contained;
-        //__itt_pause();
-
 
         // in this case the _matching paramter is not used
         // coarse_mappng stores cluster id and the mapping (it is identical)
@@ -266,7 +256,7 @@ EdgeWeight label_propagation_refinement::sequential_label_propagation(PartitionC
 }
 
 void label_propagation_refinement::init_for_node_unit(graph_access& G, const uint32_t block_size,
-                                                      std::vector<Pair>& permutation,
+                                                      Pair* permutation,
                                                       Cvector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                       std::unique_ptr<ConcurrentQueue>& queue) {
         Block block;
@@ -288,8 +278,9 @@ void label_propagation_refinement::init_for_node_unit(graph_access& G, const uin
         }
 }
 
+template<typename T>
 void label_propagation_refinement::seq_init_for_edge_unit(graph_access& G, const uint32_t block_size,
-                                                      std::vector<Pair>& permutation,
+                                                      T* permutation,
                                                       Cvector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                       std::unique_ptr<ConcurrentQueue>& queue) {
         Block block;
@@ -316,8 +307,9 @@ void label_propagation_refinement::seq_init_for_edge_unit(graph_access& G, const
         }
 }
 
+template<typename T>
 void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const uint32_t block_size,
-                                                      std::vector<Pair>& permutation,
+                                                      T* permutation,
                                                       Cvector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                       std::unique_ptr<ConcurrentQueue>& queue) {
 
@@ -364,45 +356,29 @@ void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const
         par_init_for_edge_unit(G, block_size, permutation, queue);
 }
 
+template<typename T>
 void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const uint32_t block_size,
-                                                          std::vector<Pair>& permutation,
+                                                          T* permutation,
                                                           std::unique_ptr<ConcurrentQueue>& queue) {
 
         CLOCK_START;
-//        apply_to_range_sync(NodeID(0), G.number_of_nodes(), parallel::g_thread_pool, [&](auto begin, auto end) {
-//                Block block(m_block_allocator);
-//                block.reserve(100);
-//                size_t cur_block_size = 0;
-//
-//                for (auto it = begin; it != end; ++it) {
-//                        NodeID node = *it;
-//                        block.push_back(permutation[node].first);
-//                        cur_block_size += permutation[node].second > 0 ? permutation[node].second : 1;
-//                        if (cur_block_size >= block_size) {
-//                                // block is full
-//                                queue->push(std::move(block));
-//                                block.clear();
-//                                block.reserve(100);
-//                                cur_block_size = 0;
-//                        }
-//                }
-//                if (!block.empty()) {
-//                        queue->push(std::move(block));
-//                }
-//        });
-
         std::atomic<uint32_t> offset(0);
-        const uint32_t nodes_count = std::max<uint32_t>(sqrt(G.number_of_nodes()), 4000u);
-        auto task = [&]() {
+        uint32_t node_block_size = (uint32_t) sqrt(G.number_of_nodes());
+        node_block_size = std::max(node_block_size, 1000u);
+        parallel::submit_for_all([&](uint32_t thread_id) {
                 Block block;
                 block.reserve(100);
                 size_t cur_block_size = 0;
-                NodeID begin = offset.fetch_add(nodes_count, std::memory_order_relaxed);
+                while (true) {
+                        uint32_t begin = offset.fetch_add(node_block_size, std::memory_order_relaxed);
+                        uint32_t end = begin + node_block_size;
+                        end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
 
-                while (begin < G.number_of_nodes()) {
-                        NodeID end = std::min(begin + nodes_count, G.number_of_nodes());
+                        if (begin >= G.number_of_nodes()) {
+                                break;
+                        }
 
-                        for (auto node = begin; node != end; ++node) {
+                        for (NodeID node = begin; node != end; ++node) {
                                 block.push_back(permutation[node].first);
                                 cur_block_size += permutation[node].second > 0 ? permutation[node].second : 1;
                                 if (cur_block_size >= block_size) {
@@ -415,25 +391,9 @@ void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const
                         }
                         if (!block.empty()) {
                                 queue->push(std::move(block));
-                                block.clear();
-                                block.reserve(100);
-                                cur_block_size = 0;
                         }
-
-                        begin = offset.fetch_add(nodes_count, std::memory_order_relaxed);
                 }
-        };
-
-        std::vector<std::future<void>> futures;
-        futures.reserve(parallel::g_thread_pool.NumThreads());
-        for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
-                futures.emplace_back(parallel::g_thread_pool.Submit(i, task));
-        }
-        task();
-        std::for_each(futures.begin(), futures.end(), [&](auto& future) {
-                future.get();
         });
-
         CLOCK_END("Init queue lp");
 }
 
@@ -442,7 +402,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                                                                                PartitionConfig& config,
                                                                                Cvector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                                                std::vector<std::vector<PartitionID>>& hash_maps,
-                                                                               std::vector<Pair>& permutation) {
+                                                                               Pair* permutation) {
         CLOCK_START;
         const NodeWeight block_upperbound = config.upper_bound_partition;
         auto queue = std::make_unique<ConcurrentQueue>();
@@ -488,31 +448,24 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
 
                         parallel::random rnd(config.seed + id);
 
-                        EdgeWeight parts_size = config.k * 2;
-                        std::vector<PartitionID> partIDs;
-                        partIDs.reserve(parts_size);
+                        std::vector<NodeID> neighbor_parts;
 
                         while (queue->try_pop(cur_block)) {
                                 for (auto node : cur_block) {
                                         queue_contains[node].store(false, std::memory_order_relaxed);
                                         auto& hash_map = hash_maps[id];
-                                        if (G.getNodeDegree(node) <= parts_size) {
-                                                //now move the node to the cluster that is most common in the neighborhood
-                                                forall_out_edges(G, e, node) {
-                                                        NodeID target = G.getEdgeTarget(e);
-                                                        PartitionID part = G.getPartitionIndex(target);
-                                                        if (hash_map[part] == 0) {
-                                                                partIDs.push_back(part);
-                                                        }
-                                                        hash_map[part] += G.getEdgeWeight(e);
-                                                } endfor
-                                        } else {
-                                                //now move the node to the cluster that is most common in the neighborhood
-                                                forall_out_edges(G, e, node) {
-                                                        NodeID target = G.getEdgeTarget(e);
-                                                        hash_map[G.getPartitionIndex(target)] += G.getEdgeWeight(e);
-                                                } endfor
-                                        }
+
+                                        //now move the node to the cluster that is most common in the neighborhood
+                                        neighbor_parts.clear();
+                                        neighbor_parts.reserve(G.getNodeDegree(node));
+                                        forall_out_edges(G, e, node) {
+                                                NodeID target = G.getEdgeTarget(e);
+                                                PartitionID part = G.getPartitionIndex(target);
+                                                if (hash_map[part] == 0) {
+                                                        neighbor_parts.push_back(part);
+                                                }
+                                                hash_map[part] += G.getEdgeWeight(e);
+                                        } endfor
 
                                         //second sweep for finding max and resetting array
                                         PartitionID my_block = G.getPartitionIndex(node);
@@ -520,57 +473,24 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                                         NodeWeight max_cluster_size;
                                         PartitionID max_value = 0;
 
-                                        if (G.getNodeDegree(node) <= parts_size) {
-                                                for (auto cur_part : partIDs) {
-                                                        if (hash_map[cur_part] == 0) {
-                                                                continue;
-                                                        }
+                                        for (auto cur_part : neighbor_parts) {
+                                                PartitionID cur_value = hash_map[cur_part];
+                                                NodeWeight cur_cluster_size = cluster_sizes[cur_part].get().load(
+                                                        std::memory_order_acquire);
 
-                                                        PartitionID cur_value = hash_map[cur_part];
-                                                        NodeWeight cur_cluster_size = cluster_sizes[cur_part].get().load(
-                                                                std::memory_order_acquire);
-
-                                                        if ((cur_value > max_value || (cur_value == max_value
-                                                                                       && rnd.bit()))
-                                                            &&
-                                                            (cur_cluster_size + G.getNodeWeight(node) < block_upperbound
-                                                             || (cur_part == my_block &&
-                                                                 cur_cluster_size <= block_upperbound))) {
-                                                                max_value = cur_value;
-                                                                max_block = cur_part;
-                                                                max_cluster_size = cur_cluster_size;
-                                                        }
-
-                                                        hash_map[cur_part] = 0;
+                                                if ((cur_value > max_value || (cur_value == max_value && rnd.bit()))
+                                                    &&
+                                                    (cur_cluster_size + G.getNodeWeight(node) < block_upperbound
+                                                     || (cur_part == my_block &&
+                                                         cur_cluster_size <= block_upperbound))) {
+                                                        max_value = cur_value;
+                                                        max_block = cur_part;
+                                                        max_cluster_size = cur_cluster_size;
                                                 }
-                                                partIDs.clear();
-                                        } else {
-                                                forall_out_edges(G, e, node) {
-                                                        NodeID target = G.getEdgeTarget(e);
-                                                        PartitionID cur_part = G.getPartitionIndex(target);
-                                                        if (hash_map[cur_part] == 0) {
-                                                                continue;
-                                                        }
 
-                                                        PartitionID cur_value = hash_map[cur_part];
-                                                        NodeWeight cur_cluster_size = cluster_sizes[cur_part].get().load(
-                                                                std::memory_order_acquire);
-
-                                                        if ((cur_value > max_value || (cur_value == max_value
-                                                                                       && rnd.bit()))
-                                                            &&
-                                                            (cur_cluster_size + G.getNodeWeight(node) < block_upperbound
-                                                             || (cur_part == my_block &&
-                                                                 cur_cluster_size <= block_upperbound))) {
-                                                                max_value = cur_value;
-                                                                max_block = cur_part;
-                                                                max_cluster_size = cur_cluster_size;
-                                                        }
-
-                                                        hash_map[cur_part] = 0;
-                                                }
-                                                endfor
+                                                hash_map[cur_part] = 0;
                                         }
+                                        neighbor_parts.clear();
 
 
                                         bool changed_label = my_block != max_block;
@@ -581,9 +501,8 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                                                 while (!atomic_val.compare_exchange_weak(
                                                         max_cluster_size,
                                                         max_cluster_size + G.getNodeWeight(node),
-                                                        std::memory_order_acq_rel)) {
-                                                        if (max_cluster_size + G.getNodeWeight(node) >
-                                                            block_upperbound) {
+                                                        std::memory_order_relaxed)) {
+                                                        if (max_cluster_size + G.getNodeWeight(node) > block_upperbound) {
                                                                 perform_move = false;
                                                                 break;
                                                         }
@@ -591,17 +510,16 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
 
                                                 if (perform_move) {
                                                         cluster_sizes[G.getPartitionIndex(node)].get().fetch_sub(
-                                                                G.getNodeWeight(node), std::memory_order_acq_rel);
+                                                                G.getNodeWeight(node), std::memory_order_relaxed);
 
                                                         G.setPartitionIndex(node, max_block);
 
                                                         ++num_changed_label;
 
-                                                        forall_out_edges(G, e, node)
-                                                        {
+                                                        forall_out_edges(G, e, node) {
                                                                 NodeID target = G.getEdgeTarget(e);
                                                                 if (!next_queue_contains[target].exchange(
-                                                                        true, std::memory_order_acq_rel)) {
+                                                                        true, std::memory_order_relaxed)) {
                                                                         new_block.push_back(target);
 
                                                                         new_block_size += use_edge_unit ? G.getNodeDegree(target) : 1;
@@ -612,8 +530,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                                                                                 new_block_size = 0;
                                                                         }
                                                                 }
-                                                        }
-                                                        endfor
+                                                        } endfor
                                                 }
                                         }
                                 }
@@ -650,7 +567,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(graph_access
                                                                     PartitionConfig& config,
                                                                     Cvector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                                     std::vector<std::vector<PartitionID>>& hash_maps,
-                                                                    std::vector<Pair>& permutation) {
+                                                                    Pair* permutation) {
         NodeWeight block_upperbound = config.upper_bound_partition;
         std::vector<std::future<NodeWeight>> futures;
         futures.reserve(parallel::g_thread_pool.NumThreads());
@@ -752,8 +669,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                                                                                std::vector<NodeWeight>& cluster_id,
                                                                                std::vector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                                                std::vector<std::vector<PartitionID>>& hash_maps,
-                                                                               std::vector<Pair>& permutation) {
-        //__itt_resume();
+                                                                               Triple* permutation) {
         CLOCK_START;
         ALWAYS_ASSERT(config.block_size_unit == BlockSizeUnit::EDGES);
         auto queue = std::make_unique<ConcurrentQueue>();
@@ -780,7 +696,10 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                         break;
                 }
                 auto process = [&](const size_t id) {
-                        hash_maps[id].resize(G.number_of_nodes());
+                        //hash_maps[id].resize(G.number_of_nodes());
+                        parallel::HashMap<NodeID, EdgeWeight, TabularHash<NodeID, 3, 2, 10, true>, true> hash_map(128);
+                        //parallel::HashMap<NodeID, EdgeWeight, xxhash<NodeID>, true> hash_map(128);
+
                         NodeWeight num_changed_label = 0;
                         Block cur_block;
                         Block new_block;
@@ -789,11 +708,10 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
 
                         parallel::random rnd(config.seed + id);
                         std::vector<NodeID> neighbor_parts;
-
                         while (queue->try_pop(cur_block)) {
                                 for (auto node : cur_block) {
                                         queue_contains[node].store(false, std::memory_order_relaxed);
-                                        auto& hash_map = hash_maps[id];
+                                        //auto& hash_map = hash_maps[id];
 
                                         const PartitionID my_block = cluster_id[node];
                                         //now move the node to the cluster that is most common in the neighborhood
@@ -802,10 +720,11 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                                         forall_out_edges(G, e, node) {
                                                 NodeID target = G.getEdgeTarget(e);
                                                 NodeID cluster = cluster_id[target];
-                                                if (hash_map[cluster] == 0) {
+                                                auto& clst_size = hash_map[cluster];
+                                                if (clst_size == 0) {
                                                         neighbor_parts.push_back(cluster);
                                                 }
-                                                hash_map[cluster] += G.getEdgeWeight(e);
+                                                clst_size += G.getEdgeWeight(e);
                                         } endfor
 
                                         //second sweep for finding max and resetting array
@@ -813,26 +732,25 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                                         NodeWeight max_cluster_size = cluster_sizes[max_block].load(
                                                 std::memory_order_relaxed);
 
-                                        PartitionID max_value = 0;
+                                        EdgeWeight max_value = 0;
                                         NodeWeight node_weight = G.getNodeWeight(node);
                                         for (auto cur_block : neighbor_parts) {
-                                                PartitionID cur_value = hash_map[cur_block];
+                                                EdgeWeight cur_value = hash_map[cur_block];
 
                                                 NodeWeight cur_cluster_size = cluster_sizes[cur_block].load(
                                                         std::memory_order_relaxed);
 
                                                 if ((cur_value > max_value || (cur_value == max_value && rnd.bit())) &&
                                                     (cur_cluster_size + node_weight < block_upperbound || cur_block == my_block)) {
-                                                        ALWAYS_ASSERT(
-                                                                !config.graph_allready_partitioned);
+                                                        ALWAYS_ASSERT(!config.graph_allready_partitioned);
                                                         ALWAYS_ASSERT(!config.combine);
                                                         max_value = cur_value;
                                                         max_block = cur_block;
                                                         max_cluster_size = cur_cluster_size;
                                                 }
-
-                                                hash_map[cur_block] = 0;
+                                                //hash_map[cur_block] = 0;
                                         }
+                                        hash_map.clear();
 
                                         bool changed_label = my_block != max_block;
                                         if (changed_label) {
@@ -856,8 +774,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
 
                                                         ++num_changed_label;
 
-                                                        forall_out_edges(G, e, node)
-                                                        {
+                                                        forall_out_edges(G, e, node) {
                                                                 NodeID target = G.getEdgeTarget(e);
                                                                 if (!next_queue_contains[target].exchange(
                                                                         true, std::memory_order_acq_rel)) {
@@ -871,8 +788,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                                                                                 new_block_size = 0;
                                                                         }
                                                                 }
-                                                        }
-                                                        endfor
+                                                        } endfor
                                                 }
                                         }
                                 }
@@ -925,45 +841,57 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_many_cluster
         CLOCK_END("Init other vectors lp");
 
         CLOCK_START_N;
-        std::vector<Pair> permutation;
-        permutation.reserve(G.number_of_nodes());
-        forall_nodes(G, node) {
-                permutation.emplace_back(node, G.getNodeDegree(node));
-        } endfor
+        Triple* permutation = reinterpret_cast<Triple*>(::operator new(sizeof(Triple) * G.number_of_nodes()));
+        {
+                CLOCK_START;
+                std::atomic<uint32_t> offset(0);
+                uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
+                block_size = std::max(block_size, 1000u);
+
+                parallel::submit_for_all([&](uint32_t thread_id) {
+                        parallel::random rnd(config.seed + thread_id);
+                        while (true) {
+                                uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                                uint32_t end = begin + block_size;
+                                end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
+
+                                if (begin >= G.number_of_nodes()) {
+                                        break;
+                                }
+
+                                for (NodeID node = begin; node != end; ++node) {
+                                        permutation[node].first = node;
+                                        permutation[node].second = G.getNodeDegree(node);
+                                        permutation[node].rnd = rnd.random_number(0u, G.number_of_nodes() - 1);
+                                }
+                        }
+                });
+
+                CLOCK_END("Generate permutation");
+        }
 
         parallel::g_thread_pool.Clear();
         parallel::Unpin();
+
         {
                 CLOCK_START;
-                ips4o::parallel::sort(permutation.begin(), permutation.end(), [&](const Pair& lhs, const Pair& rhs) {
-                        return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
-                }, config.num_threads);
+                ips4o::parallel::sort(permutation, permutation + G.number_of_nodes(),
+                                      [](const Triple& lhs, const Triple& rhs) {
+                                              return lhs.second < rhs.second
+                                                     || (lhs.second == rhs.second && lhs.rnd < rhs.rnd);
+                                      },
+                                      config.num_threads);
                 CLOCK_END("Sort");
         }
         parallel::PinToCore(0);
         parallel::g_thread_pool.Resize(config.num_threads - 1);
 
-        {
-                CLOCK_START;
-                parallel::random rnd(config.seed);
-                size_t i = 0;
-                while (i < permutation.size()) {
-                        size_t end = i;
-                        while (end + 1 < permutation.size() && permutation[end].second == permutation[end + 1].second) {
-                                ++end;
-                        }
-
-                        rnd.shuffle(permutation.begin() + i, permutation.begin() + end + 1);
-                        i = end + 1;
-                }
-                CLOCK_END("Shuffle");
-        }
-
         CLOCK_END("Parallel init of permutations lp");
 
         EdgeWeight res = 0;
         CLOCK_START_N;
-        res = parallel_label_propagation_with_queue_with_many_clusters(G, config, block_upperbound, cluster_id, cluster_sizes, hash_maps, permutation);
+        res = parallel_label_propagation_with_queue_with_many_clusters(G, config, block_upperbound, cluster_id,
+                                                                       cluster_sizes, hash_maps, permutation);
         CLOCK_END("Main parallel (no queue) lp");
 
         std::cout << "Improved\t" << res << std::endl;
@@ -971,7 +899,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_many_cluster
         CLOCK_START_N;
         remap_cluster_ids_fast(config, G, cluster_id, no_of_blocks);
         CLOCK_END("Remap cluster ids");
-
+        ::operator delete(permutation);
         return res;
 }
 
@@ -1015,21 +943,43 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(PartitionCon
         CLOCK_END("Uncoarsening: Init other vectors lp");
 
         CLOCK_START_N;
-        std::vector<Pair> permutation;
-        permutation.reserve(G.number_of_nodes());
-        forall_nodes(G, node) {
-                permutation.emplace_back(node, G.getNodeDegree(node));
-        } endfor
-        CLOCK_END("Uncoarsening: Parallel init of permutations lp");
+        Pair* permutation = reinterpret_cast<Pair*>(::operator new(sizeof(Pair) * G.number_of_nodes()));
+        {
+                CLOCK_START;
+                std::atomic<uint32_t> offset(0);
+                uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
+                block_size = std::max(block_size, 1000u);
 
+                parallel::submit_for_all([&](uint32_t thread_id) {
+                        parallel::random rnd(config.seed + thread_id);
+                        while (true) {
+                                uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                                uint32_t end = begin + block_size;
+                                end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
+
+                                if (begin >= G.number_of_nodes()) {
+                                        break;
+                                }
+
+                                for (NodeID node = begin; node != end; ++node) {
+                                        permutation[node].first = node;
+                                        permutation[node].second = G.getNodeDegree(node);
+                                }
+                        }
+                });
+
+                CLOCK_END("Generate permutation");
+        }
         CLOCK_START_N;
         parallel::g_thread_pool.Clear();
         parallel::Unpin();
         {
                 CLOCK_START;
-                ips4o::parallel::sort(permutation.begin(), permutation.end(), [&](const Pair& lhs, const Pair& rhs) {
-                        return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
-                }, config.num_threads);
+                ips4o::parallel::sort(permutation, permutation + G.number_of_nodes(),
+                                      [&](const Pair& lhs, const Pair& rhs) {
+                                              return lhs.second < rhs.second
+                                                     || (lhs.second == rhs.second && lhs.first < rhs.first);
+                                      }, config.num_threads);
                 CLOCK_END("Uncoarsening: Sort");
         }
         parallel::PinToCore(0);
@@ -1049,6 +999,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation(PartitionCon
         CLOCK_END("Uncoarsening: Main parallel (no queue) lp");
 
         std::cout << "Uncoarsening: Improved\t" << res << std::endl;
+        ::operator delete(permutation);
         return res;
 }
 

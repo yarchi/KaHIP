@@ -64,7 +64,7 @@ void initial_partition_bipartition::initial_partition( const PartitionConfig & c
         rec_config.parallel_coarsening_lp = false;
         rec_config.lp_before_local_search = false;
         rec_config.fast_contract_clustering = false;
-        rec_config.accept_small_coarser_graphs = true;
+        //rec_config.accept_small_coarser_graphs = true;
 
         // turn off common_neighborhood_clustering
         rec_config.common_neighborhood_clustering = false;

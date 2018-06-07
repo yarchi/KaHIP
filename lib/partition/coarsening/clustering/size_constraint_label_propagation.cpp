@@ -234,7 +234,7 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
         futures.reserve(parallel::g_thread_pool.NumThreads());
         uint32_t num_changed_label_all = 0;
 
-        std::vector<std::unique_ptr<PartitionID[]>> hash_maps(config.num_threads);
+        std::vector<std::vector<PartitionID>> hash_maps(config.num_threads);
 
         uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
         block_size = std::max(block_size, 1000u);
@@ -245,8 +245,8 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
                         uint32_t num_active = 0;
                         auto& hash_map = hash_maps[id];
 
-                        if (hash_map.get() == nullptr) {
-                                hash_map = std::make_unique<PartitionID[]>(G.number_of_nodes());
+                        if (hash_map.empty()) {
+                                hash_map.resize(G.number_of_nodes());
                         }
 
                         uint32_t num_changed_label = 0;
@@ -338,11 +338,11 @@ uint32_t size_constraint_label_propagation::parallel_label_propagation(const Par
 
                                                         forall_out_edges(G, e, node) {
                                                                 NodeID target = G.getEdgeTarget(e);
-                                                                //new_active[target].store(true, std::memory_order_relaxed);
-                                                                char res = false;
-                                                                if (new_active[target].compare_exchange_strong(res, true, std::memory_order_relaxed)) {
-                                                                        ++num_active;
-                                                                }
+                                                                new_active[target].store(true, std::memory_order_relaxed);
+//                                                                char res = false;
+//                                                                if (new_active[target].compare_exchange_strong(res, true, std::memory_order_relaxed)) {
+//                                                                        ++num_active;
+//                                                                }
                                                         } endfor
                                                 }
                                         }
@@ -545,18 +545,10 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
         CLOCK_END("Parallel init of permutations lp");
 
         CLOCK_START_N;
-        parallel::g_thread_pool.Clear();
-        parallel::Unpin();
 
-        omp_set_dynamic(false);
-        omp_set_num_threads(config.num_threads);
-
-        uint32_t num_changed_label = parallel_label_propagation_exp(config, G, block_upperbound, cluster_sizes, cluster_id,
+        uint32_t num_changed_label = parallel_label_propagation(config, G, block_upperbound, cluster_sizes, cluster_id,
                                                                 permutation, no_of_blocks, active, new_active);
 
-
-        parallel::PinToCore(0);
-        parallel::g_thread_pool.Resize(config.num_threads - 1);
         CLOCK_END("Main parallel (no queue) lp");
         std::cout << "Improved\t" << num_changed_label << std::endl;
 

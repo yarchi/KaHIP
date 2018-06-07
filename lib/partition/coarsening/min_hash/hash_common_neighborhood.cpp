@@ -28,10 +28,10 @@ void hash_common_neighborhood::find_vertices_with_common_neighbors(const Partiti
                 uint64_t hash_value = 0;
                 //uint64_t hash_value = std::numeric_limits<uint64_t>::max();
                 forall_out_edges(G, e, node){
-                                        NodeID neighbor = G.getEdgeTarget(e);
-                                        hash_value ^= hash(neighbor);
-                                        //hash_value = std::min(hash(neighbor), hash_value);
-                                }endfor
+                        NodeID neighbor = G.getEdgeTarget(e);
+                        hash_value ^= hash(neighbor);
+                        //hash_value = std::min(hash(neighbor), hash_value);
+                } endfor
 
 
                 buckets[hash_value].push_back(node);

@@ -93,6 +93,13 @@ private:
         m_nodes[node].firstEdge = e;
     }
 
+    void start_construction(std::vector<Node>& nodes, std::vector<Edge>& edges) {
+        m_nodes.swap(nodes);
+        m_edges.swap(edges);
+        m_refinement_node_props.resize(m_nodes.size());
+        m_coarsening_edge_props.resize(m_edges.size());
+    }
+
     EdgeID new_edge(NodeID source, NodeID target) {
         ASSERT_TRUE(m_building_graph);
         ASSERT_TRUE(e < m_edges.size());
@@ -174,6 +181,7 @@ class graph_access {
                 /* build methods */
                 /* ============================================================= */
                 void start_construction(NodeID nodes, EdgeID edges);
+                void start_construction(std::vector<Node>& nodes, std::vector<Edge>& edges);
                 NodeID new_node();
                 EdgeID new_edge(NodeID source, NodeID target);
                 void finish_construction();
@@ -248,6 +256,10 @@ class graph_access {
 
 /* graph build methods */
 inline void graph_access::start_construction(NodeID nodes, EdgeID edges) {
+        graphref->start_construction(nodes, edges);
+}
+
+inline void graph_access::start_construction(std::vector<Node>& nodes, std::vector<Edge>& edges) {
         graphref->start_construction(nodes, edges);
 }
 

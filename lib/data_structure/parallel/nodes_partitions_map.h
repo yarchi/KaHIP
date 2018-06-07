@@ -15,6 +15,7 @@ public:
         using key_type = _key_type;
         using value_type = _value_type;
         using map_type = hash_map<key_type, value_type>;
+        //using map_type = HashMap<key_type, value_type, parallel::xxhash<key_type>, true>;
 
         explicit hash_table_map(uint64_t, uint64_t mem)
                 :       start_size(get_max_size_to_fit(mem))
@@ -77,10 +78,10 @@ public:
         using key_type = _key_type;
         using value_type = _value_type;
 
-        explicit array_map(uint64_t _max_size)
+        explicit array_map(uint64_t _max_size, uint64_t)
                 :       max_size(_max_size)
         {
-                init(max_size);
+                init(max_size, 0);
         }
 
         inline void init(uint64_t _max_size, uint64_t) {
@@ -243,5 +244,4 @@ private:
 
 template <typename key_type, typename value_type>
 using cache_aware_map = hash_table_map<key_type, value_type>;
-
 }
