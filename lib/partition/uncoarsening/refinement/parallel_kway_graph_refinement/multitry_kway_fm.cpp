@@ -7,10 +7,6 @@
 #include <iomanip>
 #include <sstream>
 
-#ifdef __gnu_linux__
-#include "ittnotify.h"
-#endif
-
 namespace parallel {
 
 std::vector<thread_data_factory::statistics_type> thread_data_factory::m_statistics;

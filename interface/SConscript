@@ -70,12 +70,23 @@ libkaffpa_files = [   '..//lib/data_structure/graph_hierarchy.cpp',
                       '..//lib/parallel_mh/parallel_mh_async.cpp',
                       '..//lib/parallel_mh/population.cpp',
                       '..//lib/parallel_mh/exchange/exchanger.cpp',
-                      '..//lib/partition/uncoarsening/refinement/tabu_search/tabu_search.cpp'
+                      '..//lib/partition/uncoarsening/refinement/tabu_search/tabu_search.cpp',
+                      '..//lib/partition/uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.cpp',
+                      '..//lib/partition/uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_core.cpp',
+                      '..//lib/partition/uncoarsening/parallel_uncoarsening.cpp',
+                      '..//lib/partition/initial_partitioning/parallel/initial_partitioning.cpp',
+                      '..//lib/data_structure/parallel/thread_pool.cpp',
+                      '..//lib/partition/coarsening/matching/local_max.cpp',
+                      '..//lib/partition/coarsening/min_hash/hash_common_neighborhood.cpp',
                       ]
 
 env.Append(LIBPATH=['./optimized'])
 env.Append(LIBPATH=['./debug'])
 env.Append(LIBPATH=['../interface/'])
+env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS -D_REENTRANT -U_OPENMP')
+env.Append(CCFLAGS  = '-DMODE_KAFFPA')
+env.Append(CPPPATH=['../growt/'])
+env.Append(CPPPATH=['../ips4o/'])
 
-env.Library('libkahip', ['kaHIP_interface.cpp']+libkaffpa_files, LIBS=['libargtable2.a','gomp'])
-
+print env.Dump()
+env.Library('libkahip', ['kaHIP_interface.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'tbbmalloc_proxy', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])

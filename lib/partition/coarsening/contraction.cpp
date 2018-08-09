@@ -25,7 +25,6 @@
 #include "data_structure/parallel/thread_pool.h"
 #include "../uncoarsening/refinement/quotient_graph_refinement/complete_boundary.h"
 #include "macros_assertions.h"
-#include "ittnotify.h"
 
 #include <ips4o/ips4o.hpp>
 

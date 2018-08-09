@@ -139,6 +139,9 @@ void kaffpa(int* n,
                 case STRONGSOCIAL: 
                         cfg.strongsocial(partition_config);
                         break;
+                case FASTSOCIALMULTITRY_PARALLEL:
+                        cfg.fastsocialmultitry_parallel(partition_config);
+                        break;
                 default: 
                         cfg.eco(partition_config);
                         break;

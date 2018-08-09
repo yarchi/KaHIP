@@ -46,7 +46,7 @@ env.Append(CPPDEFINES = { 'GIT_DESC' : ('\\"%s\\"' % GIT_DESC) })
 
 # Build a library from the code in lib/.
 libkaffpa_files = [   'lib/data_structure/graph_hierarchy.cpp',
-		      'lib/data_structure/parallel/thread_pool.cpp',
+		              'lib/data_structure/parallel/thread_pool.cpp',
                       'lib/algorithms/strongly_connected_components.cpp',
                       'lib/algorithms/topological_sort.cpp',
                       'lib/algorithms/push_relabel.cpp',
@@ -69,9 +69,9 @@ libkaffpa_files = [   'lib/data_structure/graph_hierarchy.cpp',
                       'lib/partition/coarsening/matching/gpa/path_set.cpp',
                       'lib/partition/coarsening/clustering/node_ordering.cpp',
                       'lib/partition/coarsening/clustering/size_constraint_label_propagation.cpp',
-		      'lib/partition/coarsening/min_hash/hash_common_neighborhood.cpp',
+		              'lib/partition/coarsening/min_hash/hash_common_neighborhood.cpp',
                       'lib/partition/initial_partitioning/initial_partitioning.cpp',
-	              'lib/partition/initial_partitioning/parallel/initial_partitioning.cpp',
+	                  'lib/partition/initial_partitioning/parallel/initial_partitioning.cpp',
                       'lib/partition/initial_partitioning/initial_partitioner.cpp',
                       'lib/partition/initial_partitioning/initial_partition_bipartition.cpp',
                       'lib/partition/initial_partitioning/initial_refinement/initial_refinement.cpp',
@@ -127,7 +127,7 @@ libkaffpa_parallel_async  = ['lib/parallel_mh/parallel_mh_async.cpp',
 if env['program'] == 'kaffpa':
         env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS -D_REENTRANT -U_OPENMP')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')
-        env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'tbbmalloc_proxy', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
+        env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'tbbmalloc_proxy', 'libargtable2','gomp', 'pthread', 'dl'])
 if env['program'] == 'kaffpa_test':
         env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')

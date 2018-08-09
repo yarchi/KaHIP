@@ -36,6 +36,7 @@ const int STRONG         = 2;
 const int FASTSOCIAL     = 3;
 const int ECOSOCIAL      = 4;
 const int STRONGSOCIAL   = 5;
+const int FASTSOCIALMULTITRY_PARALLEL = 6;
 
 // same data structures as in metis 
 // edgecut and part are output parameters
