@@ -127,7 +127,7 @@ libkaffpa_parallel_async  = ['lib/parallel_mh/parallel_mh_async.cpp',
 if env['program'] == 'kaffpa':
         env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS -D_REENTRANT -U_OPENMP')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')
-        env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'tbbmalloc_proxy', 'libargtable2','gomp', 'pthread', 'dl', 'atomic'])
+        env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'tbbmalloc_proxy', 'libargtable2', 'pthread', 'dl', 'atomic'])
 if env['program'] == 'kaffpa_test':
         env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')
