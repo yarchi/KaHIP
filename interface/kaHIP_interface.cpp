@@ -35,6 +35,7 @@
 #include "../lib/partition/uncoarsening/separator/vertex_separator_algorithm.h"
 #include "../app/configuration.h"
 #include "../app/balance_configuration.h"
+#include "../data_structure/parallel/thread_pool.h"
 
 using namespace std;
 
@@ -114,11 +115,13 @@ void kaffpa(int* n,
                    bool suppress_output, 
                    int seed,
                    int mode,
+                   uint32_t num_threads,
                    int* edgecut, 
                    int* part) {
         configuration cfg;
         PartitionConfig partition_config;
         partition_config.k = *nparts;
+        partition_config.num_threads = num_threads;
 
         switch( mode ) {
                 case FAST: 
@@ -141,6 +144,8 @@ void kaffpa(int* n,
                         break;
                 case FASTSOCIALMULTITRY_PARALLEL:
                         cfg.fastsocialmultitry_parallel(partition_config);
+                        parallel::PinToCore(partition_config.main_core);
+                        parallel::g_thread_pool.Resize(partition_config.num_threads - 1);
                         break;
                 default: 
                         cfg.eco(partition_config);

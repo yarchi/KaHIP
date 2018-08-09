@@ -88,5 +88,4 @@ env.Append(CCFLAGS  = '-DMODE_KAFFPA')
 env.Append(CPPPATH=['../growt/'])
 env.Append(CPPPATH=['../ips4o/'])
 
-print env.Dump()
 env.Library('libkahip', ['kaHIP_interface.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'tbbmalloc_proxy', 'libargtable2','gomp', 'pthread', 'libittnotify', 'dl'])
