@@ -390,7 +390,6 @@ void contraction::parallel_fast_contract_clustering_multiple_threads(const Parti
                         handles.push_back(new_edges[i].getHandle());
                 }
                 std::vector<NodeWeight> my_block_infos(no_of_coarse_vertices);
-                std::vector<std::vector<std::pair<uint64_t, EdgeWeight>>> buffers(num_threads);
 
                 while (true) {
                         uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
