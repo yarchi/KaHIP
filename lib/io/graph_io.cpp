@@ -104,8 +104,8 @@ int graph_io::readGraphWeighted(graph_access & G, std::string filename) {
                 return 1;
         }
 
-        long nmbNodes;
-        long nmbEdges;
+        NodeID nmbNodes;
+        EdgeID nmbEdges;
 
         std::getline(in,line);
         //skip comments
@@ -119,10 +119,10 @@ int graph_io::readGraphWeighted(graph_access & G, std::string filename) {
         ss >> nmbEdges;
         ss >> ew;
 
-        if( 2*nmbEdges > std::numeric_limits<int>::max() || nmbNodes > std::numeric_limits<int>::max()) {
-                std::cerr <<  "The graph is too large. Currently only 32bit supported!"  << std::endl;
-                exit(0);
-        }
+//        if( 2*nmbEdges > std::numeric_limits<int>::max() || nmbNodes > std::numeric_limits<int>::max()) {
+//                std::cerr <<  "The graph is too large. Currently only 32bit supported!"  << std::endl;
+//                exit(0);
+//        }
 
         bool read_ew = false;
         bool read_nw = false;

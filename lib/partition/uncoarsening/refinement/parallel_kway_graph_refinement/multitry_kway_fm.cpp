@@ -130,14 +130,13 @@ int multitry_kway_fm::start_more_locallized_search(graph_access& G, PartitionCon
                         td.reset_thread_data();
 
                         td.step_limit = local_step_limit;
-                        uint32_t nodes_processed = 0;
+                        NodeID nodes_processed = 0;
                         bool res = false;
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
                         while (!todolist.empty()) {
                                 int random_idx = random_functions::nextInt(0, todolist.size() - 1);
                                 NodeID node = todolist[random_idx];
 #else
-                        //__itt_resume();
                         while (m_factory.queue.try_pop(node, id)) {
 #endif
                                 // this change changes num part accesses since it changes random source
@@ -177,7 +176,7 @@ int multitry_kway_fm::start_more_locallized_search(graph_access& G, PartitionCon
 
                                                 int improvement = 0;
                                                 int min_cut_index = 0;
-                                                uint32_t tried_movements = 0;
+                                                NodeID tried_movements = 0;
                                                 size_t moved_before = td.moved.size();
 
                                                 std::tie(improvement, min_cut_index, tried_movements) =
@@ -426,7 +425,7 @@ int multitry_kway_fm::start_more_locallized_search_experimental(PartitionConfig&
                         }
 
                         td.step_limit = local_step_limit;
-                        uint32_t nodes_processed = 0;
+                        NodeID nodes_processed = 0;
                         while (m_factory.queue.try_pop(node, id)) {
                                 PartitionID maxgainer;
                                 EdgeWeight extdeg = 0;

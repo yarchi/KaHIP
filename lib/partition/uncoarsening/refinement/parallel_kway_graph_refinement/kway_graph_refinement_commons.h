@@ -177,7 +177,7 @@ public:
 
                 if (nodes_partitions.get() == nullptr) {
                         ALWAYS_ASSERT(bits_number(G.number_of_nodes() - 1) > 0);
-                        size_t mem_size = get_mem_for_thread(id, config.num_threads);
+                        size_t mem_size = get_mem_for_thread(id, config);
                         nodes_partitions =std::make_unique<nodes_partitions_hash_table>(G.number_of_nodes(), mem_size);
                 }
 

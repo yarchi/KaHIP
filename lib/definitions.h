@@ -44,7 +44,8 @@
 //Types needed for the graph ds
 typedef unsigned int 	NodeID;
 typedef double 		EdgeRatingType;
-typedef unsigned int 	EdgeID;
+//typedef unsigned int 	EdgeID;
+typedef uint64_t	EdgeID;
 typedef unsigned int 	PathID;
 typedef unsigned int 	PartitionID;
 typedef unsigned int 	NodeWeight;
@@ -56,7 +57,7 @@ typedef std::vector<NodeID> boundary_starting_nodes;
 typedef long FlowType;
 
 const EdgeID UNDEFINED_EDGE            = std::numeric_limits<EdgeID>::max();
-const NodeID NOTMAPPED                 = std::numeric_limits<EdgeID>::max();
+const NodeID NOTMAPPED                 = std::numeric_limits<NodeID>::max();
 const NodeID UNDEFINED_NODE            = std::numeric_limits<NodeID>::max();
 const PartitionID INVALID_PARTITION    = std::numeric_limits<PartitionID>::max();
 const PartitionID BOUNDARY_STRIPE_NODE = std::numeric_limits<PartitionID>::max();

@@ -463,7 +463,7 @@ void contraction::parallel_fast_contract_clustering_multiple_threads(const Parti
         EdgeID num_edges = parallel::submit_for_all(task1,
                                                     [](EdgeID num_edges, EdgeID cur_num_edges) {
                                                             return num_edges + cur_num_edges;
-                                                    }, 0u);
+                                                    }, 0ul);
         std::cout << "num edges\t" << num_edges << std::endl;
         CLOCK_END("Calculate offsets");
 

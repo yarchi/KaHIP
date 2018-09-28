@@ -49,12 +49,42 @@
 
 #include "data_structure/parallel/adaptive_hash_table.h"
 
+#ifdef __gnu_linux__
+#include <numa.h>
+#endif
+
+#include <execinfo.h>
+#include <signal.h>
+
+void handler(int sig) {
+        void *array[10];
+        size_t size;
+
+        // get void*'s for all entries on the stack
+        size = backtrace(array, 10);
+
+        // print out all the frames to stderr
+        fprintf(stderr, "Error: signal %d:\n", sig);
+        backtrace_symbols_fd(array, size, STDERR_FILENO);
+        exit(1);
+}
+
 int main(int argn, char **argv) {
+        signal(SIGSEGV, handler);
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
         #pragma message("COMPARE WITH SEQUENTIAL MODE IS ON")
         std::cout << "COMPARE WITH SEQUENTIAL MODE IS ON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
         std::cout << "THIS SLOWS DOWN THE APP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::end;
 #endif
+
+#ifdef __gnu_linux__
+        if (numa_available() < 0) {
+		printf("No NUMA support available on this system.\n");
+		exit(1);
+	}
+        numa_set_interleave_mask(numa_all_nodes_ptr);
+#endif
+
         std::cout << "Git revision\t" << GIT_DESC << std::endl;
         PartitionConfig partition_config;
         std::string graph_filename;
@@ -138,6 +168,7 @@ int main(int argn, char **argv) {
         srand(partition_config.seed);
         random_functions::setSeed(partition_config.seed);
 
+        // pin main thread to core
         parallel::PinToCore(partition_config.main_core);
         parallel::g_thread_pool.Resize(partition_config.num_threads - 1);
 

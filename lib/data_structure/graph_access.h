@@ -59,7 +59,7 @@ public:
     basicGraph() : m_building_graph(false) {
     }
 
-private:
+//private:
     //methods only to be used by friend class
     EdgeID number_of_edges() {
         return m_edges.size();
@@ -245,7 +245,7 @@ class graph_access {
                 //Count get_node_queue_index(NodeID node);
 
                 void copy(graph_access & Gcopy);
-        private:
+        //private:
                 basicGraph * graphref;     
                 bool         m_max_degree_computed;
                 unsigned int m_partition_count;

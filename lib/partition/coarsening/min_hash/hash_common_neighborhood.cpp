@@ -17,10 +17,10 @@ void hash_common_neighborhood::find_vertices_with_common_neighbors(const Partiti
                                                                    graph_access& G,
                                                                    CoarseMapping& coarse_mapping,
                                                                    NodeID& no_of_coarse_vertices) {
-        const uint32_t cluster_upperbound = (uint32_t) ceil(
+        const NodeID cluster_upperbound = (NodeID) ceil(
                 (config.upper_bound_partition + 0.0) / config.cluster_coarsening_factor);
 
-        std::vector<uint32_t> cluster_sizes(G.number_of_nodes());
+        std::vector<NodeID> cluster_sizes(G.number_of_nodes());
         std::unordered_map<uint64_t, std::vector<NodeID>> buckets;
         parallel::MurmurHash<NodeID> hash(config.seed);
 

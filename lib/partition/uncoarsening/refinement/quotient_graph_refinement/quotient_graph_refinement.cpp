@@ -110,9 +110,7 @@ EdgeWeight quotient_graph_refinement::perform_refinement(PartitionConfig & confi
 
                 CLOCK_START;
                 double time = 0.0;
-                // __itt_resume();
                 auto kway_ref = get_multitry_kway_fm_instance(config, G, boundary);
-                //__itt_pause();
                 time += CLOCK_END_TIME;
 
                 double time_two_way = 0.0;

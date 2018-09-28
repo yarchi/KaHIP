@@ -137,10 +137,7 @@ constexpr typename array_map<_key_type, _value_type>::value_type array_map<_key_
 
 template <
         typename _key_type,
-        typename _value_type,
-        uint64_t l1_cache_size = 32 * 1024 * sizeof(char),
-        uint64_t l2_cache_size = 256 * 1024 * sizeof(char),
-        uint64_t l3_cache_size = 20480 * 1024 * sizeof(char)
+        typename _value_type
 >
 class cache_aware_map_impl {
 public:
@@ -154,11 +151,12 @@ public:
 
         static_assert(std::is_integral<key_type>::value, "key_type shoud be integral");
 
-        cache_aware_map_impl(uint64_t _max_size, uint64_t _start_size)
+        cache_aware_map_impl(uint64_t _max_size, uint64_t _start_size, uint32_t _l2_cache_size)
                 :       small_map(_max_size, _start_size)
                 ,       max_size(_max_size, _start_size)
                 ,       large_map_mem(max_size * sizeof(typename large_map_type::value_type))
                 ,       cur_container(cur_container_type::SMALL)
+                ,       l2_cache_size(_l2_cache_size)
         {
                 try_swap_containers();
         }
@@ -219,12 +217,13 @@ private:
         uint64_t max_size;
         const uint64_t large_map_mem;
         cur_container_type cur_container;
+        uint32_t l2_cache_size;
 
         inline bool try_swap_containers() {
                 if (cur_container == cur_container_type::SMALL) {
                         uint64_t small_map_mem = small_map.memory_size();
 
-                        if (small_map_mem <= g_l2_cache_size && small_map_mem <= large_map_mem) {
+                        if (small_map_mem <= l2_cache_size && small_map_mem <= large_map_mem) {
                                 return false;
                         }
 

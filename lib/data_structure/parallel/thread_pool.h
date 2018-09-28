@@ -11,28 +11,32 @@
 #include <type_traits>
 #include <vector>
 
+#ifdef __gnu_linux__
+#include <numa.h>
+#include <pthread.h>
+#endif
+
 namespace parallel {
 
+static void PinToCore(size_t core) {
 #ifdef __gnu_linux__
-#include <pthread.h>
-static void PinToCore(size_t core)
-{
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(core, &cpuset);
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+#endif
 }
 
 static void Unpin() {
+#ifdef __gnu_linux__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     for (size_t core = 0; core < std::thread::hardware_concurrency(); ++core) {
         CPU_SET(core, &cpuset);
     }
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-}
-
 #endif
+}
 
 template<typename T>
 class TThreadsafeQueue {
@@ -190,6 +194,7 @@ private:
 #endif
         ) {
 #ifdef __gnu_linux__
+                numa_set_interleave_mask(numa_all_nodes_ptr);
                 PinToCore(id);
 #endif
                 while (!Done) {

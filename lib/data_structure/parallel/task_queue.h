@@ -77,12 +77,12 @@ public:
         }
 
         template <typename... arg_type>
-        void emplace_back(arg_type... args) {
+        void emplace_back(arg_type&&... args) {
                 m_elems.emplace_back(std::forward<arg_type>(args)...);
         }
 
         template <typename... arg_type>
-        void concurrent_emplace_back(arg_type... args) {
+        void concurrent_emplace_back(arg_type&&... args) {
                 std::lock_guard<spin_lock> guard(m_lock);
                 m_elems.emplace_back(std::forward<arg_type>(args)...);
         }

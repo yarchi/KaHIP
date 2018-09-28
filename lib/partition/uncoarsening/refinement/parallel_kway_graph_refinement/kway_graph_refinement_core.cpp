@@ -103,13 +103,6 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
                 NodeID node = queue->deleteMax();
 
                 PartitionID from = td.get_local_partition(node);
-#ifndef NDEBUG
-                PartitionID maxgainer;
-                EdgeWeight ext_degree;
-                ASSERT_EQ(gain, td.compute_gain(node, from, maxgainer, ext_degree));
-                ASSERT_TRUE(ext_degree > 0);
-#endif
-
                 PartitionID to;
 
                 if (td.num_threads_finished.load(std::memory_order_acq_rel) > 0) {
@@ -187,7 +180,6 @@ EdgeWeight kway_graph_refinement_core::apply_moves(uint32_t num_threads,
                                                    std::vector<NodeID>& reactivated_vertices) const {
 
         EdgeWeight overall_gain = 0;
-        //__itt_resume();
         CLOCK_START;
         std::vector<std::future<void>> futures;
         std::atomic<uint32_t> thread_id(0);
@@ -215,7 +207,6 @@ EdgeWeight kway_graph_refinement_core::apply_moves(uint32_t num_threads,
                 threads_data[0].get().time_move_nodes_change_boundary += CLOCK_END_TIME;
         }
         CLOCK_END("prepare boundary movements 2");
-        //__itt_pause();
         return overall_gain;
 }
 

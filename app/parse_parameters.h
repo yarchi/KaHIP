@@ -176,7 +176,6 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *chernoff_gradient_descent_step_size  = arg_int0(NULL, "chernoff_gradient_descent_step_size", NULL, "Size of gradient descent steps for Chernoff stopping rule");
         struct arg_int *chernoff_min_step_limit              = arg_int0(NULL, "chernoff_min_step_limit", NULL, "Min step limit for Chernoff stopping rule");
         struct arg_int *chernoff_max_step_limit              = arg_int0(NULL, "chernoff_max_step_limit", NULL, "Max step limit for Chernoff stopping rule");
-        struct arg_int *main_core                            = arg_int0(NULL, "main_core", NULL, "Sets to which core to pin main threads");
         struct arg_int *max_number_of_moves                  = arg_int0(NULL, "max_number_of_moves", NULL, "Sets max number of moves for local search");
         struct arg_lit *kway_all_boundary_nodes_refinement   = arg_lit0(NULL, "kway_all_boundary_nodes_refinement",  "(Default: disabled)");
         struct arg_lit *no_quotient_graph_two_way_refinement = arg_lit0(NULL, "no_quotient_graph_two_way_refinement", "(Default: disabled)");
@@ -189,6 +188,10 @@ int parse_parameters(int argn, char **argv,
         struct arg_lit *sort_edges                           = arg_lit0(NULL, "sort_edges", "(Default: disabled)");
         struct arg_int *stop_mls_threshold                   = arg_int0(NULL, "stop_mls_threshold", NULL, "Sets percent threshold to stop iteration of MLS");
         struct arg_lit *common_neighborhood_clustering       = arg_lit0(NULL, "common_neighborhood_clustering", "(Default: disabled)");
+        struct arg_lit *use_numa_aware_graph                 = arg_lit0(NULL, "use_numa_aware_graph", "(Default: disabled)");
+        struct arg_int *threads_per_socket                   = arg_int0(NULL, "threads_per_socket", NULL, "Sets the maximum number of threads per socket (Default: 8)");
+        struct arg_int *l2_cache_size                        = arg_int0(NULL, "l2_cache_size", NULL, "Size of l2 cache in bytes (Default: 256 * 1024 bytes)");
+        struct arg_int *l3_cache_size                        = arg_int0(NULL, "l3_cache_size", NULL, "Size of l3 cache in bytes (Default: 20480 * 1024 bytes)");
         struct arg_end *end                                  = arg_end(100);
 
         // Define argtable.
@@ -240,7 +243,6 @@ int parse_parameters(int argn, char **argv,
                 chernoff_gradient_descent_step_size,
                 chernoff_min_step_limit,
                 chernoff_max_step_limit,
-                main_core,
                 only_first_level,
                 input_partition,
                 max_number_of_moves,
@@ -259,6 +261,10 @@ int parse_parameters(int argn, char **argv,
                 num_vert_stop_factor,
                 stop_mls_threshold,
                 common_neighborhood_clustering,
+                use_numa_aware_graph,
+                threads_per_socket,
+                l2_cache_size,
+                l3_cache_size,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -1144,10 +1150,6 @@ int parse_parameters(int argn, char **argv,
                 partition_config.chernoff_max_step_limit = chernoff_max_step_limit->ival[0];
         }
 
-        if (main_core->count > 0) {
-                partition_config.main_core = main_core->ival[0];
-        }
-
         if (max_number_of_moves->count > 0) {
                 partition_config.max_number_of_moves = max_number_of_moves->ival[0];
         }
@@ -1195,6 +1197,23 @@ int parse_parameters(int argn, char **argv,
         if (common_neighborhood_clustering->count > 0) {
                 partition_config.common_neighborhood_clustering = true;
         }
+
+        if (use_numa_aware_graph->count > 0) {
+                partition_config.use_numa_aware_graph = true;
+        }
+
+        if (threads_per_socket->count > 0) {
+                partition_config.threads_per_socket = threads_per_socket->ival[0];
+        }
+
+        if (l2_cache_size->count > 0) {
+                partition_config.l2_cache_size = l2_cache_size->ival[0];
+        }
+
+        if (l3_cache_size->count > 0) {
+                partition_config.l3_cache_size = l3_cache_size->ival[0];
+        }
+
         return 0;
 }
 

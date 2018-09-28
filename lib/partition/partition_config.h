@@ -423,6 +423,10 @@ struct PartitionConfig
         uint32_t stop_mls_threshold = 5;
         bool sort_edges = false;
         bool common_neighborhood_clustering = false;
+        bool use_numa_aware_graph = false;
+        uint32_t threads_per_socket = 8;
+        uint32_t l2_cache_size = 256 * 1024;
+        uint32_t l3_cache_size = 20480 * 1024;
         //bool accept_small_coarser_graphs = false;
 };
 

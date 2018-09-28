@@ -2,6 +2,7 @@
 #include "partition/uncoarsening/parallel_uncoarsening.h"
 #include "partition/uncoarsening/refinement/label_propagation_refinement/label_propagation_refinement.h"
 #include "partition/uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.h"
+#include "tools/graph_partition_assertions.h"
 #include "tools/quality_metrics.h"
 
 #include <memory>

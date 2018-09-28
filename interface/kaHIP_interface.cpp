@@ -154,6 +154,8 @@ void kaffpa(int* n,
 
         partition_config.seed = seed;
         internal_kaffpa_call(partition_config, suppress_output, n, vwgt, xadj, adjcwgt, adjncy, nparts, imbalance, edgecut, part);
+        parallel::Unpin();
+        parallel::g_thread_pool.Clear();
 }
 
 void kaffpa_balance_NE(int* n, 

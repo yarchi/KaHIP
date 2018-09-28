@@ -134,7 +134,9 @@ inline bool multiple_k_stop_rule::stop(NodeID no_of_finer_vertices, graph_access
 
 class mem_stop_rule : public stop_rule {
 public:
-        mem_stop_rule (PartitionConfig & config, NodeID number_of_nodes) {
+        mem_stop_rule (PartitionConfig & config, NodeID number_of_nodes)
+                :       m_config(config)
+        {
                 NodeID num_stop = config.num_vert_stop_factor*config.k;
 
                 if(config.disable_max_vertex_weight_constraint) {
@@ -151,8 +153,11 @@ public:
         };
         virtual ~mem_stop_rule () {};
         bool stop(NodeID, graph_access& coarser) {
-                return coarser.mem() > parallel::g_l3_cache_size / 2;
+                return coarser.mem() > m_config.l3_cache_size / 2;
         }
+
+private:
+        const PartitionConfig& m_config;
 };
 
 class multiple_k_strong_contraction : public multiple_k_stop_rule {

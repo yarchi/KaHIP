@@ -389,9 +389,9 @@ void label_propagation_refinement::par_init_for_edge_unit(graph_access& G, const
                                         cur_block_size = 0;
                                 }
                         }
-                        if (!block.empty()) {
-                                queue->push(std::move(block));
-                        }
+                }
+                if (!block.empty()) {
+                        queue->push(std::move(block));
                 }
         });
         CLOCK_END("Init queue lp");
@@ -469,8 +469,8 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
 
                                         //second sweep for finding max and resetting array
                                         PartitionID my_block = G.getPartitionIndex(node);
-                                        PartitionID max_block  = my_block;
-                                        NodeWeight max_cluster_size;
+                                        PartitionID max_block = my_block;
+                                        NodeWeight max_cluster_size = 0;
                                         PartitionID max_value = 0;
 
                                         for (auto cur_part : neighbor_parts) {

@@ -368,14 +368,14 @@ static ParallelVector<T, TaskConsumer> Get_parallel_vector(TaskConsumer& task_co
 //        std::vector<std::future<void>> futures;
 //        futures.reserve(g_thread_pool.NumThreads());
 //
-//        std::atomic<uint32_t> offset(0);
+//        std::atomic<size_t> offset(0);
 //        size_t size = end - begin;
-//        uint32_t block_size = (uint32_t) sqrt(size);
+//        size_t block_size = (size_t) sqrt(size);
 //        block_size = std::max(block_size, 1000u);
 //        auto task = [&] () {
 //                while (true) {
-//                        uint32_t cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
-//                        uint32_t cur_end = cur_begin + block_size;
+//                        size_t cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+//                        size_t cur_end = cur_begin + block_size;
 //                        cur_end = cur_end <= size ? cur_end : size;
 //
 //                        if (cur_begin >= size) {

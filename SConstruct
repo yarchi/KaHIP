@@ -73,7 +73,7 @@ env = GetEnvironment()
 
 env.Append(LIBPATH=['/home/akhremtsev/lib/tbb/build/linux_intel64_gcc_cc5.4.1_libc2.19_kernel3.13.0_release'])
 env.Append(CPPPATH=['../extern/argtable-2.10/include'])
-env.Append(CPPPATH=['/opt/intel/vtune_amplifier_xe_2015.4.0.410668/include/'])
+env.Append(CPPPATH=['/opt/intel/vtune_amplifier_2018/include'])
 env.Append(CPPPATH=['./extern/argtable-2.10/include'])
 env.Append(CPPPATH=['./lib'])
 env.Append(CPPPATH=['/home/akhremtsev/lib/tbb/include'])
@@ -91,7 +91,7 @@ env.Append(CPPPATH=['../lib/partition'])
 env.Append(CPPPATH=['../lib/io'])
 env.Append(CPPPATH=['../lib/partition/uncoarsening/refinement/quotient_graph_refinement/flow_refinement/'])
 env.Append(LIBPATH=['../../extern/argtable-2.10/lib'])
-env.Append(LIBPATH=['/opt/intel/vtune_amplifier_xe_2015.4.0.410668/lib64/'])
+env.Append(LIBPATH=['/opt/intel/vtune_amplifier_2018/lib64/'])
 env.Append(CPPPATH=['/usr/include/openmpi/'])
 
 conf = Configure(env)
@@ -126,7 +126,7 @@ elif env['variant'] == 'optimized_output':
 else:
   #env.Append(CXXFLAGS = ' -DNDEBUG -Wall -funroll-loops  -fno-stack-limit -O3 -std=c++14 -g')
   #env.Append(CCFLAGS  = '-O3  -DNDEBUG -funroll-loops -std=c++14 ')
-  env.Append(CXXFLAGS = '-O0 -std=c++14 -g -D_GLIBCXX_PARALLEL')
+  env.Append(CXXFLAGS = '-O0 -std=c++14 -g')
   if SYSTEM != 'Darwin':
         env.Append(CXXFLAGS = '-march=native')
         env.Append(CCFLAGS  = '-march=native')
