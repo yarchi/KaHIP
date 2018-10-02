@@ -4,8 +4,6 @@
 
 #include <tbb/concurrent_queue.h>
 
-#include "ittnotify.h"
-
 namespace parallel {
 
 void local_max_matching::match(const PartitionConfig& partition_config,
@@ -35,7 +33,6 @@ void local_max_matching::sequential_match(const PartitionConfig& partition_confi
                                           CoarseMapping& mapping,
                                           NodeID& no_of_coarse_vertices,
                                           NodePermutationMap& permutation) {
-        __itt_resume();
         std::cout << "MAX VERTEX WEIGHT = " << partition_config.max_vertex_weight << std::endl;
         CLOCK_START;
         std::vector<std::pair<NodeID, uint32_t>> max_neighbours;
@@ -119,7 +116,6 @@ void local_max_matching::sequential_match(const PartitionConfig& partition_confi
         }
         std::cout << no_of_coarse_vertices << std::endl;
         CLOCK_END("Coarsening: Matching: Remap");
-        __itt_pause();
 }
 
 void local_max_matching::parallel_match(const PartitionConfig& partition_config,
@@ -215,7 +211,7 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
                                                                                  std::memory_order_release);
                                         }
                                 } else {
-                                        // put in the other queue vertex !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                                        // put in the other queue vertex
                                         vertex_mark[node].store(MatchingPhases::NOT_STARTED, std::memory_order_release);
                                         next_block.push_back(node);
                                         this_thread_block_size += G.getNodeDegree(node);

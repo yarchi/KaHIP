@@ -83,9 +83,9 @@ libkaffpa_files = [   '..//lib/data_structure/graph_hierarchy.cpp',
 env.Append(LIBPATH=['./optimized'])
 env.Append(LIBPATH=['./debug'])
 env.Append(LIBPATH=['../interface/'])
-env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS -D_REENTRANT -U_OPENMP')
+env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS -D_REENTRANT -U_OPENMP -Wno-unused-function')
 env.Append(CCFLAGS  = '-DMODE_KAFFPA')
 env.Append(CPPPATH=['../growt/'])
 env.Append(CPPPATH=['../ips4o/'])
 
-env.Library('libkahip', ['kaHIP_interface.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'tbbmalloc_proxy', 'libargtable2', 'pthread', 'dl', 'atomic'])
+env.Library('libkahip', ['kaHIP_interface.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'tbbmalloc_proxy', 'libargtable2', 'pthread', 'dl', 'atomic', 'numa'])

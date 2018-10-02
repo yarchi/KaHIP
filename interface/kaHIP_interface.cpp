@@ -37,6 +37,10 @@
 #include "../app/balance_configuration.h"
 #include "../data_structure/parallel/thread_pool.h"
 
+#ifdef __gnu_linux__
+#include <numa.h>
+#endif
+
 using namespace std;
 
 void internal_build_graph( PartitionConfig & partition_config, 
@@ -123,6 +127,10 @@ void kaffpa(int* n,
         partition_config.k = *nparts;
         partition_config.num_threads = num_threads;
 
+#ifdef __gnu_linux__
+        bitmask* old_numa_mask_ptr = nullptr;
+#endif
+
         switch( mode ) {
                 case FAST: 
                         cfg.fast(partition_config);
@@ -143,6 +151,14 @@ void kaffpa(int* n,
                         cfg.strongsocial(partition_config);
                         break;
                 case FASTSOCIALMULTITRY_PARALLEL:
+#ifdef __gnu_linux__
+                        if (numa_available() < 0) {
+                                printf("No NUMA support available on this system.\n");
+                                exit(1);
+                        }
+                        numa_set_interleave_mask(numa_all_nodes_ptr);
+                        old_numa_mask_ptr = numa_get_interleave_mask();
+#endif
                         cfg.fastsocialmultitry_parallel(partition_config);
                         parallel::PinToCore(partition_config.main_core);
                         parallel::g_thread_pool.Resize(partition_config.num_threads - 1);
@@ -158,6 +174,9 @@ void kaffpa(int* n,
         if (mode == FASTSOCIALMULTITRY_PARALLEL) {
                 parallel::Unpin();
                 parallel::g_thread_pool.Clear();
+#ifdef __gnu_linux__
+                numa_set_interleave_mask(old_numa_mask_ptr);
+#endif
         }
 }
 
