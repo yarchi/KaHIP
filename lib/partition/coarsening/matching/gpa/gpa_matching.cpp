@@ -55,11 +55,16 @@ void gpa_matching::match(const PartitionConfig & partition_config,
         init(G, partition_config, permutation, edge_matching, edge_permutation, sources);
 
         //permutation of the edges for random tie breaking
-        if(partition_config.edge_rating_tiebreaking) {
-                ALWAYS_ASSERT(false);
+        if (partition_config.edge_rating_tiebreaking) {
+                if (partition_config.initial_partitioning) {
+                        // if the initial partitioner works within parallel framework
+                        // then random_functions::permutate_entries is slow since
+                        // all threads access the same data structure
+                        ALWAYS_ASSERT(false);
+                }
                 PartitionConfig gpa_perm_config     = partition_config;
                 gpa_perm_config.permutation_quality = PERMUTATION_QUALITY_GOOD;
-                //random_functions::permutate_entries(gpa_perm_config, edge_permutation, false);
+                random_functions::permutate_entries(gpa_perm_config, edge_permutation, false);
         }
 
         std::sort(edge_permutation.begin(), edge_permutation.end(),

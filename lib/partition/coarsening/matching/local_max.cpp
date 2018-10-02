@@ -4,6 +4,8 @@
 
 #include <tbb/concurrent_queue.h>
 
+#include "ittnotify.h"
+
 namespace parallel {
 
 void local_max_matching::match(const PartitionConfig& partition_config,
@@ -33,6 +35,7 @@ void local_max_matching::sequential_match(const PartitionConfig& partition_confi
                                           CoarseMapping& mapping,
                                           NodeID& no_of_coarse_vertices,
                                           NodePermutationMap& permutation) {
+        __itt_resume();
         std::cout << "MAX VERTEX WEIGHT = " << partition_config.max_vertex_weight << std::endl;
         CLOCK_START;
         std::vector<std::pair<NodeID, uint32_t>> max_neighbours;
@@ -59,9 +62,13 @@ void local_max_matching::sequential_match(const PartitionConfig& partition_confi
         CLOCK_END("Coarsening: Matching: Init");
 
         CLOCK_START_N;
-        uint32_t round = 0;
-        uint32_t m_none_count = 0;
-        while (!node_queue->empty() && round < m_max_round) {
+        uint32_t round = 1;
+        uint32_t threshold = (uint32_t) (2.0 * G.number_of_nodes() / 3.0);
+        uint32_t remaining_vertices = G.number_of_nodes();
+        while (!node_queue->empty() && round < m_max_round + 1 && remaining_vertices > threshold) {
+                std::cout << round - 1 << std::endl;
+                std::cout << remaining_vertices << std::endl;
+                CLOCK_START;
                 while (!node_queue->empty()) {
                         NodeID node = node_queue->front();
                         node_queue->pop();
@@ -71,48 +78,32 @@ void local_max_matching::sequential_match(const PartitionConfig& partition_confi
                                 continue;
                         }
 
-                        if (max_neighbours[node].second != round) {
-                                max_neighbours[node].first = node;
-                                max_neighbours[node].second = round;
-                        }
-                        NodeID max_neighbour = max_neighbours[node].first;
-                        if (max_neighbour == node) {
-                                max_neighbour = find_max_neighbour_sequential(node, G, partition_config, edge_matching,
-                                                                              rnd);
-                                max_neighbours[node].first = max_neighbour;
-                        }
+                        NodeID max_neighbour = find_max_neighbour_sequential(node, round, G, partition_config,
+                                                                             max_neighbours, edge_matching, rnd);
 
                         if (max_neighbour == m_none) {
-                                m_none_count++;
                                 continue;
                         }
 
-                        if (max_neighbours[max_neighbour].second != round) {
-                                max_neighbours[max_neighbour].first = max_neighbour;
-                                max_neighbours[max_neighbour].second = round;
-                        }
-                        NodeID max_neighbour_neighbour = max_neighbours[max_neighbour].first;
-                        if (max_neighbour_neighbour == max_neighbour) {
-                                max_neighbour_neighbour = find_max_neighbour_sequential(max_neighbour, G,
-                                                                                        partition_config,
-                                                                                        edge_matching,
-                                                                                        rnd);
-                                max_neighbours[max_neighbour].first = max_neighbour_neighbour;
-                        }
 
+                        NodeID max_neighbour_neighbour = find_max_neighbour_sequential(max_neighbour, round, G,
+                                                                                       partition_config, max_neighbours,
+                                                                                       edge_matching, rnd);
 
                         if (max_neighbour_neighbour == node) {
                                 // match
                                 edge_matching[node] = max_neighbour;
                                 edge_matching[max_neighbour] = node;
+                                --remaining_vertices;
                         } else {
                                 node_queue_next->push(node);
                         }
                 }
                 ++round;
-
                 std::swap(node_queue, node_queue_next);
+                CLOCK_END("Round time");
         }
+        std::cout << remaining_vertices << std::endl;
         CLOCK_END("Coarsening: Matching: Main");
 
         CLOCK_START_N;
@@ -126,8 +117,9 @@ void local_max_matching::sequential_match(const PartitionConfig& partition_confi
                         ++no_of_coarse_vertices;
                 }
         }
+        std::cout << no_of_coarse_vertices << std::endl;
         CLOCK_END("Coarsening: Matching: Remap");
-
+        __itt_pause();
 }
 
 void local_max_matching::parallel_match(const PartitionConfig& partition_config,
@@ -191,6 +183,7 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
                 next_block.reserve(block_size);
 
                 auto& rnd = randoms[id].get();
+                NodeID matched_vertices = 0;
 
                 while (node_queue->try_pop(cur_block)) {
                         for (NodeID node : cur_block) {
@@ -198,8 +191,7 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
                                         continue;
                                 }
 
-                                NodeID max_neighbour = find_max_neighbour_parallel(node, round, G,
-                                                                                   partition_config,
+                                NodeID max_neighbour = find_max_neighbour_parallel(node, round, G, partition_config,
                                                                                    max_neighbours,
                                                                                    vertex_mark, rnd);
                                 if (max_neighbour == m_none) {
@@ -216,6 +208,7 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
                                         if (node < max_neighbour) {
                                                 edge_matching[node] = max_neighbour;
                                                 edge_matching[max_neighbour] = node;
+                                                ++matched_vertices;
                                                 vertex_mark[node].store(MatchingPhases::MATCHED,
                                                                         std::memory_order_release);
                                                 vertex_mark[max_neighbour].store(MatchingPhases::MATCHED,
@@ -238,26 +231,31 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
                 if (!next_block.empty()) {
                         node_queue_next->push(std::move(next_block));
                 }
+                return matched_vertices;
         };
 
         CLOCK_START_N;
         // add loop for rounds with two queues
-        std::vector<std::future<void>> futures;
+        std::vector<std::future<NodeID>> futures;
         futures.reserve(num_threads);
-
-        while (!node_queue->empty() && round < m_max_round + 1) {
+        NodeID threshold = (NodeID) (2.0 * G.number_of_nodes() / 3.0);
+        NodeID coarse_vertices = G.number_of_nodes();
+        while (!node_queue->empty() && round < m_max_round + 1 &&  coarse_vertices > threshold) {
+                std::cout << round - 1 << std::endl;
+                std::cout << coarse_vertices << std::endl;
                 futures.clear();
                 for (uint32_t id = 1; id < num_threads; ++id) {
                         futures.push_back(g_thread_pool.Submit(id - 1, task, id));
                 }
 
-                task(0);
-                std::for_each(futures.begin(), futures.end(), [](auto& future) {
-                        future.get();
+                coarse_vertices -= task(0);
+                std::for_each(futures.begin(), futures.end(), [&coarse_vertices](auto& future) {
+                        coarse_vertices -= future.get();
                 });
                 node_queue.swap(node_queue_next);
                 ++round;
         }
+        std::cout << coarse_vertices << std::endl;
 
         CLOCK_END("Coarsening: Matching: Main");
 
@@ -279,6 +277,10 @@ NodeID local_max_matching::find_max_neighbour_parallel(NodeID node, const uint32
                                                 const PartitionConfig& partition_config,
                                                 std::vector<std::pair<AtomicWrapper<NodeID>, AtomicWrapper<uint32_t>>>& max_neighbours,
                                                 std::vector<AtomicWrapper<int>>& vertex_mark, random& rnd) const {
+        if (max_neighbours[node].first.load(std::memory_order_relaxed) == m_none) {
+                return m_none;
+        }
+
         int mark = MatchingPhases::NOT_STARTED;
         if (vertex_mark[node].compare_exchange_strong(mark, MatchingPhases::STARTED, std::memory_order_acquire)) {
 
@@ -297,39 +299,49 @@ NodeID local_max_matching::find_max_neighbour_parallel(NodeID node, const uint32
         return max_neighbours[node].first.load(std::memory_order_relaxed);
 }
 
-NodeID
-local_max_matching::find_max_neighbour_sequential(NodeID node, graph_access& G, const PartitionConfig& partition_config,
+NodeID local_max_matching::find_max_neighbour_sequential(NodeID node, const uint32_t round, graph_access& G,
+                                                  const PartitionConfig& partition_config,
+                                                  std::vector<std::pair<NodeID, uint32_t>>& max_neighbours,
                                                   Matching& edge_matching, random& rnd) const {
+        NodeID max_neighbour = max_neighbours[node].first;
+
+        // recaluclate max_neighbour even if max_neighbour from previous iteration is NOT matched
+        // because if there are a lot of edges with the same rating then only few of them will match
+        if (max_neighbour == m_none || round == max_neighbours[node].second) {
+                return max_neighbour;
+        }
+        max_neighbours[node].second = round;
+
         NodeWeight node_weight = G.getNodeWeight(node);
         EdgeRatingType max_rating = 0;
-        NodeID max_target = m_none;
+        max_neighbour = m_none;
 
-        forall_out_edges(G, e, node)
-                        {
-                                NodeID target = G.getEdgeTarget(e);
-                                EdgeRatingType edge_rating = G.getEdgeRating(e);
-                                NodeWeight coarser_weight = G.getNodeWeight(target) + node_weight;
+        forall_out_edges(G, e, node) {
+                NodeID target = G.getEdgeTarget(e);
+                EdgeRatingType edge_rating = G.getEdgeRating(e);
+                NodeWeight coarser_weight = G.getNodeWeight(target) + node_weight;
 
-                                if ((edge_rating > max_rating || (edge_rating == max_rating && rnd.bit())) &&
-                                    edge_matching[target] == target &&
-                                    coarser_weight <= partition_config.max_vertex_weight) {
+                if ((edge_rating > max_rating || (edge_rating == max_rating && rnd.bit())) &&
+                    edge_matching[target] == target &&
+                    coarser_weight <= partition_config.max_vertex_weight) {
 
-                                        if (partition_config.graph_allready_partitioned &&
-                                            G.getPartitionIndex(node) != G.getPartitionIndex(target)) {
-                                                continue;
-                                        }
-
-                                        if (partition_config.combine &&
-                                            G.getSecondPartitionIndex(node) != G.getSecondPartitionIndex(target)) {
-                                                continue;
-                                        }
-
-                                        max_target = target;
-                                        max_rating = edge_rating;
-                                }
+                        if (partition_config.graph_allready_partitioned &&
+                            G.getPartitionIndex(node) != G.getPartitionIndex(target)) {
+                                continue;
                         }
-        endfor
-        return max_target;
+
+                        if (partition_config.combine &&
+                            G.getSecondPartitionIndex(node) != G.getSecondPartitionIndex(target)) {
+                                continue;
+                        }
+
+                        max_neighbour = target;
+                        max_rating = edge_rating;
+                }
+        } endfor
+
+        max_neighbours[node].first = max_neighbour;
+        return max_neighbour;
 }
 
 NodeID
