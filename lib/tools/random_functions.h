@@ -70,20 +70,25 @@ class random_functions {
                                                 vec[i] = i;
                                         }                   
                                 }
-                                
+
+                                permutate_vector_fast(vec);
+                        }
+
+                template<typename sometype>
+                        static void permutate_vector_fast(std::vector<sometype> & vec) {
                                 if(vec.size() < 10) return;
-                                        
-                                int distance = 20; 
+
+                                int distance = 20;
                                 std::uniform_int_distribution<unsigned int> A(0, distance);
                                 unsigned int size = vec.size()-4;
                                 for( unsigned int i = 0; i < size; i++) {
                                         unsigned int posA = i;
                                         unsigned int posB = (posA + A(m_mt))%size;
                                         std::swap(vec[posA], vec[posB]);
-                                        std::swap(vec[posA+1], vec[posB+1]); 
-                                        std::swap(vec[posA+2], vec[posB+2]); 
-                                        std::swap(vec[posA+3], vec[posB+3]); 
-                                }               
+                                        std::swap(vec[posA+1], vec[posB+1]);
+                                        std::swap(vec[posA+2], vec[posB+2]);
+                                        std::swap(vec[posA+3], vec[posB+3]);
+                                }
                         }
 
                 template<typename sometype>
@@ -94,7 +99,12 @@ class random_functions {
                                         }                   
                                 }
 
-                                if(vec.size() < 10) { 
+                                permutate_vector_good(vec);
+                        }
+
+                template<typename sometype>
+                        static void permutate_vector_good(std::vector<sometype> & vec) {
+                                if(vec.size() < 10) {
                                         permutate_vector_good_small(vec);
                                         return;
                                 }
@@ -106,9 +116,9 @@ class random_functions {
                                         unsigned int posA = A(m_mt);
                                         unsigned int posB = B(m_mt);
                                         std::swap(vec[posA], vec[posB]);
-                                        std::swap(vec[posA+1], vec[posB+1]); 
-                                        std::swap(vec[posA+2], vec[posB+2]); 
-                                        std::swap(vec[posA+3], vec[posB+3]); 
+                                        std::swap(vec[posA+1], vec[posB+1]);
+                                        std::swap(vec[posA+2], vec[posB+2]);
+                                        std::swap(vec[posA+3], vec[posB+3]);
 
                                 }
                         }
@@ -137,12 +147,17 @@ class random_functions {
                                         }                   
                                 }
 
+                                permutate_entries(partition_config, vec);
+                        }
+
+                template<typename type>
+                        static void permutate_entries(const PartitionConfig & partition_config,
+                                              std::vector<type> & vec) {
                                 switch(partition_config.permutation_quality) {
                                         case PERMUTATION_QUALITY_NONE: break;
-                                        case PERMUTATION_QUALITY_FAST: permutate_vector_fast(vec, false); break;
-                                        case PERMUTATION_QUALITY_GOOD: permutate_vector_good(vec, false); break;
-                                }      
-
+                                        case PERMUTATION_QUALITY_FAST: permutate_vector_fast(vec); break;
+                                        case PERMUTATION_QUALITY_GOOD: permutate_vector_good(vec); break;
+                                }
                         }
 
                 static bool nextBool() {

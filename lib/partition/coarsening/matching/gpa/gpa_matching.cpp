@@ -23,7 +23,6 @@
 #include <algorithm>
 #include <deque>
 
-#include "compare_rating.h"
 #include "gpa_matching.h"
 #include "macros_assertions.h"
 #include "random_functions.h"
@@ -56,15 +55,12 @@ void gpa_matching::match(const PartitionConfig & partition_config,
 
         //permutation of the edges for random tie breaking
         if (partition_config.edge_rating_tiebreaking) {
-                if (partition_config.initial_partitioning) {
-                        // if the initial partitioner works within parallel framework
-                        // then random_functions::permutate_entries is slow since
-                        // all threads access the same data structure
-                        ALWAYS_ASSERT(false);
-                }
+                // if the initial partitioner works within parallel framework
+                // then random_functions::permutate_entries is slow since
+                // all threads access the same data structure
                 PartitionConfig gpa_perm_config     = partition_config;
                 gpa_perm_config.permutation_quality = PERMUTATION_QUALITY_GOOD;
-                random_functions::permutate_entries(gpa_perm_config, edge_permutation, false);
+                random_functions::permutate_entries(gpa_perm_config, edge_permutation);
         }
 
         std::sort(edge_permutation.begin(), edge_permutation.end(),
