@@ -28,6 +28,8 @@
 
 #include <ips4o/ips4o.hpp>
 
+#include "ittnotify.h"
+
 contraction::contraction() {
 
 }
@@ -45,13 +47,18 @@ void contraction::contract(const PartitionConfig & partition_config,
                            const NodeID & no_of_coarse_vertices,
                            const NodePermutationMap & permutation) const {
 
-        if(partition_config.matching_type == CLUSTER_COARSENING) {
+        if (partition_config.matching_type == CLUSTER_COARSENING) {
                 if (!partition_config.fast_contract_clustering) {
-                        return contract_clustering(partition_config, G, coarser, edge_matching, coarse_mapping, no_of_coarse_vertices, permutation);
+                        contract_clustering(partition_config, G, coarser, edge_matching, coarse_mapping, no_of_coarse_vertices, permutation);
+                        return;
                 } else {
                         //return fast_contract_clustering(partition_config, G, coarser, edge_matching, coarse_mapping, no_of_coarse_vertices, permutation);
-                        return parallel_fast_contract_clustering(partition_config, G, coarser, edge_matching, coarse_mapping, no_of_coarse_vertices, permutation);
+                        parallel_fast_contract_clustering(partition_config, G, coarser, edge_matching, coarse_mapping, no_of_coarse_vertices, permutation);
+                        return;
                 }
+        } else if (partition_config.matching_type == MATCHING_PARALLEL_LOCAL_MAX) {
+                parallel_contract_matching(partition_config, G, coarser, edge_matching, coarse_mapping, no_of_coarse_vertices, permutation);
+                return;
         }
 
         if(partition_config.combine) {
@@ -174,15 +181,15 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
         // build set of new edges
         double avg_degree = (G.number_of_edges() + 0.0) / G.number_of_nodes();
         size_t num_cut_edges = std::min<size_t>(avg_degree * no_of_coarse_vertices, G.number_of_edges() / 2);
-
+        std::cout << no_of_coarse_vertices << " " << num_cut_edges << std::endl;
         std::cout << "ht capacity\t" << num_cut_edges << std::endl;
         growt::uaGrow<parallel::xxhash<uint64_t>> new_edges(num_cut_edges);
         CLOCK_END("Init hash table");
 
         CLOCK_START_N;
-        std::atomic<uint32_t> offset(0);
+        std::atomic<NodeID> offset(0);
 
-        uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
+        NodeID block_size = (NodeID) sqrt(G.number_of_nodes());
         block_size = std::max(block_size, 1000u);
         std::cout << "block_size\t" << block_size << std::endl;
 
@@ -190,8 +197,8 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
                 auto handle = new_edges.getHandle();
                 std::vector<NodeWeight> my_block_infos(no_of_coarse_vertices);
                 while (true) {
-                        uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
-                        uint32_t end = begin + block_size;
+                        NodeID begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                        NodeID end = begin + block_size;
                         end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
 
                         if (begin >= G.number_of_nodes()) {
@@ -249,7 +256,7 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
         }
 
         auto handle = new_edges.getHandle();
-        size_t num_edges = 0;
+        EdgeID num_edges = 0;
         for (auto it = handle.begin(); it != handle.end(); ++it) {
                 std::pair<NodeID, NodeID> edge = get_pair_from_uint64((*it).first);
                 auto edge_weight = (*it).second / 2;
@@ -296,12 +303,13 @@ void contraction::parallel_fast_contract_clustering_multiple_threads(const Parti
         std::cout << "ht capacity\t" << num_cut_edges / num_threads << std::endl;
 
         using concurrent_ht_type = growt::uaGrow<parallel::MurmurHash<uint64_t>>;
-        std::unique_ptr<concurrent_ht_type[], void(*)(concurrent_ht_type*)> new_edges(
-                reinterpret_cast<concurrent_ht_type*>(::operator new(sizeof(concurrent_ht_type) * num_threads)),
-                [](concurrent_ht_type* p) {
-                        ::operator delete(p);
-                }
-        );
+//        std::unique_ptr<concurrent_ht_type[], void(*)(concurrent_ht_type*)> new_edges(
+//                reinterpret_cast<concurrent_ht_type*>(::operator new(sizeof(concurrent_ht_type) * num_threads)),
+//                [](concurrent_ht_type* p) {
+//                        ::operator delete(p);
+//                }
+//        );
+        parallel::ParallelVector<concurrent_ht_type> new_edges(num_threads);
 
         parallel::submit_for_all([&](uint32_t thread_id) {
                 new (&new_edges[thread_id]) concurrent_ht_type(2 * num_cut_edges / num_threads);
@@ -309,9 +317,9 @@ void contraction::parallel_fast_contract_clustering_multiple_threads(const Parti
         CLOCK_END("Init hash tables");
 
         CLOCK_START_N;
-        std::atomic<uint32_t> offset(0);
+        std::atomic<NodeID> offset(0);
 
-        uint32_t block_size = (uint32_t) sqrt(G.number_of_nodes());
+        NodeID block_size = (NodeID) sqrt(G.number_of_nodes());
         block_size = std::max(block_size, 1000u);
         std::cout << "block_size\t" << block_size << std::endl;
 
@@ -323,7 +331,7 @@ void contraction::parallel_fast_contract_clustering_multiple_threads(const Parti
                 }
                 std::vector<NodeWeight> my_block_infos(no_of_coarse_vertices);
                 std::vector<std::vector<std::pair<uint64_t, EdgeWeight>>> buffers(num_threads);
-                const uint32_t max_buffer_size = 10000;
+                const NodeID max_buffer_size = 10000;
                 for (auto& buffer : buffers) {
                         buffer.reserve(max_buffer_size);
                 }
@@ -342,8 +350,8 @@ void contraction::parallel_fast_contract_clustering_multiple_threads(const Parti
                 };
 
                 while (true) {
-                        uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
-                        uint32_t end = begin + block_size;
+                        NodeID begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                        NodeID end = begin + block_size;
                         end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
 
                         if (begin >= G.number_of_nodes()) {
@@ -392,8 +400,8 @@ void contraction::parallel_fast_contract_clustering_multiple_threads(const Parti
                 std::vector<NodeWeight> my_block_infos(no_of_coarse_vertices);
 
                 while (true) {
-                        uint32_t begin = offset.fetch_add(block_size, std::memory_order_relaxed);
-                        uint32_t end = begin + block_size;
+                        NodeID begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                        NodeID end = begin + block_size;
                         end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
 
                         if (begin >= G.number_of_nodes()) {
@@ -463,24 +471,41 @@ void contraction::parallel_fast_contract_clustering_multiple_threads(const Parti
         EdgeID num_edges = parallel::submit_for_all(task1,
                                                     [](EdgeID num_edges, EdgeID cur_num_edges) {
                                                             return num_edges + cur_num_edges;
-                                                    }, 0ul);
+                                                    }, EdgeID(0));
         std::cout << "num edges\t" << num_edges << std::endl;
         CLOCK_END("Calculate offsets");
 
         CLOCK_START_N;
-        std::vector<Node> nodes(no_of_coarse_vertices + 1);
-        EdgeID cur_prefix = 0;
-        for (size_t i = 0; i < no_of_coarse_vertices; ++i) {
-                EdgeID cur_offset = offsets[i];
-
-                offsets[i] = cur_prefix;
-                nodes[i].firstEdge = cur_prefix;
-                nodes[i].weight = block_infos[i];
-
-                cur_prefix += cur_offset;
+        NodeID last_node_degree = offsets.back();
+        {
+                CLOCK_START;
+                parallel::partial_sum_open_interval(offsets.begin(), offsets.end(), offsets.begin(),
+                                                    partition_config.num_threads);
+                CLOCK_END("prefix sum");
         }
-        nodes.back().firstEdge = cur_prefix;
+        std::vector<Node> nodes(no_of_coarse_vertices + 1);
+        parallel::parallel_for_index(NodeID(0), no_of_coarse_vertices, [&](NodeID node) {
+                nodes[node].firstEdge = offsets[node];
+                nodes[node].weight = block_infos[node];
+        });
+        nodes.back().firstEdge = num_edges;
+        ALWAYS_ASSERT(num_edges == offsets.back() + last_node_degree);
         CLOCK_END("Calculate prefix sum");
+
+//        CLOCK_START_N;
+//        std::vector<Node> nodes(no_of_coarse_vertices + 1);
+//        EdgeID cur_prefix = 0;
+//        for (size_t i = 0; i < no_of_coarse_vertices; ++i) {
+//                EdgeID cur_offset = offsets[i];
+//
+//                offsets[i] = cur_prefix;
+//                nodes[i].firstEdge = cur_prefix;
+//                nodes[i].weight = block_infos[i];
+//
+//                cur_prefix += cur_offset;
+//        }
+//        nodes.back().firstEdge = cur_prefix;
+//        CLOCK_END("Calculate prefix sum");
 
         CLOCK_START_N;
         std::vector<Edge> edges(num_edges);
@@ -515,6 +540,183 @@ void contraction::parallel_fast_contract_clustering_multiple_threads(const Parti
         };
         parallel::submit_for_all(task_clean_ht);
         CLOCK_END("Clean hash tables");
+}
+
+void contraction::parallel_contract_matching(const PartitionConfig& partition_config,
+                                             graph_access& G,
+                                             graph_access& coarser,
+                                             const Matching& edge_matching,
+                                             const CoarseMapping& coarse_mapping,
+                                             const NodeID& no_of_coarse_vertices,
+                                             const NodePermutationMap&) const {
+        NodeID node_block_size = (NodeID) sqrt(G.number_of_nodes());
+        node_block_size = std::max(node_block_size, 1000u);
+
+        CLOCK_START;
+        std::vector<EdgeID> offsets(no_of_coarse_vertices);
+        std::vector<NodeWeight> coarse_node_weights(no_of_coarse_vertices);
+        std::atomic<NodeID> offset(0);
+        auto task1 = [&](uint32_t thread_id) {
+                parallel::hash_set<NodeID> common_neighbors(512);
+                EdgeID num_edges = 0;
+                while (true) {
+                        NodeID begin = offset.fetch_add(node_block_size, std::memory_order_relaxed);
+                        NodeID end = begin + node_block_size;
+                        end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
+
+                        if (begin >= G.number_of_nodes()) {
+                                break;
+                        }
+
+                        for (NodeID node = begin; node != end; ++node) {
+                                NodeID matched = edge_matching[node];
+                                EdgeID degree = 0;
+                                if (node < matched) {
+                                        forall_out_edges(G, e, node)
+                                                        {
+                                                                NodeID target = G.getEdgeTarget(e);
+                                                                if (target != matched) {
+                                                                        common_neighbors.insert(coarse_mapping[target]);
+                                                                }
+                                                        }
+                                        endfor
+
+                                        forall_out_edges(G, e, matched)
+                                                        {
+                                                                NodeID target = G.getEdgeTarget(e);
+                                                                if (target != node) {
+                                                                        common_neighbors.insert(coarse_mapping[target]);
+                                                                }
+                                                        }
+                                        endfor
+
+                                        coarse_node_weights[coarse_mapping[node]] =
+                                                G.getNodeWeight(node) + G.getNodeWeight(matched);
+                                } else if (node == matched) {
+                                        forall_out_edges(G, e, node){
+                                                                NodeID target = G.getEdgeTarget(e);
+                                                                common_neighbors.insert(coarse_mapping[target]);
+                                                        }endfor
+                                        coarse_node_weights[coarse_mapping[node]] = G.getNodeWeight(node);
+                                } else {
+                                        continue;
+                                }
+                                degree = common_neighbors.size();
+                                common_neighbors.clear();
+                                offsets[coarse_mapping[node]] = degree;
+                                num_edges += degree;
+                        }
+                }
+                return num_edges;
+        };
+
+        EdgeID num_edges = 0;
+        {
+                CLOCK_START;
+                num_edges = parallel::submit_for_all(task1,
+                                                     [](EdgeID num_edges, EdgeID cur_num_edges) {
+                                                             return num_edges + cur_num_edges;
+                                                     }, EdgeID(0));
+                CLOCK_END("par");
+        }
+        CLOCK_END("Calculate offsets");
+
+
+        CLOCK_START_N;
+        NodeID last_node_degree = offsets.back();
+        {
+                CLOCK_START;
+                parallel::partial_sum_open_interval(offsets.begin(), offsets.end(), offsets.begin(),
+                                                    partition_config.num_threads);
+                CLOCK_END("prefix sum");
+        }
+        std::vector<Node> nodes(no_of_coarse_vertices + 1);
+        parallel::parallel_for_index(NodeID(0), no_of_coarse_vertices, [&](NodeID node) {
+                nodes[node].firstEdge = offsets[node];
+                nodes[node].weight = coarse_node_weights[node];
+        });
+        nodes.back().firstEdge = num_edges;
+        ALWAYS_ASSERT(num_edges == offsets.back() + last_node_degree);
+        CLOCK_END("Calculate prefix sum");
+
+//        CLOCK_START_N;
+//        std::vector<Node> nodes(no_of_coarse_vertices + 1);
+//        {
+//                CLOCK_START;
+//                EdgeID cur_prefix = 0;
+//                for (size_t i = 0; i < no_of_coarse_vertices; ++i) {
+//                        EdgeID cur_offset = offsets[i];
+//
+//                        offsets[i] = cur_prefix;
+//                        nodes[i].firstEdge = cur_prefix;
+//                        nodes[i].weight = coarse_node_weights[i];
+//
+//                        cur_prefix += cur_offset;
+//                }
+//                nodes.back().firstEdge = cur_prefix;
+//                CLOCK_END("prefix sum");
+//        }
+//        CLOCK_END("Calculate prefix sum");
+
+        CLOCK_START_N;
+        std::vector<Edge> edges(num_edges);
+        CLOCK_END("Init edge array");
+
+        offset.store(0, std::memory_order_relaxed);
+        auto task2 = [&](uint32_t thread_id) {
+                parallel::hash_map<NodeID, EdgeWeight> common_neighbors(512);
+                while (true) {
+                        NodeID begin = offset.fetch_add(node_block_size, std::memory_order_relaxed);
+                        NodeID end = begin + node_block_size;
+                        end = end <= G.number_of_nodes() ? end : G.number_of_nodes();
+
+                        if (begin >= G.number_of_nodes()) {
+                                break;
+                        }
+
+                        for (NodeID node = begin; node != end; ++node) {
+                                NodeID matched = edge_matching[node];
+                                if (node < matched) {
+                                        forall_out_edges(G, e, node) {
+                                                NodeID target = G.getEdgeTarget(e);
+                                                if (target != matched) {
+                                                        common_neighbors[coarse_mapping[target]] += G.getEdgeWeight(e);
+                                                }
+                                        } endfor
+
+                                        forall_out_edges(G, e, matched) {
+                                                NodeID target = G.getEdgeTarget(e);
+                                                if (target != node) {
+                                                        common_neighbors[coarse_mapping[target]] += G.getEdgeWeight(e);
+                                                }
+                                        } endfor
+                                } else if (node == matched) {
+                                        forall_out_edges(G, e, node) {
+                                                NodeID target = G.getEdgeTarget(e);
+                                                common_neighbors[coarse_mapping[target]] += G.getEdgeWeight(e);
+                                        } endfor
+                                } else {
+                                        continue;
+                                }
+
+                                NodeID coarse_node = coarse_mapping[node];
+                                for (auto& record : common_neighbors) {
+                                        edges[offsets[coarse_node]].target = record.first;
+                                        edges[offsets[coarse_node]].weight = record.second;
+                                        ++offsets[coarse_node];
+                                }
+                                common_neighbors.clear();
+                        }
+                }
+        };
+
+        CLOCK_START_N;
+        parallel::submit_for_all(task2);
+        CLOCK_END("Make edge array");
+
+        CLOCK_START_N;
+        coarser.start_construction(nodes, edges);
+        CLOCK_END("Make graph");
 }
 
 void contraction::fast_contract_clustering(const PartitionConfig& partition_config,

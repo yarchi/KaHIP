@@ -1,3 +1,4 @@
+#include "data_structure/parallel/algorithm.h"
 #include "data_structure/graph_access.h"
 #include "data_structure/parallel/thread_pool.h"
 #include "data_structure/parallel/time.h"

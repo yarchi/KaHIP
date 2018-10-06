@@ -36,6 +36,7 @@ public:
         void push_back(graph_access * G, CoarseMapping * coarse_mapping);
         
         graph_access  * pop_finer_and_project();
+        graph_access  * parallel_pop_finer_and_project();
         graph_access  * pop_finer_and_project_ns( PartialBoundary & separator );
         graph_access  * get_coarsest();
         CoarseMapping * get_mapping_of_current_finer();

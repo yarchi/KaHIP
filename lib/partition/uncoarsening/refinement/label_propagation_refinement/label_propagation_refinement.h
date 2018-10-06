@@ -72,7 +72,7 @@ private:
                 NodeID rnd;
         };
 
-        inline uint32_t get_block_size(graph_access& G, const PartitionConfig& config) const {
+        inline uint64_t get_block_size(graph_access& G, const PartitionConfig& config) const {
                 if (config.block_size_unit == BlockSizeUnit::NODES) {
                         return get_block_size(G.number_of_nodes());
                 }
@@ -84,9 +84,9 @@ private:
                 return get_block_size(1);
         }
 
-        inline uint32_t get_block_size(uint32_t total) const {
-                uint32_t block_size = 1000;
-                return std::max((uint32_t) sqrt(total), block_size);
+        inline uint64_t get_block_size(uint64_t total) const {
+                uint64_t block_size = 1000;
+                return std::max((uint64_t) sqrt(total), block_size);
         }
 
         std::chrono::system_clock::time_point begin, end;
@@ -98,7 +98,7 @@ private:
                                                          PartitionConfig& config,
                                                          parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                          std::vector<std::vector<PartitionID>>& hash_maps,
-                                                         Pair* permutation);
+                                                         const parallel::ParallelVector<Pair>& permutation);
 
         EdgeWeight parallel_label_propagation_with_queue_with_many_clusters(graph_access& G,
                                                                             const PartitionConfig& config,
@@ -106,33 +106,33 @@ private:
                                                                             std::vector<NodeWeight>& cluster_id,
                                                                             std::vector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                                             std::vector<std::vector<PartitionID>>& hash_maps,
-                                                                            Triple* permutation);
+                                                                            const parallel::ParallelVector<Triple>& permutation);
 
         EdgeWeight parallel_label_propagation(graph_access& G,
                                               PartitionConfig& config,
                                               parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                               std::vector<std::vector<PartitionID>>& hash_maps,
-                                              Pair* permutation);
+                                              const parallel::ParallelVector<Pair>& permutation);
 
         template<typename T>
-        void seq_init_for_edge_unit(graph_access& G, const uint32_t block_size,
-                                    T* permutation,
+        void seq_init_for_edge_unit(graph_access& G, const uint64_t block_size,
+                                    const T& permutation,
                                     parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                     std::unique_ptr<ConcurrentQueue>& queue);
 
         template<typename T>
-        void par_init_for_edge_unit(graph_access& G, const uint32_t block_size,
-                                    T* permutation,
+        void par_init_for_edge_unit(graph_access& G, const uint64_t block_size,
+                                    const T& permutation,
                                     parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                     std::unique_ptr<ConcurrentQueue>& queue);
 
         template<typename T>
-        void par_init_for_edge_unit(graph_access& G, const uint32_t block_size,
-                                    T* permutation,
+        void par_init_for_edge_unit(graph_access& G, const uint64_t block_size,
+                                    const T& permutation,
                                     std::unique_ptr<ConcurrentQueue>& queue);
 
-        void init_for_node_unit(graph_access& G, const uint32_t block_size,
-                                Pair* permutation,
+        void init_for_node_unit(graph_access& G, const uint64_t block_size,
+                                const parallel::ParallelVector<Pair>& permutation,
                                 parallel::Cvector<parallel::AtomicWrapper<NodeWeight>>& cluster_sizes,
                                 std::unique_ptr<ConcurrentQueue>& queue);
 
@@ -142,6 +142,9 @@ private:
         void remap_cluster_ids_fast(const PartitionConfig& partition_config, graph_access& G,
                                     std::vector<NodeWeight>& cluster_id, NodeID& no_of_coarse_vertices,
                                     bool apply_to_graph = false);
+
+        void parallel_remap_cluster_ids_fast(const PartitionConfig& partition_config, graph_access& G,
+                                             std::vector<NodeWeight>& cluster_id, NodeID& no_of_coarse_vertices);
 };
 
 

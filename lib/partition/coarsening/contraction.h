@@ -80,6 +80,14 @@ public:
                                   const NodeID& no_of_coarse_vertices,
                                   const NodePermutationMap& permutation) const;
 
+        void parallel_contract_matching(const PartitionConfig& partition_config,
+                                        graph_access& G,
+                                        graph_access& coarser,
+                                        const Matching& edge_matching,
+                                        const CoarseMapping& coarse_mapping,
+                                        const NodeID& no_of_coarse_vertices,
+                                        const NodePermutationMap&) const;
+
 private:
         // visits an edge in G (and auxillary graph) and updates/creates and edge in coarser graph
 

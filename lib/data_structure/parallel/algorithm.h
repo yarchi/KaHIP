@@ -1,10 +1,18 @@
 #pragma once
 
+#include "data_structure/parallel/cache.h"
+#include "data_structure/parallel/thread_pool.h"
+
 #include <algorithm>
 #include <cmath>
 #include <iterator>
 #include <future>
 #include <vector>
+
+#include <ips4o/ips4o.hpp>
+#include <omp.h>
+#include <parallel/algorithm>
+#include <parallel/numeric>
 
 namespace parallel {
 template<typename _value_type>
@@ -183,110 +191,30 @@ Functor apply_to_range_async(Iterator first, Iterator last, TaskConsumer& task_c
                                                        typename std::iterator_traits<iter_type>::iterator_category());
 }
 
-constexpr uint32_t g_cache_line_size = 64 * sizeof(char);
-
-template <typename T>
-class alignas(g_cache_line_size) CacheAlignedData {
-public:
-        using Type = T;
-
-        CacheAlignedData()
-                :       m_elem()
-        {
-                static_assert(sizeof(Self) % g_cache_line_size == 0, "No cache line alignment");
-        }
-
-        CacheAlignedData(T elem)
-                :       m_elem(elem)
-        {
-                static_assert(sizeof(Self) % g_cache_line_size == 0, "No cache line alignment");
-        }
-
-        template <typename... Args>
-        CacheAlignedData(Args&&... args)
-                :       m_elem(std::forward<Args>(args)...)
-        {}
-
-        CacheAlignedData(CacheAlignedData& other) = default;
-        CacheAlignedData(const CacheAlignedData& other) = default;
-        CacheAlignedData(CacheAlignedData&& other) = default;
-
-        inline T& get() {
-                return m_elem;
-        }
-
-        inline const T& get() const {
-                return m_elem;
-        }
-
-        inline bool operator! () const {
-                return !m_elem;
-        }
-
-        inline CacheAlignedData& operator= (const T& elem) {
-                m_elem = elem;
-                return *this;
-        }
-
-        inline CacheAlignedData& operator= (const CacheAlignedData& other) {
-                m_elem = other.m_elem;
-                return *this;
-        }
-
-        inline CacheAlignedData& operator= (CacheAlignedData&& other) {
-                m_elem = other.m_elem;
-                return *this;
-        }
-
-        inline CacheAlignedData& operator+= (const T& elem) {
-                m_elem += elem;
-                return *this;
-        }
-
-        inline CacheAlignedData& operator-= (const T& elem) {
-                m_elem -= elem;
-                return *this;
-        }
-
-        inline CacheAlignedData& operator*= (const T& elem) {
-                m_elem *= elem;
-                return *this;
-        }
-
-        inline CacheAlignedData& operator/= (const T& elem) {
-                m_elem /= elem;
-                return *this;
-        }
-
-        inline T& operator++ () {
-                ++m_elem;
-                return *this;
-        }
-
-        inline T operator++ (int) {
-                T tmp = m_elem;
-                ++m_elem;
-                return tmp;
-        }
-private:
-        using Self = CacheAlignedData<T>;
-        T m_elem;
-
-};
-
 template <typename T>
 using Cvector = std::vector<CacheAlignedData<T>>;
 
-template <typename T, typename TaskConsumer>
+template <typename T>
+T* allocate_raw_memory(size_t size) {
+        return reinterpret_cast<T*>(sizeof(T) * size);
+}
+
+template <typename T>
 class ParallelVector {
 public:
-#ifdef CACHE_LINE_ALIGNMENT
-        static const bool m_cache_line_alignment = true;
-#else
-        static const bool m_cache_line_alignment = false;
-#endif
-        using Self = ParallelVector<T, TaskConsumer>;
-        using Type = typename std::conditional<m_cache_line_alignment, CacheAlignedData<T>, T>::type;
+        using Self = ParallelVector<T>;
+        using Type = T;
+
+        explicit ParallelVector(size_t size)
+                :       m_ptr(nullptr)
+                ,       m_size(size)
+        {
+                m_ptr = reinterpret_cast<T*>(::operator new(size * sizeof(T)));
+        }
+
+        ~ParallelVector() {
+                ::operator delete(m_ptr);
+        }
 
         const Type& operator[] (size_t index) const {
                 return m_ptr[index];
@@ -296,6 +224,22 @@ public:
                 return m_ptr[index];
         }
 
+        const Type& front() const {
+                return m_ptr[0];
+        }
+
+        Type& front() {
+                return m_ptr[0];
+        }
+
+        const Type& back() const {
+                return m_ptr[size() - 1];
+        }
+
+        Type& back() {
+                return m_ptr[size() - 1];
+        }
+
         size_t size() const {
                 return m_size;
         }
@@ -303,11 +247,6 @@ public:
         void swap(Self& other) {
                 std::swap(m_ptr, other.m_ptr);
                 std::swap(m_size, other.m_size);
-        }
-
-        ~ParallelVector() {
-                parallel_destruction(m_task_consumer, m_ptr, m_size);
-                ::operator delete(m_ptr);
         }
 
         const Type* begin() const {
@@ -325,76 +264,147 @@ public:
         Type* end() {
                 return m_ptr + m_size;
         }
+
 private:
-        explicit ParallelVector(TaskConsumer& task_consumer, size_t size, T init_value = 0)
-                :       m_ptr(nullptr)
-                ,       m_task_consumer(task_consumer)
-                ,       m_size(size)
-        {
-                m_ptr = parallel_construction<Type>(m_task_consumer, size, init_value);
-        }
-
-        template <typename V>
-        V* parallel_construction(TaskConsumer& task_consumer, size_t size, T init_value) {
-                V* ptr = reinterpret_cast<V*>(::operator new(size * sizeof(V)));
-                for_each_sync(ptr, ptr + size, task_consumer, [&init_value](V& p) {
-                        new (&p) V(init_value);
-                });
-                return ptr;
-        }
-
-        template <typename V>
-        void parallel_destruction(TaskConsumer& task_consumer, V* ptr, size_t size) {
-                for_each_sync(ptr, ptr + size, task_consumer, [](V& p) {
-                        p.~V();
-                });
-        }
-
-        template <typename G, typename V>
-        friend ParallelVector<G, V> Get_parallel_vector(V&, size_t, G);
-
         Type* m_ptr;
-        TaskConsumer& m_task_consumer;
         size_t m_size;
 };
 
-template <typename T, typename TaskConsumer>
-static ParallelVector<T, TaskConsumer> Get_parallel_vector(TaskConsumer& task_consumer, size_t size, T init_value = 0) {
-        return ParallelVector<T, TaskConsumer>(task_consumer, size, init_value);
-};
+template<typename Iterator, typename Functor>
+static void parallel_for_each(Iterator begin, Iterator end, Functor functor) {
+        std::vector<std::future<void>> futures;
+        futures.reserve(g_thread_pool.NumThreads());
 
-//template<typename Iterator, typename Functor>
-//static void parallel_for_each(Iterator begin, Iterator end, Functor functor) {
-//        std::vector<std::future<void>> futures;
-//        futures.reserve(g_thread_pool.NumThreads());
-//
-//        std::atomic<size_t> offset(0);
-//        size_t size = end - begin;
-//        size_t block_size = (size_t) sqrt(size);
-//        block_size = std::max(block_size, 1000u);
-//        auto task = [&] () {
-//                while (true) {
-//                        size_t cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
-//                        size_t cur_end = cur_begin + block_size;
-//                        cur_end = cur_end <= size ? cur_end : size;
-//
-//                        if (cur_begin >= size) {
-//                                break;
-//                        }
-//
-//                        for (Iterator elem = begin + cur_begin; elem != begin + cur_end; ++elem) {
-//                                functor(*elem);
-//                        }
-//                }
-//        };
-//
-//        for (size_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
-//                futures.push_back(g_thread_pool.Submit(i, task));
-//        }
-//        task();
-//
-//        std::for_each(futures.begin(), futures.end(), [&](auto& future) {
-//                future.get();
-//        });
-//}
+        std::atomic<size_t> offset(0);
+        size_t size = end - begin;
+        size_t block_size = (size_t) sqrt(size);
+        block_size = std::max(block_size, size_t(1000));
+        auto task = [&] () {
+                while (true) {
+                        size_t cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                        size_t cur_end = cur_begin + block_size;
+                        cur_end = cur_end <= size ? cur_end : size;
+
+                        if (cur_begin >= size) {
+                                break;
+                        }
+
+                        for (Iterator elem = begin + cur_begin; elem != begin + cur_end; ++elem) {
+                                functor(*elem);
+                        }
+                }
+        };
+
+        for (size_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
+                futures.push_back(g_thread_pool.Submit(i, task));
+        }
+        task();
+
+        std::for_each(futures.begin(), futures.end(), [&](auto& future) {
+                future.get();
+        });
+}
+
+template<typename Integer_type, typename Functor>
+static void parallel_for_index(Integer_type begin, Integer_type end, Functor functor) {
+        static_assert(std::is_integral<Integer_type>::value, "Integral required.");
+
+        std::vector<std::future<void>> futures;
+        futures.reserve(g_thread_pool.NumThreads());
+
+        std::atomic<size_t> offset(0);
+        size_t size = end - begin;
+        size_t block_size = (size_t) sqrt(size);
+        block_size = std::max(block_size, size_t(1000));
+        auto task = [&] () {
+                while (true) {
+                        size_t cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                        size_t cur_end = cur_begin + block_size;
+                        cur_end = cur_end <= size ? cur_end : size;
+
+                        if (cur_begin >= size) {
+                                break;
+                        }
+
+                        for (Integer_type elem = cur_begin; elem != cur_end; ++elem) {
+                                functor(elem);
+                        }
+                }
+        };
+
+        for (size_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
+                futures.push_back(g_thread_pool.Submit(i, task));
+        }
+        task();
+
+        std::for_each(futures.begin(), futures.end(), [&](auto& future) {
+                future.get();
+        });
+}
+
+template <typename Iterator>
+void random_shuffle(Iterator begin, Iterator end, uint32_t num_threads) {
+        ALWAYS_ASSERT(num_threads > 0);
+
+        parallel::g_thread_pool.Clear();
+        parallel::Unpin();
+        omp_set_dynamic(false);
+        omp_set_num_threads(num_threads);
+
+        __gnu_parallel::random_shuffle(begin, end);
+
+        omp_set_num_threads(0);
+        parallel::PinToCore(0);
+        parallel::g_thread_pool.Resize(num_threads - 1);
+}
+
+template <typename InputIterator, typename OutputIterator>
+void partial_sum(InputIterator begin, InputIterator end, OutputIterator out, uint32_t num_threads) {
+        ALWAYS_ASSERT(num_threads > 0);
+
+        parallel::g_thread_pool.Clear();
+        parallel::Unpin();
+        omp_set_dynamic(false);
+        omp_set_num_threads(num_threads);
+
+        __gnu_parallel::partial_sum(begin, end, out);
+
+        omp_set_num_threads(0);
+        parallel::PinToCore(0);
+        parallel::g_thread_pool.Resize(num_threads - 1);
+}
+
+// calculates prefix sum for each prefix not including last element of the prefix
+template <typename InputIterator, typename OutputIterator>
+void partial_sum_open_interval(InputIterator begin, InputIterator end, OutputIterator out, uint32_t num_threads) {
+        ALWAYS_ASSERT(num_threads > 0);
+
+        size_t size = end - begin;
+
+        // copy array
+        using value_type = typename InputIterator::value_type;
+        ParallelVector<value_type> copy(size);
+
+        // calculate prefix sum for copy
+        partial_sum(begin, end, copy.begin(), num_threads);
+
+        // change the input array
+        parallel::parallel_for_index(size_t(0), size, [&](size_t index) {
+                *(out + index) = copy[index] - *(begin + index);
+        });
+}
+
+template <typename Iterator, typename Functor>
+void sort(Iterator begin, Iterator end, Functor functor, uint32_t num_threads) {
+        ALWAYS_ASSERT(num_threads > 0);
+
+        parallel::g_thread_pool.Clear();
+        parallel::Unpin();
+
+        ips4o::parallel::sort(begin, end, functor, num_threads);
+
+        parallel::PinToCore(0);
+        parallel::g_thread_pool.Resize(num_threads - 1);
+}
+
 }

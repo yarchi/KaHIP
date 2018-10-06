@@ -54,6 +54,7 @@
 #endif
 
 #include <execinfo.h>
+#include <omp.h>
 #include <signal.h>
 
 void handler(int sig) {
@@ -70,6 +71,9 @@ void handler(int sig) {
 }
 
 int main(int argn, char **argv) {
+        omp_set_dynamic(false);
+        omp_set_num_threads(0);
+
         signal(SIGSEGV, handler);
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
         #pragma message("COMPARE WITH SEQUENTIAL MODE IS ON")

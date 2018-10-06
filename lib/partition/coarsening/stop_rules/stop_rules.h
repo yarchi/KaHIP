@@ -25,7 +25,7 @@
 
 #include <math.h>
 
-#include "data_structure/parallel/hardware.h"
+#include "data_structure/parallel/cache.h"
 #include "partition_config.h"
 
 class stop_rule {

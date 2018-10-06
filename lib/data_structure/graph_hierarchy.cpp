@@ -20,6 +20,7 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include "data_structure/parallel/algorithm.h"
 #include "graph_hierarchy.h"
 
 graph_hierarchy::graph_hierarchy() : m_current_coarser_graph(NULL), 
@@ -77,6 +78,39 @@ graph_access* graph_hierarchy::pop_finer_and_project() {
         m_current_coarser_graph = finer;
 
         return finer;                
+}
+
+graph_access* graph_hierarchy::parallel_pop_finer_and_project() {
+        graph_access* finer = pop_coarsest();
+
+        CoarseMapping* coarse_mapping = m_the_mappings.top(); // mapps finer to coarser nodes
+        m_the_mappings.pop();
+
+        if(finer == m_coarsest_graph) {
+                m_current_coarser_graph = finer;
+                finer = pop_coarsest();
+                finer->set_partition_count(m_current_coarser_graph->get_partition_count());
+
+                coarse_mapping = m_the_mappings.top();
+                m_the_mappings.pop();
+        }
+
+        ASSERT_EQ(m_the_graph_hierarchy.size(), m_the_mappings.size());
+
+        //perform projection
+        graph_access& fRef = *finer;
+        graph_access& cRef = *m_current_coarser_graph;
+        parallel::parallel_for_index(NodeID(0), fRef.number_of_nodes(), [&](NodeID node) {
+                NodeID coarser_node = (*coarse_mapping)[node];
+                PartitionID coarser_partition_id = cRef.getPartitionIndex(coarser_node);
+                fRef.setPartitionIndex(node, coarser_partition_id);
+        });
+
+        m_current_coarse_mapping = coarse_mapping;
+        finer->set_partition_count(m_current_coarser_graph->get_partition_count());
+        m_current_coarser_graph = finer;
+
+        return finer;
 }
 
 graph_access* graph_hierarchy::pop_finer_and_project_ns( PartialBoundary & separator ) {

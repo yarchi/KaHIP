@@ -2,7 +2,7 @@
 
 #include <type_traits>
 
-#include "data_structure/parallel/hardware.h"
+#include "data_structure/parallel/cache.h"
 #include "data_structure/parallel/adaptive_hash_table.h"
 
 namespace parallel {

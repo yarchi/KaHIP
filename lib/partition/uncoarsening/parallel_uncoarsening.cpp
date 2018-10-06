@@ -39,7 +39,7 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig& config, graph_
 
         while (!hierarchy.isEmpty()) {
                 CLOCK_START;
-                graph_access* G = hierarchy.pop_finer_and_project();
+                graph_access* G = hierarchy.parallel_pop_finer_and_project();
                 CLOCK_END("Projection");
 
                 PRINT(std::cout << "log>" << "unrolling graph with " << G->number_of_nodes() << std::endl;)

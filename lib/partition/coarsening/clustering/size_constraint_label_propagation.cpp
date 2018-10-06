@@ -518,7 +518,7 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
         parallel::Unpin();
         {
                 CLOCK_START;
-                ips4o::parallel::sort(permutation.begin(), permutation.end(), [&](const pair_type& lhs, const pair_type& rhs) {
+                parallel::sort(permutation.begin(), permutation.end(), [&](const pair_type& lhs, const pair_type& rhs) {
                         return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
                 }, config.num_threads);
                 CLOCK_END("Sort");
@@ -553,7 +553,11 @@ void size_constraint_label_propagation::parallel_label_propagation(const Partiti
         std::cout << "Improved\t" << num_changed_label << std::endl;
 
         CLOCK_START_N;
-        remap_cluster_ids_fast(config, G, cluster_id, no_of_blocks);
+        if (config.num_threads > 1) {
+                parallel_remap_cluster_ids_fast(config, G, cluster_id, no_of_blocks);
+        } else {
+                remap_cluster_ids_fast(config, G, cluster_id, no_of_blocks);
+        }
         CLOCK_END("Remap cluster ids");
 }
 
@@ -593,8 +597,6 @@ void size_constraint_label_propagation::remap_cluster_ids(const PartitionConfig 
         no_of_coarse_vertices = cur_no_clusters;
 }
 
-
-
 void size_constraint_label_propagation::remap_cluster_ids_fast(const PartitionConfig& partition_config,
                                                                graph_access& G,
                                                                std::vector<NodeWeight>& cluster_id,
@@ -626,4 +628,29 @@ void size_constraint_label_propagation::remap_cluster_ids_fast(const PartitionCo
                 } endfor
                 G.set_partition_count(no_of_coarse_vertices);
         }
+}
+
+void size_constraint_label_propagation::parallel_remap_cluster_ids_fast(const PartitionConfig& partition_config,
+                                                                        graph_access& G,
+                                                                        std::vector<NodeWeight>& cluster_id,
+                                                                        NodeID& no_of_coarse_vertices) {
+        if (cluster_id.empty()) {
+                no_of_coarse_vertices = 0;
+                return;
+        }
+
+        parallel::ParallelVector<NodeID> cluster_map(G.number_of_nodes());
+        parallel::parallel_for_index(NodeID(0), G.number_of_nodes(), [&](NodeID node) {
+                PartitionID cur_cluster = cluster_id[node];
+                cluster_map[cur_cluster] = 1;
+        });
+
+        parallel::partial_sum(cluster_map.begin(), cluster_map.end(), cluster_map.begin(),
+                              partition_config.num_threads);
+
+        parallel::parallel_for_index(NodeID(0), G.number_of_nodes(), [&](NodeID node) {
+                cluster_id[node] = cluster_map[cluster_id[node]] - 1;
+        });
+
+        no_of_coarse_vertices = cluster_map.back();
 }

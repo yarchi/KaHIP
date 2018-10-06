@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "data_structure/parallel/bits.h"
-#include "data_structure/parallel/hardware.h"
+#include "data_structure/parallel/cache.h"
 #include "data_structure/parallel/hash_function.h"
 
 
@@ -639,7 +639,7 @@ public:
         explicit HashSet(const uint64_t max_size = 1) :
                 _empty_element(std::numeric_limits<Key>::max()),
                 _max_size(std::max(round_up_to_next_power_2(max_size), 16u)),
-                _ht_size(max_size * SizeFactor),
+                _ht_size(_max_size * SizeFactor),
                 _ht(_ht_size + _max_size * 1.1, _empty_element),
                 _poses(),
                 _hash(),

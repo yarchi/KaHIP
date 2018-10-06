@@ -1,8 +1,9 @@
 #pragma once
 
-#include "data_structure/parallel/algorithm.h"
+#include "data_structure/parallel/cache.h"
 #include "data_structure/parallel/spin_lock.h"
 
+#include <algorithm>
 #include <atomic>
 #include <functional>
 #include <future>
