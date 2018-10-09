@@ -12,6 +12,8 @@
 
 #include <tbb/concurrent_queue.h>
 
+#include "data-structures/definitions.h"
+
 namespace parallel {
 
 
@@ -213,6 +215,7 @@ public:
                 ,       m_second_level_size(m_config.num_threads * m_config.num_threads)
         {}
 
+        // called only by single threaded executions
         void move(NodeID vertex, PartitionID from, PartitionID to) {
                 ALWAYS_ASSERT(m_G.getPartitionIndex(vertex) == to);
 
@@ -224,6 +227,7 @@ public:
                         if (target_block == to) {
                                 auto& target_boundary_ht = m_boundaries_per_thread[num_hash_table(target)].get();
                                 int32_t new_count = --target_boundary_ht[target];
+                                ALWAYS_ASSERT(new_count >= 0);
                                 if (new_count == 0) {
                                         target_boundary_ht.erase(target);
                                 }
@@ -248,11 +252,9 @@ public:
         }
 
         void construct_boundary() {
-                using std::placeholders::_1;
-
                 container_collection_type containers(m_config.num_threads, Cvector<thread_container_type>(m_config.num_threads));
 
-                if (parallel::g_thread_pool.NumThreads() == 0) {
+                if (m_config.num_threads == 1) {
                         distribute_boundary_vertices(m_G, containers, [this](uint32_t vertex, uint32_t) {
                                 return external_neighbors(vertex);
                         });
@@ -260,9 +262,13 @@ public:
                         if (m_config.use_numa_aware_graph && parallel::graph_is_large(m_G, m_config)) {
                                 parallel::numa_aware_graph na_graph(m_G, m_config.num_threads, m_config.threads_per_socket);
                                 na_graph.construct();
-                                distribute_boundary_vertices(na_graph.get_handle(0), containers, [this, &na_graph](uint32_t vertex, uint32_t thread_id) {
-                                        return is_boundary(na_graph.get_handle(thread_id), vertex);
-                                });
+                                distribute_boundary_vertices(
+                                        na_graph.get_handle(0),
+                                        containers,
+                                        [this, &na_graph](uint32_t vertex, uint32_t thread_id) {
+                                                return is_boundary(na_graph.get_handle(thread_id), vertex);
+                                        }
+                                );
                         } else {
                                 distribute_boundary_vertices(m_G, containers, [this](uint32_t vertex, uint32_t) {
                                         return is_boundary(m_G, vertex);
@@ -368,6 +374,9 @@ public:
         }
 
         ~fast_parallel_boundary() {
+                if (m_boundaries_per_thread.empty()) {
+                        return;
+                }
                 auto task = [this](uint32_t thread_id) {
                         m_boundaries_per_thread[thread_id].get().clear();
                         // to resize hash tables in parallel
@@ -398,39 +407,9 @@ public:
         }
 
         void finish_movements() {
-                auto task = [this](uint32_t thread_id) {
-                        auto& container = m_containers[thread_id];
-                        parallel::HashSet<NodeID, parallel::xxhash<NodeID>, true> processed_vertices(1024u);
-                        for (auto& sub_container : container) {
-                                for (const auto& vertex : sub_container.get()) {
-                                        if (processed_vertices.contains(vertex)) {
-                                                continue;
-                                        }
-                                        processed_vertices.insert(vertex);
-                                        int32_t num_external_neighbors = is_boundary(m_G, vertex);
-                                        if (num_external_neighbors > 0) {
-                                                m_boundaries_per_thread[thread_id].get().insert(vertex, num_external_neighbors);
-                                        } else {
-                                                m_boundaries_per_thread[thread_id].get().erase(vertex);
-                                        }
-                                }
-                                sub_container.get().clear();
-                        }
-                        return processed_vertices.size();
-                };
-
-                std::vector<std::future<size_t>> futures;
-                futures.reserve(parallel::g_thread_pool.NumThreads());
-                for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
-                        futures.push_back(parallel::g_thread_pool.Submit(i, task, i + 1));
-                }
-                NodeID size = task(0);
-
-                std::for_each(futures.begin(), futures.end(), [&](auto& future){
-                        NodeID sz = future.get();
-                        size += sz;
+                finish_movements_impl([&](uint32_t thread_id) -> hash_map_with_erase_type& {
+                        return m_boundaries_per_thread[thread_id].get();
                 });
-                std::cout << "TOTAL SIZE = " << size << std::endl;
         }
 private:
         using thread_container_type = thread_container<std::pair<NodeID, int32_t>>;
@@ -438,38 +417,19 @@ private:
 
 
         Cvector<hash_map_with_erase_type> m_boundaries_per_thread;
-        std::vector<parallel::Cvector<parallel::thread_container<NodeID>>> m_containers;
-        parallel::xxhash<NodeID> m_primary_hash;
-        parallel::xxhash<NodeID> m_secondary_hash;
-        uint32_t m_second_level_size;
 
         template <typename TGraph, typename TFunctor>
         void distribute_boundary_vertices(TGraph& graph, container_collection_type& containers, TFunctor&& bnd_func) {
                 CLOCK_START;
-                std::vector<std::future<std::vector<block_data_type>>> futures;
-                futures.reserve(parallel::g_thread_pool.NumThreads());
 
-
-                NodeID block_size = (NodeID) sqrt(graph.number_of_nodes());
-                block_size = std::max(10 * block_size, 1000u);
+                NodeID block_size = std::max<NodeID>(sqrt(graph.number_of_nodes()), 1000);
 
                 std::atomic<NodeID> offset(0);
                 auto task_distribute = [this, &containers, &offset, block_size, &bnd_func, &graph] (uint32_t thread_id) {
                         std::vector<block_data_type> blocks_info(m_G.get_partition_count());
-                        while (true) {
-                                size_t cur_index = offset.load(std::memory_order_relaxed);
-
-                                if (cur_index >= graph.number_of_nodes()) {
-                                        break;
-                                }
-
-                                NodeID begin = offset.fetch_add(block_size, std::memory_order_relaxed);
-                                NodeID end = begin + block_size;
-                                end = end <= graph.number_of_nodes() ? end : graph.number_of_nodes();
-
-                                if (begin >= graph.number_of_nodes()) {
-                                        break;
-                                }
+                        NodeID begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                        while (begin < graph.number_of_nodes()) {
+                                NodeID end = std::min(begin + block_size, graph.number_of_nodes());
 
                                 for (NodeID node = begin; node != end; ++node) {
                                         PartitionID cur_part = graph.getPartitionIndex(node);
@@ -482,25 +442,59 @@ private:
                                                 container.concurrent_emplace_back(node, num_external_neighbors);
                                         }
                                 }
+                                begin = offset.fetch_add(block_size, std::memory_order_relaxed);
                         }
                         return blocks_info;
                 };
 
-                for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
-                        futures.push_back(parallel::g_thread_pool.Submit(i, task_distribute, i + 1));
-                }
-
-                m_blocks_info = task_distribute(0);
-                std::for_each(futures.begin(), futures.end(), [&](auto& future){
-                        std::vector<block_data_type> tmp_blocks_info(future.get());
-
-                        for (size_t i = 0; i < m_blocks_info.size(); ++i) {
-                                m_blocks_info[i].block_size += tmp_blocks_info[i].block_size;
-                                m_blocks_info[i].block_weight += tmp_blocks_info[i].block_weight;
+                m_blocks_info.clear();
+                submit_for_all(task_distribute, [](auto& result, auto&& new_value) {
+                        if (result.empty()) {
+                                result = std::move(new_value);
+                        } else {
+                                for (size_t i = 0; i < result.size(); ++i) {
+                                        result[i].block_size += new_value[i].block_size;
+                                        result[i].block_weight += new_value[i].block_weight;
+                                }
                         }
-                });
-                std::cout << std::endl;
+                }, m_blocks_info);
                 CLOCK_END("Distribute boundary vertices");
+        }
+
+protected:
+        std::vector<parallel::Cvector<parallel::thread_container<NodeID>>> m_containers;
+        parallel::xxhash<NodeID> m_primary_hash;
+        parallel::xxhash<NodeID> m_secondary_hash;
+        uint32_t m_second_level_size;
+
+        template <typename TFunctor>
+        void finish_movements_impl(TFunctor&& get_ht) {
+                auto task = [&, this](uint32_t thread_id) {
+                        auto& container = m_containers[thread_id];
+                        auto& ht = get_ht(thread_id);
+                        parallel::HashSet<NodeID, parallel::xxhash<NodeID>, true> processed_vertices(1024u);
+                        for (auto& sub_container : container) {
+                                for (const auto& vertex : sub_container.get()) {
+                                        if (processed_vertices.contains(vertex)) {
+                                                continue;
+                                        }
+                                        processed_vertices.insert(vertex);
+                                        int32_t num_external_neighbors = is_boundary(m_G, vertex);
+                                        if (num_external_neighbors > 0) {
+                                                // we do not care if num_external_neighbors
+                                                // correct or not. It must be only greater than 0
+                                                ht.insert(vertex, num_external_neighbors);
+                                        } else {
+                                                ht.erase(vertex);
+                                        }
+                                }
+                                sub_container.get().clear();
+                        }
+                        return (NodeID) processed_vertices.size();
+                };
+                NodeID size = parallel::submit_for_all(task, std::plus<NodeID>(), NodeID(0));
+
+                std::cout << "TOTAL SIZE = " << size << std::endl;
         }
 
         inline NodeID num_hash_table(NodeID vertex) const {
@@ -539,7 +533,214 @@ private:
         }
 };
 
+class fast_parallel_boundary_exp : public fast_parallel_boundary {
+private:
+        using concurrent_ht_type = growt::uaGrow<parallel::MurmurHash<uint64_t>>;
+        using concurrent_ht_handle_type = typename concurrent_ht_type::Handle;
+
+public:
+        fast_parallel_boundary_exp(graph_access& G, const PartitionConfig& config)
+                :       fast_parallel_boundary(G, config)
+                ,       m_boundary(std::min<size_t>(G.number_of_edges(), 1000000))
+        {
+                m_ht_handles.reserve(m_config.num_threads);
+                for (size_t thread_id = 0; thread_id < m_config.num_threads; ++thread_id) {
+                        m_ht_handles.emplace_back(m_boundary.getHandle());
+                }
+        }
+
+        // called only by single threaded executions
+        void move(NodeID vertex, PartitionID from, PartitionID to) {
+                ALWAYS_ASSERT(m_G.getPartitionIndex(vertex) == to);
+
+                auto& ht_handle = m_ht_handles[0].get();
+                int32_t external_neighbors = 0;
+                forall_out_edges(m_G, e, vertex) {
+                        NodeID target = m_G.getEdgeTarget(e);
+                        PartitionID target_block = m_G.getPartitionIndex(target);
+
+                        if (target_block == to) {
+                                auto it = ht_handle.find(target);
+                                ALWAYS_ASSERT(it != ht_handle.end());
+
+                                int32_t new_count = (*it).second;
+                                if (--new_count == 0) {
+                                        ht_handle.erase(target);
+                                } else {
+                                        ht_handle.update(target, [](size_t& lhs, const size_t& rhs) {
+                                                return lhs = rhs;
+                                        }, new_count);
+                                }
+                        }
+
+                        if (target_block == from) {
+                                ht_handle.insertOrUpdate(target, 1, [](size_t& lhs) {
+                                        return lhs += 1;
+                                });
+                        }
+
+                        if (target_block != to) {
+                                ++external_neighbors;
+                        }
+                } endfor
+
+                if (external_neighbors == 0) {
+                        ht_handle.erase(vertex);
+                } else {
+                        ht_handle.insertOrUpdate(vertex, external_neighbors, [](size_t& lhs, const size_t& rhs) {
+                                return lhs = rhs;
+                        }, external_neighbors);
+                }
+        }
+
+        void construct_boundary() {
+                if (parallel::g_thread_pool.NumThreads() == 0) {
+                        distribute_boundary_vertices(m_G, [this](uint32_t vertex, uint32_t) {
+                                return external_neighbors(vertex);
+                        });
+                } else {
+                        if (m_config.use_numa_aware_graph && parallel::graph_is_large(m_G, m_config)) {
+                                parallel::numa_aware_graph na_graph(m_G, m_config.num_threads, m_config.threads_per_socket);
+                                na_graph.construct();
+                                distribute_boundary_vertices(na_graph.get_handle(0), [this, &na_graph](uint32_t vertex, uint32_t thread_id) {
+                                        return is_boundary(na_graph.get_handle(thread_id), vertex);
+                                });
+                        } else {
+                                distribute_boundary_vertices(m_G, [this](uint32_t vertex, uint32_t) {
+                                        return is_boundary(m_G, vertex);
+                                });
+                        }
+                }
+                std::cout << "Boundary size\t" << m_ht_handles[0].get().element_count_approx() << std::endl;
+        }
+
+        const concurrent_ht_handle_type& operator[] (uint32_t thread_id) const {
+                return m_ht_handles[thread_id].get();
+        }
+
+        concurrent_ht_handle_type& operator[] (uint32_t thread_id) {
+                return m_ht_handles[thread_id].get();
+        }
+
+        void check_boundary() {
+                std::vector<NodeID> this_boundary;
+
+                auto& ht_handle = m_ht_handles[0].get();
+                this_boundary.reserve(ht_handle.element_count_approx());
+
+                for (auto it = ht_handle.begin(); it != ht_handle.end(); ++it) {
+                        this_boundary.push_back((*it).first);
+                }
+                size_t size = this_boundary.size();
+
+                std::sort(this_boundary.begin(), this_boundary.end());
+
+                std::vector<NodeID> expected_boundary;
+                expected_boundary.reserve(size);
+                std::cout << "Boundary diff: " << std::endl;
+                forall_nodes(m_G, n) {
+                        PartitionID cur_block = m_G.getPartitionIndex(n);
+                        bool boundary = false;
+                        forall_out_edges(m_G, e, n) {
+                                NodeID target = m_G.getEdgeTarget(e);
+                                PartitionID target_block = m_G.getPartitionIndex(target);
+
+                                if (cur_block != target_block) {
+                                        boundary = true;
+                                        break;
+                                }
+                        } endfor
+
+                        if (boundary) {
+                                expected_boundary.push_back(n);
+//                                if (!m_boundaries_per_thread[num_hash_table(n)].get().contains(n)) {
+//                                     std::cout << "! " << n << " ";
+//                                }
+                        } else {
+//                                if (m_boundaries_per_thread[num_hash_table(n)].get().contains(n)) {
+//                                        std::cout << n << " ";
+//                                }
+                        }
+                } endfor
+                std::cout << std::endl;
+                std::cout << "check size = " << size << std::endl;
+                if (expected_boundary == this_boundary) {
+                        std::cout << "expected size = " << expected_boundary.size() << std::endl;
+                        std::cout << "this size = " << this_boundary.size() << std::endl;
+                        ALWAYS_ASSERT(expected_boundary == this_boundary);
+                }
+        }
+
+        ~fast_parallel_boundary_exp() {
+        }
+
+        //
+        void begin_movements() {
+                if (m_containers.size() != m_config.num_threads) {
+                        m_containers.resize(m_config.num_threads, Cvector<thread_container<NodeID>>(m_second_level_size));
+                }
+        }
+
+        void add_vertex_to_check(NodeID vertex) {
+                uint32_t thread_id = num_hash_table(vertex);
+                uint32_t bucket_id = (uint32_t) m_secondary_hash(vertex) % m_second_level_size;
+                m_containers[thread_id][bucket_id].get().concurrent_emplace_back(vertex);
+        }
+
+        void finish_movements() {
+                finish_movements_impl([&](uint32_t thread_id) -> concurrent_ht_handle_type& {
+                        return m_ht_handles[thread_id].get();
+                });
+        }
+private:
+        concurrent_ht_type m_boundary;
+        Cvector<concurrent_ht_handle_type> m_ht_handles;
+
+        template <typename TGraph, typename TFunctor>
+        void distribute_boundary_vertices(TGraph& graph, TFunctor&& bnd_func) {
+                CLOCK_START;
+                NodeID block_size = std::max<NodeID>(sqrt(graph.number_of_nodes()), 1000);
+
+                std::atomic<NodeID> offset(0);
+                auto task_distribute = [this, &offset, block_size, &bnd_func, &graph] (uint32_t thread_id) {
+                        std::vector<block_data_type> blocks_info(m_G.get_partition_count());
+                        NodeID begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                        auto& ht_handle = m_ht_handles[thread_id].get();
+                        while (begin < graph.number_of_nodes()) {
+                                NodeID end = std::min(begin + block_size, graph.number_of_nodes());
+
+                                for (NodeID node = begin; node != end; ++node) {
+                                        PartitionID cur_part = graph.getPartitionIndex(node);
+                                        int32_t num_external_neighbors = bnd_func(node, thread_id);
+
+                                        ++blocks_info[cur_part].block_size;
+                                        blocks_info[cur_part].block_weight += graph.getNodeWeight(node);
+                                        if (num_external_neighbors > 0) {
+                                                ht_handle.insert(node, num_external_neighbors);
+                                        }
+                                }
+                                begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                        }
+                        return blocks_info;
+                };
+
+                m_blocks_info.clear();
+                submit_for_all(task_distribute, [](auto& result, auto&& new_value) {
+                        if (result.empty()) {
+                                result = std::move(new_value);
+                        } else {
+                                for (size_t i = 0; i < result.size(); ++i) {
+                                        result[i].block_size += new_value[i].block_size;
+                                        result[i].block_weight += new_value[i].block_weight;
+                                }
+                        }
+                }, m_blocks_info);
+                CLOCK_END("Distribute boundary vertices");
+        }
+};
+
 //using boundary_type = parallel::fast_sequential_boundary;
-using boundary_type = parallel::fast_parallel_boundary;
+//using boundary_type = parallel::fast_parallel_boundary;
+using boundary_type = parallel::fast_parallel_boundary_exp;
 
 }

@@ -532,6 +532,8 @@ private:
         void setup_start_nodes_all(graph_access& G, PartitionConfig& config, parallel::fast_sequential_boundary& boundary);
 
         void setup_start_nodes_all(graph_access& G, PartitionConfig& config, parallel::fast_parallel_boundary& boundary);
+
+        void setup_start_nodes_all(graph_access& G, PartitionConfig& config, parallel::fast_parallel_boundary_exp& boundary);
 };
 
 }

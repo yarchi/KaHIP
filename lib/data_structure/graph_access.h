@@ -261,6 +261,7 @@ inline void graph_access::start_construction(NodeID nodes, EdgeID edges) {
 
 inline void graph_access::start_construction(std::vector<Node>& nodes, std::vector<Edge>& edges) {
         graphref->start_construction(nodes, edges);
+        graphref->m_building_graph = false;
 }
 
 inline NodeID graph_access::new_node() {

@@ -29,8 +29,6 @@
 #include "matching/matching.h"
 #include "partition_config.h"
 
-#include "data-structures/definitions.h"
-
 typedef NodeID Regions;
 
 class contraction {
@@ -90,7 +88,6 @@ public:
 
 private:
         // visits an edge in G (and auxillary graph) and updates/creates and edge in coarser graph
-
         struct edge_type {
                 NodeID source;
                 NodeID target;
@@ -128,11 +125,12 @@ private:
                 return std::make_pair(first, second);
         }
 
-        void parallel_fast_contract_clustering_multiple_threads(const PartitionConfig& partition_config,
-                                                                graph_access& G,
-                                                                graph_access& coarser,
-                                                                const CoarseMapping& coarse_mapping,
-                                                                const NodeID& no_of_coarse_vertices) const;
+        void parallel_fast_contract_clustering_multiple_threads_balls_and_bins_ht(
+                const PartitionConfig& partition_config,
+                graph_access& G,
+                graph_access& coarser,
+                const CoarseMapping& coarse_mapping,
+                const NodeID& no_of_coarse_vertices) const;
 };
 
 inline void contraction::visit_edge(graph_access& G,

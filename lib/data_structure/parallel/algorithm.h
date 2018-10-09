@@ -280,18 +280,14 @@ static void parallel_for_each(Iterator begin, Iterator end, Functor functor) {
         size_t block_size = (size_t) sqrt(size);
         block_size = std::max(block_size, size_t(1000));
         auto task = [&] () {
-                while (true) {
-                        size_t cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
-                        size_t cur_end = cur_begin + block_size;
-                        cur_end = cur_end <= size ? cur_end : size;
-
-                        if (cur_begin >= size) {
-                                break;
-                        }
+                size_t cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                while (cur_begin < size) {
+                        size_t cur_end = std::min(cur_begin + block_size, size);
 
                         for (Iterator elem = begin + cur_begin; elem != begin + cur_end; ++elem) {
                                 functor(*elem);
                         }
+                        cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
                 }
         };
 
@@ -317,18 +313,14 @@ static void parallel_for_index(Integer_type begin, Integer_type end, Functor fun
         size_t block_size = (size_t) sqrt(size);
         block_size = std::max(block_size, size_t(1000));
         auto task = [&] () {
-                while (true) {
-                        size_t cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
-                        size_t cur_end = cur_begin + block_size;
-                        cur_end = cur_end <= size ? cur_end : size;
-
-                        if (cur_begin >= size) {
-                                break;
-                        }
+                size_t cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                while (cur_begin < size) {
+                        size_t cur_end = std::min(cur_begin + block_size, size);
 
                         for (Integer_type elem = cur_begin; elem != cur_end; ++elem) {
                                 functor(elem);
                         }
+                        cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
                 }
         };
 

@@ -427,6 +427,7 @@ struct PartitionConfig
         uint32_t threads_per_socket = 8;
         uint32_t l2_cache_size = 256 * 1024;
         uint32_t l3_cache_size = 20480 * 1024;
+        bool balls_and_bins_ht = false;
         //bool accept_small_coarser_graphs = false;
 };
 

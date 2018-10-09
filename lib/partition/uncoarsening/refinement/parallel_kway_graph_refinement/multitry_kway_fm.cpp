@@ -4,9 +4,6 @@
 #include "uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_core.h"
 #include "uncoarsening/refinement/parallel_kway_graph_refinement/multitry_kway_fm.h"
 
-#include <iomanip>
-#include <sstream>
-
 namespace parallel {
 
 std::vector<thread_data_factory::statistics_type> thread_data_factory::m_statistics;
@@ -234,7 +231,6 @@ int multitry_kway_fm::start_more_locallized_search(graph_access& G, PartitionCon
 
                 for (uint32_t id = 1; id < num_threads; ++id) {
                         futures.push_back(parallel::g_thread_pool.Submit(id - 1, task, id));
-                        //futures.push_back(parallel::g_thread_pool.Submit(task, id));
                 }
 
                 bool is_more_that_5percent_moved = task(0);
@@ -316,22 +312,10 @@ void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& c
                 }
         }
 
-        auto task = [this](uint32_t thread_id) {
+        parallel::submit_for_all([this](uint32_t thread_id) {
                 auto& td = m_factory.get_thread_data(thread_id);
                 auto& thread_container = m_factory.queue[thread_id];
                 td.rnd.shuffle(thread_container.begin(), thread_container.end());
-        };
-
-        std::vector<std::future<void>> futures;
-        futures.reserve(parallel::g_thread_pool.NumThreads());
-
-        for (uint32_t id = 0; id < parallel::g_thread_pool.NumThreads(); ++id) {
-                futures.push_back(parallel::g_thread_pool.Submit(id, task, id + 1));
-        }
-
-        task(0);
-        std::for_each(futures.begin(), futures.end(), [](auto& future) {
-                future.get();
         });
 
         shuffle_task_queue();
@@ -340,7 +324,7 @@ void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& c
 void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& config, parallel::fast_parallel_boundary& boundary) {
         ALWAYS_ASSERT(config.num_threads > 0);
 
-        auto task = [this, &boundary](uint32_t thread_id) {
+        parallel::submit_for_all([this, &boundary](uint32_t thread_id) {
 
                 auto& thread_container = m_factory.queue[thread_id];
                 for (const auto& elem : boundary[thread_id]) {
@@ -349,18 +333,34 @@ void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& c
 
                 auto& td = m_factory.get_thread_data(thread_id);
                 td.rnd.shuffle(thread_container.begin(), thread_container.end());
-        };
+        });
 
-        std::vector<std::future<void>> futures;
-        futures.reserve(parallel::g_thread_pool.NumThreads());
+        shuffle_task_queue();
+}
 
-        for (uint32_t id = 0; id < parallel::g_thread_pool.NumThreads(); ++id) {
-                futures.push_back(parallel::g_thread_pool.Submit(id, task, id + 1));
-        }
+void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& config, parallel::fast_parallel_boundary_exp& boundary) {
+        ALWAYS_ASSERT(config.num_threads > 0);
 
-        task(0);
-        std::for_each(futures.begin(), futures.end(), [](auto& future) {
-                future.get();
+        std::atomic<size_t> offset(0);
+        parallel::submit_for_all([this, &boundary, &offset](uint32_t thread_id) {
+                auto& thread_container = m_factory.queue[thread_id];
+                auto& ht_hadle = boundary[thread_id];
+                size_t size = ht_hadle.capacity();
+                const size_t block_size = std::min<size_t>(sqrt(size), 1000);
+                size_t begin = offset.fetch_add(block_size);
+
+                while (begin < size)
+                {
+                        auto it = ht_hadle.range(begin, begin + block_size);
+
+                        for (; it != ht_hadle.range_end(); ++it) {
+                                thread_container.push_back((*it).first);
+                        }
+                        begin = offset.fetch_add(block_size);
+                }
+
+                auto& td = m_factory.get_thread_data(thread_id);
+                td.rnd.shuffle(thread_container.begin(), thread_container.end());
         });
 
         shuffle_task_queue();

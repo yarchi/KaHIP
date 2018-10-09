@@ -430,16 +430,16 @@ static typename std::result_of<TFunctorResult(TArg, TArg)>::type submit_for_all(
 };
 
 template<typename TFunctor, typename TFunctorResult, typename TArg>
-static void submit_for_all(TFunctor&& functor, TFunctorResult&& functor_result, TArg& init_value) {
+static void submit_for_all(TFunctor&& functor, TFunctorResult&& functor_result, TArg& result) {
         std::vector<std::future<TArg>> futures;
         futures.reserve(g_thread_pool.NumThreads());
         for (size_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
                 futures.push_back(g_thread_pool.Submit(i, functor, i + 1));
         }
-        functor_result(init_value, functor(0));
+        functor_result(result, functor(0));
 
         std::for_each(futures.begin(), futures.end(), [&](auto& future) {
-                functor_result(init_value, future.get());
+                functor_result(result, future.get());
         });
 };
 

@@ -192,6 +192,7 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *threads_per_socket                   = arg_int0(NULL, "threads_per_socket", NULL, "Sets the maximum number of threads per socket (Default: 8)");
         struct arg_int *l2_cache_size                        = arg_int0(NULL, "l2_cache_size", NULL, "Size of l2 cache in bytes (Default: 256 * 1024 bytes)");
         struct arg_int *l3_cache_size                        = arg_int0(NULL, "l3_cache_size", NULL, "Size of l3 cache in bytes (Default: 20480 * 1024 bytes)");
+        struct arg_lit *balls_and_bins_ht                    = arg_lit0(NULL, "balls_and_bins_ht", "Use bins and ball for parallel for on hash tables. (Default: false)");
         struct arg_end *end                                  = arg_end(100);
 
         // Define argtable.
@@ -266,6 +267,7 @@ int parse_parameters(int argn, char **argv,
                 l2_cache_size,
                 l3_cache_size,
                 matching_type,
+                balls_and_bins_ht,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -1218,6 +1220,11 @@ int parse_parameters(int argn, char **argv,
         if (l3_cache_size->count > 0) {
                 partition_config.l3_cache_size = l3_cache_size->ival[0];
         }
+
+        if (balls_and_bins_ht->count > 0) {
+                partition_config.balls_and_bins_ht = true;
+        }
+
 
         return 0;
 }

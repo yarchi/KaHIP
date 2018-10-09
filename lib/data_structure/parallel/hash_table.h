@@ -798,7 +798,7 @@ private:
 //using hash_set = HashSet<key_type, xxhash<key_type>, true>;
 
 //template <typename key_type, typename value_type>
-//using hash_map = HashMap<key_type, value_type, MurmurHash<key_type>, true, false>;
+//using hash_map = HashMap<key_type, value_type, MurmurHash<key_type>, true>;
 
 template <typename key_type, typename value_type>
 using hash_map = HashMap<key_type, value_type, TabularHash<key_type, 5, 2, 10, true>, true>;
