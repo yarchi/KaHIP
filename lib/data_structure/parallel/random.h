@@ -1,7 +1,7 @@
 #pragma once
 
 #include <random>
-
+#include <iostream>
 namespace parallel {
 class random {
 public:
@@ -15,9 +15,13 @@ public:
         }
 
         // returns random number in [a, b]
-        template <typename T = int>
+        template <typename T = uint32_t>
         inline T random_number(T a = std::numeric_limits<T>::min(), T b = std::numeric_limits<T>::max()) {
-                std::uniform_int_distribution<T> rnd(a, b);
+
+                using dist_type = typename std::conditional<std::is_integral<T>::value,
+                                                            std::uniform_int_distribution<T>,
+                                                            std::uniform_real_distribution<T>>::type;
+                dist_type rnd(a, b);
                 return rnd(m_mt);
         }
 

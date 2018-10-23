@@ -545,13 +545,12 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue(g
                         //futures.push_back(parallel::g_thread_pool.Submit(process, i + 1));
                 }
 
-                CLOCK_START;
+                //CLOCK_START;
                 num_changed_label += process(0);
                 std::for_each(futures.begin(), futures.end(), [&](auto& future){
                         num_changed_label += future.get();
                 });
-                CLOCK_END(std::string("Iteration ") + std::to_string(j) + " time");
-                //std::cout << "Queue size\t" << total << std::endl;
+                //CLOCK_END(std::string("Iteration ") + std::to_string(j) + " time");
                 std::swap(queue, next_queue);
                 std::swap(queue_contains, next_queue_contains);
                 futures.clear();
@@ -687,6 +686,9 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
         futures.reserve(parallel::g_thread_pool.NumThreads());
         NodeWeight num_changed_label = 0;
 
+        ALWAYS_ASSERT(!config.graph_allready_partitioned);
+        ALWAYS_ASSERT(!config.combine);
+
         CLOCK_START_N;
         std::cout << "Num blocks\t" << queue->unsafe_size() << std::endl;
         for (int j = 0; j < config.label_iterations; j++) {
@@ -740,8 +742,6 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
 
                                                 if ((cur_value > max_value || (cur_value == max_value && rnd.bit())) &&
                                                     (cur_cluster_size + node_weight < block_upperbound || cur_block == my_block)) {
-                                                        ALWAYS_ASSERT(!config.graph_allready_partitioned);
-                                                        ALWAYS_ASSERT(!config.combine);
                                                         max_value = cur_value;
                                                         max_block = cur_block;
                                                         max_cluster_size = cur_cluster_size;
@@ -805,13 +805,12 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                         //futures.push_back(parallel::g_thread_pool.Submit(process, i + 1));
                 }
 
-                CLOCK_START;
+                //CLOCK_START;
                 num_changed_label += process(0);
                 std::for_each(futures.begin(), futures.end(), [&](auto& future){
                         num_changed_label += future.get();
                 });
-                CLOCK_END(std::string("Iteration ") + std::to_string(j) + " time");
-                //std::cout << "Queue size\t" << total << std::endl;
+                //CLOCK_END(std::string("Iteration ") + std::to_string(j) + " time");
                 std::swap(queue, next_queue);
                 std::swap(queue_contains, next_queue_contains);
                 futures.clear();

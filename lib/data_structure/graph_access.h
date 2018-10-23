@@ -184,6 +184,7 @@ class graph_access {
                 void start_construction(std::vector<Node>& nodes, std::vector<Edge>& edges);
                 NodeID new_node();
                 EdgeID new_edge(NodeID source, NodeID target);
+                void remove_edge(EdgeID e, EdgeID first_invalid_edge);
                 void finish_construction();
 
                 /* ============================================================= */
@@ -270,6 +271,13 @@ inline NodeID graph_access::new_node() {
 
 inline EdgeID graph_access::new_edge(NodeID source, NodeID target) {
         return graphref->new_edge(source, target);
+}
+
+inline void graph_access::remove_edge(EdgeID e, EdgeID end) {
+        if (end > e) {
+                std::swap(graphref->m_edges[e], graphref->m_edges[end - 1]);
+                std::swap(graphref->m_coarsening_edge_props[e], graphref->m_coarsening_edge_props[end - 1]);
+        }
 }
 
 inline void graph_access::finish_construction() {

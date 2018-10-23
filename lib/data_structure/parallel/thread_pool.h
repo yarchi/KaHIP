@@ -1,6 +1,7 @@
 #pragma once
 
 #include "data_structure/parallel/cache.h"
+#include "data_structure/parallel/metaprogramming_utils.h"
 #include "data_structure/parallel/spin_lock.h"
 
 #include <algorithm>
@@ -399,13 +400,23 @@ public:
 extern TThreadPoolWithTaskQueuePerThread g_thread_pool;
 
 template<typename TFunctor>
-static void submit_for_all(TFunctor&& functor) {
+static void submit_for_all(TFunctor functor) {
         std::vector<std::future<void>> futures;
         futures.reserve(g_thread_pool.NumThreads());
-        for (size_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
-                futures.push_back(g_thread_pool.Submit(i, functor, i + 1));
+        for (uint32_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
+                if constexpr (function_traits<TFunctor>::arity == 0) {
+                        futures.push_back(g_thread_pool.Submit(i, functor));
+                }
+                if constexpr (function_traits<TFunctor>::arity == 1) {
+                        futures.push_back(g_thread_pool.Submit(i, functor, i + 1));
+                }
         }
-        functor(0);
+        if constexpr (function_traits<TFunctor>::arity == 0) {
+                functor();
+        }
+        if constexpr (function_traits<TFunctor>::arity == 1) {
+                functor(uint32_t(0));
+        }
 
         std::for_each(futures.begin(), futures.end(), [&](auto& future) {
                 future.get();
@@ -413,15 +424,30 @@ static void submit_for_all(TFunctor&& functor) {
 };
 
 template<typename TFunctor, typename TFunctorResult, typename TArg>
-static typename std::result_of<TFunctorResult(TArg, TArg)>::type submit_for_all(TFunctor&& functor,
-                                                                               TFunctorResult&& functor_result,
+static typename std::result_of<TFunctorResult(TArg, TArg)>::type submit_for_all(TFunctor functor,
+                                                                               TFunctorResult functor_result,
                                                                                const TArg& init_value) {
         std::vector<std::future<TArg>> futures;
         futures.reserve(g_thread_pool.NumThreads());
-        for (size_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
-                futures.push_back(g_thread_pool.Submit(i, functor, i + 1));
+        for (uint32_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
+                if constexpr (function_traits<TFunctor>::arity == 0) {
+                        futures.push_back(g_thread_pool.Submit(i, functor));
+                }
+                if constexpr (function_traits<TFunctor>::arity == 1) {
+                        futures.push_back(g_thread_pool.Submit(i, functor, i + 1));
+                }
         }
-        TArg res = functor_result(init_value, functor(0));
+
+        using  res_type = typename std::result_of<TFunctorResult(TArg, TArg)>::type;
+
+        res_type res = res_type();
+        if constexpr (function_traits<TFunctor>::arity == 0) {
+                res = functor_result(init_value, functor());
+        }
+
+        if constexpr (function_traits<TFunctor>::arity == 1) {
+                res = functor_result(init_value, functor(uint32_t(0)));
+        }
 
         std::for_each(futures.begin(), futures.end(), [&](auto& future) {
                 res = functor_result(res, future.get());
@@ -430,13 +456,24 @@ static typename std::result_of<TFunctorResult(TArg, TArg)>::type submit_for_all(
 };
 
 template<typename TFunctor, typename TFunctorResult, typename TArg>
-static void submit_for_all(TFunctor&& functor, TFunctorResult&& functor_result, TArg& result) {
+static void submit_for_all(TFunctor functor, TFunctorResult functor_result, TArg& result) {
         std::vector<std::future<TArg>> futures;
         futures.reserve(g_thread_pool.NumThreads());
-        for (size_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
-                futures.push_back(g_thread_pool.Submit(i, functor, i + 1));
+        for (uint32_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
+                if constexpr (function_traits<TFunctor>::arity == 0) {
+                        futures.push_back(g_thread_pool.Submit(i, functor));
+                }
+                if constexpr (function_traits<TFunctor>::arity == 1) {
+                        futures.push_back(g_thread_pool.Submit(i, functor, i + 1));
+                }
         }
-        functor_result(result, functor(0));
+
+        if constexpr (function_traits<TFunctor>::arity == 0) {
+                functor_result(result, functor());
+        }
+        if constexpr (function_traits<TFunctor>::arity == 1) {
+                functor_result(result, functor(uint32_t(0)));
+        }
 
         std::for_each(futures.begin(), futures.end(), [&](auto& future) {
                 functor_result(result, future.get());

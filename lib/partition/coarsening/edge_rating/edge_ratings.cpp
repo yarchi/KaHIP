@@ -22,6 +22,9 @@
 
 #include <math.h>
 
+#include "data_structure/parallel/algorithm.h"
+#include "data_structure/parallel/hash_function.h"
+
 #include "edge_ratings.h"
 #include "partition_config.h"       
 #include "random_functions.h"
@@ -184,7 +187,12 @@ void edge_ratings::rate_expansion_star_2_algdist(graph_access & G) {
 
 
 void edge_ratings::rate_expansion_star_2(graph_access & G) {
-        forall_nodes(G,n) {
+        if (partition_config.matching_type == MATCHING_PARALLEL_LOCAL_MAX) {
+                parallel_rate_expansion_star_2(G);
+                return;
+        }
+
+        forall_nodes(G, n) {
                 NodeWeight sourceWeight = G.getNodeWeight(n);
                 forall_out_edges(G, e, n) {
                         NodeID targetNode = G.getEdgeTarget(e);
@@ -195,6 +203,26 @@ void edge_ratings::rate_expansion_star_2(graph_access & G) {
                         G.setEdgeRating(e, rating);
                 } endfor
         } endfor
+}
+
+void edge_ratings::parallel_rate_expansion_star_2(graph_access & G) {
+        const parallel::MurmurHash<uint32_t> hash(partition_config.seed);
+        using hash_type = parallel::MurmurHash<uint32_t>::hash_type;
+
+        parallel::parallel_for_index(NodeID(0), G.number_of_nodes(), [&G, &hash](NodeID node, uint32_t thread_id) {
+                NodeWeight sourceWeight = G.getNodeWeight(node);
+                forall_out_edges(G, e, node) {
+                        NodeID target = G.getEdgeTarget(e);
+                        NodeWeight targetWeight = G.getNodeWeight(target);
+                        EdgeWeight edgeWeight = G.getEdgeWeight(e);
+
+                        EdgeRatingType rating = 1.0 * edgeWeight * edgeWeight / (targetWeight * sourceWeight);
+
+                        double delta = (hash(node ^ target) + 0.0) / std::numeric_limits<hash_type>::max() * 0.001 * rating;
+                        rating += delta;
+                        G.setEdgeRating(e, rating);
+                } endfor
+        });
 }
 
 void edge_ratings::rate_inner_outer(graph_access & G) {

@@ -117,7 +117,7 @@ int parse_parameters(int argn, char **argv,
 #ifdef MODE_KAFFPAs
         struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: eco) [strong|eco|fast|fastsocial|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel]." );
 #else
-        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|fastsocialmultitry|fastsocialmultitry_parallel|fastsocialmultitry_parallel_fast|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: strong) [strong|eco|fast|fastsocial|fastsocialmultitry|fastsocialmultitry_parallel|fastsocialmultitry_parallel_fast|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel]." );
+        struct arg_rex *preconfiguration                     = arg_rex0(NULL, "preconfiguration", "^(strong|eco|fast|fastsocial|fastsocialmultitry|fastsocialmultitry_parallel|fastsocialmultitry_parallel_fast|ecosocialmultitry_parallel|ecosocialmultitry_parallel_fast|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel)$", "VARIANT", REG_EXTENDED, "Use a preconfiguration. (Default: strong) [strong|eco|fast|fastsocial|fastsocialmultitry|fastsocialmultitry_parallel|fastsocialmultitry_parallel_fast|ecosocialmultitry_parallel|ecosocialmultitry_parallel_fast|ecosocial|strongsocial|strongsocial_parallel|fastsocial_parallel|fastmultitry|fastmultitry_parallel]." );
 #endif
 
         struct arg_dbl *time_limit                           = arg_dbl0(NULL, "time_limit", NULL, "Time limit in s. Default 0s .");
@@ -193,6 +193,7 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *l2_cache_size                        = arg_int0(NULL, "l2_cache_size", NULL, "Size of l2 cache in bytes (Default: 256 * 1024 bytes)");
         struct arg_int *l3_cache_size                        = arg_int0(NULL, "l3_cache_size", NULL, "Size of l3 cache in bytes (Default: 20480 * 1024 bytes)");
         struct arg_lit *balls_and_bins_ht                    = arg_lit0(NULL, "balls_and_bins_ht", "Use bins and ball for parallel for on hash tables. (Default: false)");
+        struct arg_lit *remove_edges_in_matching             = arg_lit0(NULL, "remove_edges_in_matching", "Remove edges in parallel local max or not. (Default: false)");
         struct arg_end *end                                  = arg_end(100);
 
         // Define argtable.
@@ -268,6 +269,7 @@ int parse_parameters(int argn, char **argv,
                 l3_cache_size,
                 matching_type,
                 balls_and_bins_ht,
+                remove_edges_in_matching,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -390,7 +392,7 @@ int parse_parameters(int argn, char **argv,
                 }
 #else
                 partition_config.configuration = preconfiguration->sval[0];
-                if(strcmp("strong", preconfiguration->sval[0]) == 0) {
+                if (strcmp("strong", preconfiguration->sval[0]) == 0) {
                         cfg.strong(partition_config);
                 } else if (strcmp("eco", preconfiguration->sval[0]) == 0) {
                         cfg.eco(partition_config);
@@ -416,6 +418,10 @@ int parse_parameters(int argn, char **argv,
                         cfg.fastmultitry(partition_config);
                 } else if (strcmp("fastmultitry_parallel", preconfiguration->sval[0]) == 0) {
                         cfg.fastmultitry_parallel(partition_config);
+                } else if (strcmp("ecosocialmultitry_parallel", preconfiguration->sval[0]) == 0) {
+                        cfg.ecosocialmultitry_parallel(partition_config);
+                } else if (strcmp("ecosocialmultitry_parallel_fast", preconfiguration->sval[0]) == 0) {
+                        cfg.ecosocialmultitry_parallel_fast(partition_config);
                 } else {
                         fprintf(stderr, "Invalid preconfiguration variant: \"%s\"\n", preconfiguration->sval[0]);
                         exit(0);
@@ -1225,6 +1231,9 @@ int parse_parameters(int argn, char **argv,
                 partition_config.balls_and_bins_ht = true;
         }
 
+        if (remove_edges_in_matching->count > 0) {
+                partition_config.remove_edges_in_matching = true;
+        }
 
         return 0;
 }

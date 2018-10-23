@@ -33,8 +33,9 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
                 std::cout << "Iter\t" << i << std::endl;
                 CLOCK_START_N;
                 EdgeWeight improvement = start_more_locallized_search(G, config, init_neighbors);
-
                 m_factory.time_local_search += CLOCK_END_TIME;
+
+                std::cout << "Gain improvement\t" << improvement << std::endl;
                 if (improvement == 0) {
                         break;
                 }
@@ -45,7 +46,7 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
 
                 overall_improvement += improvement;
         }
-
+        std::cout << "Total gain improvement\t" << overall_improvement << std::endl;
         config.kway_adaptive_limits_alpha = tmp_alpha;
         config.kway_stop_rule = tmp_stop;
         ASSERT_TRUE(overall_improvement >= 0);
@@ -255,7 +256,6 @@ int multitry_kway_fm::start_more_locallized_search(graph_access& G, PartitionCon
                                                                     reactivated_vertices);
 
                 ALWAYS_ASSERT(real_gain_improvement >= 0);
-                std::cout << "Gain improvement\t" << real_gain_improvement << std::endl;
                 total_gain_improvement += real_gain_improvement;
 
                 if (total_gain_improvement * (config.stop_mls_threshold / 100.0) > real_gain_improvement) {
@@ -324,25 +324,39 @@ void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& c
 void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& config, parallel::fast_parallel_boundary& boundary) {
         ALWAYS_ASSERT(config.num_threads > 0);
 
+        CLOCK_START;
         parallel::submit_for_all([this, &boundary](uint32_t thread_id) {
-
+                CLOCK_START;
                 auto& thread_container = m_factory.queue[thread_id];
-                for (const auto& elem : boundary[thread_id]) {
+                auto& ht = boundary[thread_id];
+                thread_container.reserve(ht.size());
+                for (const auto& elem : ht) {
                         thread_container.push_back(elem.first);
                 }
+                if (thread_id == 0) {
+                        CLOCK_END("Time copy from ht");
+                }
 
+                CLOCK_START_N;
                 auto& td = m_factory.get_thread_data(thread_id);
                 td.rnd.shuffle(thread_container.begin(), thread_container.end());
+                if (thread_id == 0) {
+                        CLOCK_END("Time shuffle");
+                }
         });
+        CLOCK_END("Copy and shuffle");
 
+        CLOCK_START_N;
         shuffle_task_queue();
+        CLOCK_END("Additional shuffle");
 }
 
 void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& config, parallel::fast_parallel_boundary_exp& boundary) {
         ALWAYS_ASSERT(config.num_threads > 0);
-
+        CLOCK_START;
         std::atomic<size_t> offset(0);
         parallel::submit_for_all([this, &boundary, &offset](uint32_t thread_id) {
+                CLOCK_START;
                 auto& thread_container = m_factory.queue[thread_id];
                 auto& ht_hadle = boundary[thread_id];
                 size_t size = ht_hadle.capacity();
@@ -358,12 +372,23 @@ void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& c
                         }
                         begin = offset.fetch_add(block_size);
                 }
+                if (thread_id == 0) {
+                        CLOCK_END("Time copy from ht");
+                }
+
+                CLOCK_START_N;
 
                 auto& td = m_factory.get_thread_data(thread_id);
                 td.rnd.shuffle(thread_container.begin(), thread_container.end());
+                if (thread_id == 0) {
+                        CLOCK_END("Time shuffle");
+                }
         });
+        CLOCK_END("Copy and shuffle");
 
+        CLOCK_START_N;
         shuffle_task_queue();
+        CLOCK_END("Additional shuffle");
 }
 
 void  multitry_kway_fm::shuffle_task_queue() {

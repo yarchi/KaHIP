@@ -490,11 +490,8 @@ protected:
                                 }
                                 sub_container.get().clear();
                         }
-                        return (NodeID) processed_vertices.size();
                 };
-                NodeID size = parallel::submit_for_all(task, std::plus<NodeID>(), NodeID(0));
-
-                std::cout << "TOTAL SIZE = " << size << std::endl;
+                parallel::submit_for_all(task);
         }
 
         inline NodeID num_hash_table(NodeID vertex) const {

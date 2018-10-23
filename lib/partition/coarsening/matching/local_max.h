@@ -1,5 +1,6 @@
 #pragma once
 
+#include <partition/uncoarsening/refinement/quotient_graph_refinement/2way_fm_refinement/vertex_moved_hashtable.h>
 #include "data_structure/parallel/algorithm.h"
 #include "data_structure/parallel/atomics.h"
 #include "data_structure/parallel/random.h"
@@ -18,7 +19,7 @@ public:
 
 private:
         static constexpr NodeID m_none = std::numeric_limits<NodeID>::max();
-        static constexpr uint32_t m_max_round = 10;
+        static constexpr uint32_t m_max_round = 20;
 
         using atomic_pair_type = std::pair<AtomicWrapper<NodeID>, AtomicWrapper<uint32_t>>;
         using block_type = std::vector<NodeID>;
@@ -28,15 +29,25 @@ private:
                                        graph_access& G,
                                        Matching& edge_matching,
                                        CoarseMapping& mapping,
-                                       NodeID& no_of_coarse_vertices,
-                                       NodePermutationMap& permutation);
+                                       NodeID& no_of_coarse_vertices);
+
+        void parallel_match_with_queue_exp(const PartitionConfig& partition_config,
+                                       graph_access& G,
+                                       Matching& edge_matching,
+                                       CoarseMapping& mapping,
+                                       NodeID& no_of_coarse_vertices);
+
+        void parallel_match_with_queue_exp_with_removal(const PartitionConfig& partition_config,
+                                                        graph_access& G,
+                                                        Matching& edge_matching,
+                                                        CoarseMapping& mapping,
+                                                        NodeID& no_of_coarse_vertices);
 
         void parallel_match(const PartitionConfig& partition_config,
                             graph_access& G,
                             Matching& edge_matching,
                             CoarseMapping& mapping,
-                            NodeID& no_of_coarse_vertices,
-                            NodePermutationMap& permutation);
+                            NodeID& no_of_coarse_vertices);
 
         void sequential_match(const PartitionConfig& partition_config,
                               graph_access& G,
@@ -46,8 +57,7 @@ private:
                               NodePermutationMap& permutation);
 
         void remap_matching(const PartitionConfig& partition_config, graph_access& G,
-                            Matching& edge_matching, CoarseMapping& mapping, NodeID& no_of_coarse_vertices,
-                            NodePermutationMap& permutation);
+                            Matching& edge_matching, CoarseMapping& mapping, NodeID& no_of_coarse_vertices);
 
         NodeID find_max_neighbour_sequential(NodeID node, const uint32_t round, graph_access& G,
                                              const PartitionConfig& partition_config,
@@ -64,8 +74,8 @@ private:
 
         enum MatchingPhases {
                 NOT_STARTED = 0,
-                STARTED,
-                MATCHED
+                STARTED = 1,
+                MATCHED = 2
         };
 };
 }

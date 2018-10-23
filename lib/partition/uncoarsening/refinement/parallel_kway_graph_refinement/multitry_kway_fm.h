@@ -146,9 +146,9 @@ public:
                 uint32_t total_stop_faction_of_nodes_moved = 0;
 
                 for (uint32_t id = 0; id < m_config.num_threads; ++id) {
-                        std::cout << "proc_id\t" << id << " | "
-                                  << "time\t" << m_thread_data[id].get().total_thread_time << " s | "
-                                  << "num part accesses\t" << m_thread_data[id].get().num_part_accesses
+//                        std::cout << "proc_id\t" << id << " | "
+//                                  << "time\t" << m_thread_data[id].get().total_thread_time << " s | "
+//                                  << "num part accesses\t" << m_thread_data[id].get().num_part_accesses
 //                                  << "tried moves\t" << m_thread_data[id].get().tried_movements << " | "
 //                                  << "accepted moves\t" << m_thread_data[id].get().accepted_movements << " | "
 //                                  << "scanned neighbours\t" << m_thread_data[id].get().scaned_neighbours << " | "
@@ -165,7 +165,7 @@ public:
 //                                  << "stop stopping rule\t" << m_thread_data[id].get().stop_stopping_rule << " | "
 //                                  << "stop max number of swaps\t" << m_thread_data[id].get().stop_max_number_of_swaps << " | "
 //                                  << "stop faction of nodes moved\t" << m_thread_data[id].get().stop_faction_of_nodes_moved
-                                  << std::endl;
+//                                  << std::endl;
 
                         total_num_part_accesses += m_thread_data[id].get().num_part_accesses;
                         total_tried_movements += m_thread_data[id].get().tried_movements;
@@ -293,10 +293,10 @@ public:
                 std::cout << "Time compute gain\t" << stat.total_compute_gain_time << std::endl;
                 std::cout << "Number of partition accesses\t" << stat.total_num_part_accesses << std::endl;
 
-                for (auto& pr : stat.proc_stats) {
-                        std::cout << "proc_id\t" << pr.proc_id << " | "
-                                  << "time\t" << pr.total_thread_time << " s | "
-                                  << "num part accesses\t" << pr.num_part_accesses << " | "
+//                for (auto& pr : stat.proc_stats) {
+//                        std::cout << "proc_id\t" << pr.proc_id << " | "
+//                                  << "time\t" << pr.total_thread_time << " s | "
+//                                  << "num part accesses\t" << pr.num_part_accesses << " | "
 //                                  << "accepted moves\t" << pr.accepted_movements << " | "
 //                                  << "scanned neighbours\t" << pr.scaned_neighbours << " | "
 //                                  << "try moves time\t" << pr.total_thread_try_move_time << " s | "
@@ -308,8 +308,8 @@ public:
 //                                  << "stop stopping rule\t" << pr.stop_stopping_rule << " | "
 //                                  << "stop max number of swaps\t" << pr.stop_max_number_of_swaps << " | "
 //                                  << "stop faction of nodes moved\t" << pr.stop_faction_of_nodes_moved
-                                  << std::endl;
-                }
+//                                  << std::endl;
+//                }
 
                 std::cout << "Total tried moves\t" << stat.total_tried_movements << std::endl;
                 std::cout << "Total accepted moves\t" << stat.total_accepted_movements << std::endl;

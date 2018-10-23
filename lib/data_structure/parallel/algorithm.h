@@ -1,6 +1,7 @@
 #pragma once
 
 #include "data_structure/parallel/cache.h"
+#include "data_structure/parallel/metaprogramming_utils.h"
 #include "data_structure/parallel/thread_pool.h"
 
 #include <algorithm>
@@ -279,22 +280,27 @@ static void parallel_for_each(Iterator begin, Iterator end, Functor functor) {
         size_t size = end - begin;
         size_t block_size = (size_t) sqrt(size);
         block_size = std::max(block_size, size_t(1000));
-        auto task = [&] () {
+        auto task = [&] (uint32_t thread_id) {
                 size_t cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
                 while (cur_begin < size) {
                         size_t cur_end = std::min(cur_begin + block_size, size);
 
                         for (Iterator elem = begin + cur_begin; elem != begin + cur_end; ++elem) {
-                                functor(*elem);
+                                if constexpr (function_traits<Functor>::arity == 1) {
+                                        functor(*elem);
+                                }
+                                if constexpr (function_traits<Functor>::arity == 2) {
+                                        functor(*elem, thread_id);
+                                }
                         }
                         cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
                 }
         };
 
-        for (size_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
-                futures.push_back(g_thread_pool.Submit(i, task));
+        for (uint32_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
+                futures.push_back(g_thread_pool.Submit(i, task, i + 1));
         }
-        task();
+        task(uint32_t(0));
 
         std::for_each(futures.begin(), futures.end(), [&](auto& future) {
                 future.get();
@@ -312,22 +318,27 @@ static void parallel_for_index(Integer_type begin, Integer_type end, Functor fun
         size_t size = end - begin;
         size_t block_size = (size_t) sqrt(size);
         block_size = std::max(block_size, size_t(1000));
-        auto task = [&] () {
+        auto task = [&] (uint32_t thread_id) {
                 size_t cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
                 while (cur_begin < size) {
                         size_t cur_end = std::min(cur_begin + block_size, size);
 
                         for (Integer_type elem = cur_begin; elem != cur_end; ++elem) {
-                                functor(elem);
+                                if constexpr (function_traits<Functor>::arity == 1) {
+                                        functor(elem);
+                                }
+                                if constexpr (function_traits<Functor>::arity == 2) {
+                                        functor(elem, thread_id);
+                                }
                         }
                         cur_begin = offset.fetch_add(block_size, std::memory_order_relaxed);
                 }
         };
 
-        for (size_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
-                futures.push_back(g_thread_pool.Submit(i, task));
+        for (uint32_t i = 0; i < g_thread_pool.NumThreads(); ++i) {
+                futures.push_back(g_thread_pool.Submit(i, task, i + 1));
         }
-        task();
+        task(0);
 
         std::for_each(futures.begin(), futures.end(), [&](auto& future) {
                 future.get();

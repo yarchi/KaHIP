@@ -49,6 +49,9 @@ class configuration {
                 void fastsocialmultitry( PartitionConfig & config );
                 void fastsocialmultitry_parallel(PartitionConfig& config);
                 void fastsocialmultitry_parallel_fast(PartitionConfig& partition_config);
+                void ecosocialmultitry_parallel(PartitionConfig& config);
+                void ecosocialmultitry_parallel_fast(PartitionConfig& partition_config);
+
                 void ecosocial( PartitionConfig & config );
                 void strongsocial( PartitionConfig & config );
                 void strongsocial_parallel( PartitionConfig& config);
@@ -135,11 +138,11 @@ inline void configuration::fastmultitry( PartitionConfig & partition_config ) {
         partition_config.kway_all_boundary_nodes_refinement = true;
         //if(partition_config.k > 8) {
         partition_config.quotient_graph_refinement_disabled     = true;
-        partition_config.kway_fm_search_limit                   = 0; 
-        partition_config.kway_stop_rule                         = KWAY_SIMPLE_STOP_RULE; 
-        partition_config.corner_refinement_enabled              = true; 
+        partition_config.kway_fm_search_limit                   = 0;
+        partition_config.kway_stop_rule                         = KWAY_SIMPLE_STOP_RULE;
+        partition_config.corner_refinement_enabled              = true;
         //} else {
-                //partition_config.corner_refinement_enabled              = false; 
+                //partition_config.corner_refinement_enabled              = false;
         //}
         partition_config.permutation_quality                    = PERMUTATION_QUALITY_FAST;
         partition_config.permutation_during_refinement          = PERMUTATION_QUALITY_NONE;
@@ -620,10 +623,22 @@ inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partitio
         partition_config.stop_mls_threshold = 10;
 }
 
+inline void configuration::ecosocialmultitry_parallel(PartitionConfig& partition_config) {
+        fastsocialmultitry_parallel(partition_config);
+        partition_config.matching_type = MATCHING_PARALLEL_LOCAL_MAX;
+        partition_config.stop_rule = STOP_RULE_MULTIPLE_K_WITH_MATCHING;
+}
+
 inline void configuration::fastsocialmultitry_parallel_fast(PartitionConfig& partition_config) {
         fastsocialmultitry_parallel(partition_config);
         //partition_config.accept_small_coarser_graphs = true;
         partition_config.stop_rule = STOP_RULE_MULTIPLE_K_STRONG_CONTRACTION;
+}
+
+inline void configuration::ecosocialmultitry_parallel_fast(PartitionConfig& partition_config) {
+        fastsocialmultitry_parallel_fast(partition_config);
+        partition_config.matching_type = MATCHING_PARALLEL_LOCAL_MAX;
+        partition_config.stop_rule = STOP_RULE_MULTIPLE_K_STRONG_CONTRACTION_WITH_MATCHING;
 }
 
 inline void configuration::fastsocial( PartitionConfig & partition_config ) {

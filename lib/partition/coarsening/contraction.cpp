@@ -53,7 +53,7 @@ void contraction::contract(const PartitionConfig& partition_config,
                                             no_of_coarse_vertices, permutation);
                         return;
                 } else {
-                        //return fast_contract_clustering(partition_config, G, coarser, edge_matching, coarse_mapping, no_of_coarse_vertices, permutation);
+//                        //return fast_contract_clustering(partition_config, G, coarser, edge_matching, coarse_mapping, no_of_coarse_vertices, permutation);
                         parallel_fast_contract_clustering(partition_config, G, coarser, edge_matching, coarse_mapping,
                                                           no_of_coarse_vertices, permutation);
                         return;
@@ -183,8 +183,6 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
         }
 
         CLOCK_START;
-        const uint32_t num_threads = partition_config.num_threads;
-
         // build set of new edges
         double avg_degree = (G.number_of_edges() + 0.0) / G.number_of_nodes();
         size_t num_cut_edges = std::min<size_t>(avg_degree * no_of_coarse_vertices, G.number_of_edges() / 10);
@@ -212,22 +210,22 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
                                 my_block_infos[source_cluster] += G.getNodeWeight(node);
 
                                 forall_out_edges(G, e, node) {
-                                                        NodeID targetID = G.getEdgeTarget(e);
-                                                        PartitionID target_cluster = coarse_mapping[targetID];
-                                                        bool is_cut_edge = source_cluster != target_cluster;
+                                        NodeID targetID = G.getEdgeTarget(e);
+                                        PartitionID target_cluster = coarse_mapping[targetID];
+                                        bool is_cut_edge = source_cluster != target_cluster;
 
-                                                        if (is_cut_edge) {
-                                                                EdgeWeight edge_weight = G.getEdgeWeight(e);
-                                                                uint64_t key = get_uint64_from_pair_unsorted(source_cluster,
-                                                                                                             target_cluster);
+                                        if (is_cut_edge) {
+                                                EdgeWeight edge_weight = G.getEdgeWeight(e);
+                                                uint64_t key = get_uint64_from_pair_unsorted(source_cluster,
+                                                                                             target_cluster);
 
-                                                                handle.insertOrUpdate(key, edge_weight,
-                                                                                      [](size_t& lhs, const size_t& rhs) {
-                                                                                              return lhs += rhs;
-                                                                                      },
-                                                                                      edge_weight);
-                                                        }
-                                                } endfor
+                                                handle.insertOrUpdate(key, edge_weight,
+                                                                      [](size_t& lhs, const size_t& rhs) {
+                                                                              return lhs += rhs;
+                                                                      },
+                                                                      edge_weight);
+                                        }
+                                } endfor
                         }
                         begin = offset.fetch_add(block_size, std::memory_order_relaxed);
                 }
@@ -307,7 +305,7 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
                         auto it = handle.range(begin, begin + block_size);
                         for (; it != handle.range_end(); ++it) {
                                 std::pair<NodeID, NodeID> edge = get_pair_from_uint64((*it).first);
-                                auto edge_weight = (*it).second / 2;
+                                auto edge_weight = (*it).second;
                                 EdgeID offset = offsets[edge.first].fetch_add(1, std::memory_order_relaxed);
                                 edges[offset].target = edge.second;
                                 edges[offset].weight = edge_weight;
@@ -574,33 +572,26 @@ void contraction::parallel_contract_matching(const PartitionConfig& partition_co
                                 NodeID matched = edge_matching[node];
                                 EdgeID degree = 0;
                                 if (node < matched) {
-                                        forall_out_edges(G, e, node)
-                                                        {
-                                                                NodeID target = G.getEdgeTarget(e);
-                                                                if (target != matched) {
-                                                                        common_neighbors.insert(coarse_mapping[target]);
-                                                                }
-                                                        }
-                                        endfor
+                                        forall_out_edges(G, e, node) {
+                                                NodeID target = G.getEdgeTarget(e);
+                                                if (target != matched) {
+                                                        common_neighbors.insert(coarse_mapping[target]);
+                                                }
+                                        } endfor
 
-                                        forall_out_edges(G, e, matched)
-                                                        {
-                                                                NodeID target = G.getEdgeTarget(e);
-                                                                if (target != node) {
-                                                                        common_neighbors.insert(coarse_mapping[target]);
-                                                                }
-                                                        }
-                                        endfor
+                                        forall_out_edges(G, e, matched) {
+                                                NodeID target = G.getEdgeTarget(e);
+                                                if (target != node) {
+                                                        common_neighbors.insert(coarse_mapping[target]);
+                                                }
+                                        } endfor
 
-                                        coarse_node_weights[coarse_mapping[node]] =
-                                                G.getNodeWeight(node) + G.getNodeWeight(matched);
+                                        coarse_node_weights[coarse_mapping[node]] = G.getNodeWeight(node) + G.getNodeWeight(matched);
                                 } else if (node == matched) {
-                                        forall_out_edges(G, e, node)
-                                                        {
-                                                                NodeID target = G.getEdgeTarget(e);
-                                                                common_neighbors.insert(coarse_mapping[target]);
-                                                        }
-                                        endfor
+                                        forall_out_edges(G, e, node) {
+                                                NodeID target = G.getEdgeTarget(e);
+                                                common_neighbors.insert(coarse_mapping[target]);
+                                        } endfor
                                         coarse_node_weights[coarse_mapping[node]] = G.getNodeWeight(node);
                                 } else {
                                         continue;
@@ -681,33 +672,30 @@ void contraction::parallel_contract_matching(const PartitionConfig& partition_co
                         for (NodeID node = begin; node != end; ++node) {
                                 NodeID matched = edge_matching[node];
                                 if (node < matched) {
-                                        forall_out_edges(G, e, node){
-                                                                NodeID target = G.getEdgeTarget(e);
-                                                                if (target != matched) {
-                                                                        common_neighbors[coarse_mapping[target]] += G.getEdgeWeight(
-                                                                                e);
-                                                                }
-                                                        }endfor
+                                        forall_out_edges(G, e, node) {
+                                                NodeID target = G.getEdgeTarget(e);
+                                                if (target != matched) {
+                                                        common_neighbors[coarse_mapping[target]] += G.getEdgeWeight(e);
+                                                }
+                                        }endfor
 
-                                        forall_out_edges(G, e, matched){
-                                                                NodeID target = G.getEdgeTarget(e);
-                                                                if (target != node) {
-                                                                        common_neighbors[coarse_mapping[target]] += G.getEdgeWeight(
-                                                                                e);
-                                                                }
-                                                        }endfor
+                                        forall_out_edges(G, e, matched) {
+                                                NodeID target = G.getEdgeTarget(e);
+                                                if (target != node) {
+                                                        common_neighbors[coarse_mapping[target]] += G.getEdgeWeight(e);
+                                                }
+                                        }endfor
                                 } else if (node == matched) {
-                                        forall_out_edges(G, e, node){
-                                                                NodeID target = G.getEdgeTarget(e);
-                                                                common_neighbors[coarse_mapping[target]] += G.getEdgeWeight(
-                                                                        e);
-                                                        }endfor
+                                        forall_out_edges(G, e, node) {
+                                                NodeID target = G.getEdgeTarget(e);
+                                                common_neighbors[coarse_mapping[target]] += G.getEdgeWeight(e);
+                                        } endfor
                                 } else {
                                         continue;
                                 }
 
                                 NodeID coarse_node = coarse_mapping[node];
-                                for (auto& record : common_neighbors) {
+                                for (const auto& record : common_neighbors) {
                                         edges[offsets[coarse_node]].target = record.first;
                                         edges[offsets[coarse_node]].weight = record.second;
                                         ++offsets[coarse_node];

@@ -32,7 +32,6 @@
 #include "graph_io.h"
 #include "matching/gpa/gpa_matching.h"
 #include "matching/random_matching.h"
-#include "stop_rules/stop_rules.h"
 #include "data_structure/parallel/time.h"
 #include "min_hash/hash_common_neighborhood.h"
 
@@ -57,23 +56,7 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
         contraction* contracter                  = new contraction();
         PartitionConfig copy_of_partition_config = partition_config;
 
-        stop_rule* coarsening_stop_rule = NULL;
-        if( partition_config.mode_node_separators ) {
-                coarsening_stop_rule = new separator_simple_stop_rule(copy_of_partition_config, G.number_of_nodes());
-        } else {
-                if(partition_config.stop_rule == STOP_RULE_SIMPLE) {
-                        coarsening_stop_rule = new simple_stop_rule(copy_of_partition_config, G.number_of_nodes());
-                } else if(partition_config.stop_rule == STOP_RULE_MULTIPLE_K) {
-                        coarsening_stop_rule = new multiple_k_stop_rule(copy_of_partition_config, G.number_of_nodes());
-                } else if (partition_config.stop_rule == STOP_RULE_MEM) {
-                        coarsening_stop_rule = new mem_stop_rule(copy_of_partition_config, G.number_of_nodes());
-                } else if (partition_config.stop_rule == STOP_RULE_MULTIPLE_K_STRONG_CONTRACTION) {
-                        coarsening_stop_rule = new multiple_k_strong_contraction(copy_of_partition_config, G.number_of_nodes(), G.number_of_edges());
-                }
-                else {
-                        coarsening_stop_rule = new strong_stop_rule(copy_of_partition_config, G.number_of_nodes());
-                }
-        }
+        std::unique_ptr<stop_rule> coarsening_stop_rule = get_stop_rule(G, copy_of_partition_config);
 
         coarsening_configurator coarsening_config;
 
@@ -139,11 +122,6 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
 
                 finer = coarser;
 
-                if (!contraction_stop && copy_of_partition_config.matching_type != CLUSTER_COARSENING) {
-                        contraction_stop = true;
-                        copy_of_partition_config.matching_type = CLUSTER_COARSENING;
-                }
-
                 level++;
 
         } while (contraction_stop);
@@ -151,7 +129,6 @@ void coarsening::perform_coarsening(const PartitionConfig & partition_config, gr
         hierarchy.push_back(finer, NULL); // append the last created level
 
         delete contracter;
-        delete coarsening_stop_rule;
 }
 
 

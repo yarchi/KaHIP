@@ -1,10 +1,12 @@
+#include "data_structure/parallel/hash_function.h"
 #include "coarsening/matching/local_max.h"
 #include "data_structure/parallel/thread_pool.h"
 #include "data_structure/parallel/time.h"
 
 #include <tbb/concurrent_queue.h>
 
-#include <parallel/algorithm>
+#include <functional>
+#include <unordered_set>
 
 namespace parallel {
 
@@ -22,7 +24,13 @@ void local_max_matching::match(const PartitionConfig& partition_config,
                 case MATCHING_PARALLEL_LOCAL_MAX:
                         // with queue is slower since we do not process vertices in increasing order of their degree
                         // and shuffle them
-                        parallel_match(partition_config, G, edge_matching, mapping, no_of_coarse_vertices, permutation);
+                        if (!partition_config.remove_edges_in_matching) {
+                                parallel_match_with_queue_exp(partition_config, G, edge_matching, mapping,
+                                                              no_of_coarse_vertices);
+                        } else {
+                                parallel_match_with_queue_exp_with_removal(partition_config, G, edge_matching, mapping,
+                                                                           no_of_coarse_vertices);
+                        }
                         break;
                 default:
                         std::cout << "Incorrect matching type expected sequential local max or parallel local max"
@@ -126,8 +134,7 @@ void local_max_matching::parallel_match_with_queue(const PartitionConfig& partit
                                         graph_access& G,
                                         Matching& edge_matching,
                                         CoarseMapping& mapping,
-                                        NodeID& no_of_coarse_vertices,
-                                        NodePermutationMap& permutation) {
+                                        NodeID& no_of_coarse_vertices) {
 
         // init
         CLOCK_START;
@@ -135,17 +142,16 @@ void local_max_matching::parallel_match_with_queue(const PartitionConfig& partit
 
         parallel::ParallelVector<AtomicWrapper<int>> vertex_mark(G.number_of_nodes());
         parallel::ParallelVector<atomic_pair_type> max_neighbours(G.number_of_nodes());
+        parallel::ParallelVector<NodeID> permutation(G.number_of_nodes());
 
-        parallel::parallel_for_index(0u, G.number_of_nodes(), [&](NodeID node) {
+        parallel::parallel_for_index(NodeID(0), G.number_of_nodes(), [&](NodeID node) {
                 vertex_mark[node] = MatchingPhases::NOT_STARTED;
                 new (max_neighbours.begin() + node) atomic_pair_type(0, 0);
+                permutation[node] = node;
         });
 
-        permutation.clear();
-        permutation.reserve(G.number_of_nodes());
         edge_matching.reserve(G.number_of_nodes());
-        for (size_t i = 0; i < G.number_of_nodes(); ++i) {
-                permutation.push_back(i);
+        for (NodeID i = 0; i < G.number_of_nodes(); ++i) {
                 edge_matching.push_back(i);
         }
 
@@ -161,26 +167,37 @@ void local_max_matching::parallel_match_with_queue(const PartitionConfig& partit
                 randoms.emplace_back(partition_config.seed + id);
         }
 
-        const size_t block_size_edges = std::max((uint32_t) sqrt(G.number_of_edges()), 1000u);
         std::unique_ptr<tbb::concurrent_queue<block_type>> node_queue = std::make_unique<tbb::concurrent_queue<block_type>>();
         std::unique_ptr<tbb::concurrent_queue<block_type>> node_queue_next = std::make_unique<tbb::concurrent_queue<block_type>>();
 
-        block_type block;
-        block.reserve(block_size_edges);
-        size_t cur_block_size = 0;
-        for (auto node : permutation) {
-                block.push_back(node);
-                cur_block_size += G.getNodeDegree(node);
-                if (cur_block_size >= block_size_edges) {
-                        node_queue->push(std::move(block));
-                        block.clear();
-                        block.reserve(block_size_edges);
-                        cur_block_size = 0;
+        const size_t block_size_edges = std::max((uint32_t) sqrt(G.number_of_edges()), 1000u);
+        std::atomic<NodeID> offset(0);
+        const NodeID block_size = std::max<NodeID>(sqrt(permutation.size()), 1000);
+        parallel::submit_for_all([&]() {
+                block_type block;
+                block.reserve(block_size_edges);
+                size_t cur_block_size = 0;
+                NodeID begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+
+                while (begin < permutation.size()) {
+                        NodeID end = std::min<NodeID>(begin + block_size, permutation.size());
+                        for (NodeID node = begin; node != end; ++node) {
+                                block.push_back(node);
+                                cur_block_size += G.getNodeDegree(node);
+                                if (cur_block_size >= block_size_edges) {
+                                        node_queue->push(std::move(block));
+                                        block.clear();
+                                        block.reserve(block_size_edges);
+                                        cur_block_size = 0;
+                                }
+                        }
+                        begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+
                 }
-        }
-        if (!block.empty()) {
-                node_queue->push(std::move(block));
-        }
+                if (!block.empty()) {
+                        node_queue->push(std::move(block));
+                }
+        });
 
         CLOCK_END("Coarsening: Matching: Init");
         uint32_t round = 1;
@@ -223,7 +240,7 @@ void local_max_matching::parallel_match_with_queue(const PartitionConfig& partit
                                                                                  std::memory_order_release);
                                         }
                                 } else {
-                                        // put in the other queue vertex
+                                        // put vertex in the other queue
                                         next_block.push_back(node);
                                         this_thread_block_size += G.getNodeDegree(node);
                                         if (this_thread_block_size >= block_size_edges) {
@@ -245,24 +262,21 @@ void local_max_matching::parallel_match_with_queue(const PartitionConfig& partit
         // add loop for rounds with two queues
         std::vector<std::future<NodeID>> futures;
         futures.reserve(num_threads);
-        NodeID threshold = (NodeID) (2.0 * G.number_of_nodes() / 3.0);
         NodeID coarse_vertices = G.number_of_nodes();
-        while (!node_queue->empty() && round < m_max_round + 1 &&  coarse_vertices > threshold) {
-                CLOCK_START;
+        while (!node_queue->empty()) {
                 std::cout << round - 1 << std::endl;
                 std::cout << coarse_vertices << std::endl;
-                futures.clear();
-                for (uint32_t id = 1; id < num_threads; ++id) {
-                        futures.push_back(g_thread_pool.Submit(id - 1, task, id));
-                }
 
-                coarse_vertices -= task(0);
-                std::for_each(futures.begin(), futures.end(), [&coarse_vertices](auto& future) {
-                        coarse_vertices -= future.get();
-                });
+                NodeID old_coarse_vertices = coarse_vertices;
+                CLOCK_START;
+                coarse_vertices -= parallel::submit_for_all(task, std::plus<uint32_t>(), uint32_t(0));
                 node_queue.swap(node_queue_next);
                 ++round;
                 CLOCK_END("Round time");
+
+                if (old_coarse_vertices == coarse_vertices) {
+                        break;
+                }
         }
         std::cout << coarse_vertices << std::endl;
 
@@ -270,7 +284,401 @@ void local_max_matching::parallel_match_with_queue(const PartitionConfig& partit
 
         CLOCK_START_N;
         no_of_coarse_vertices = coarse_vertices;
-        remap_matching(partition_config, G, edge_matching, mapping, no_of_coarse_vertices, permutation);
+        remap_matching(partition_config, G, edge_matching, mapping, no_of_coarse_vertices);
+        CLOCK_END("Coarsening: Matching: Remap");
+}
+
+void local_max_matching::parallel_match_with_queue_exp(const PartitionConfig& partition_config,
+                                                                    graph_access& G,
+                                                                    Matching& edge_matching,
+                                                                    CoarseMapping& mapping,
+                                                                    NodeID& no_of_coarse_vertices) {
+
+        // init
+        CLOCK_START;
+        uint32_t num_threads = partition_config.num_threads;
+
+        parallel::ParallelVector<int> vertex_mark(G.number_of_nodes());
+        parallel::ParallelVector<NodeID> permutation(G.number_of_nodes());
+
+        parallel::parallel_for_index(NodeID(0), G.number_of_nodes(), [&](NodeID node) {
+                permutation[node] = node;
+                vertex_mark[node] = NOT_STARTED;
+        });
+
+        edge_matching.reserve(G.number_of_nodes());
+        for (NodeID i = 0; i < G.number_of_nodes(); ++i) {
+                edge_matching.push_back(i);
+        }
+
+        {
+                CLOCK_START;
+                parallel::random_shuffle(permutation.begin(), permutation.end(), partition_config.num_threads);
+                CLOCK_END("Shuffle");
+        }
+
+        std::unique_ptr<tbb::concurrent_queue<block_type>> node_queue = std::make_unique<tbb::concurrent_queue<block_type>>();
+        std::unique_ptr<tbb::concurrent_queue<block_type>> node_queue_next = std::make_unique<tbb::concurrent_queue<block_type>>();
+
+        const EdgeID block_size_edges = std::max<EdgeID>(sqrt(G.number_of_edges()), 1000);
+        std::atomic<NodeID> offset(0);
+        const NodeID block_size = std::max<NodeID>(sqrt(permutation.size()), 1000);
+        parallel::submit_for_all([&]() {
+                block_type block;
+                block.reserve(block_size_edges);
+                size_t cur_block_size = 0;
+                NodeID begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+
+                while (begin < permutation.size()) {
+                        NodeID end = std::min<NodeID>(begin + block_size, permutation.size());
+                        for (NodeID node = begin; node != end; ++node) {
+                                block.push_back(node);
+                                cur_block_size += G.getNodeDegree(node);
+                                if (cur_block_size >= block_size_edges) {
+                                        node_queue->push(std::move(block));
+                                        block.clear();
+                                        block.reserve(block_size_edges);
+                                        cur_block_size = 0;
+                                }
+                        }
+                        begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+
+                }
+                if (!block.empty()) {
+                        node_queue->push(std::move(block));
+                }
+        });
+
+        CLOCK_END("Coarsening: Matching: Init");
+        uint32_t round = 1;
+
+        auto task = [&]() {
+                size_t this_thread_block_size = 0;
+                block_type cur_block;
+                block_type next_block;
+                next_block.reserve(block_size_edges);
+
+                while (node_queue->try_pop(cur_block)) {
+                        for (NodeID node : cur_block) {
+                                NodeWeight node_weight = G.getNodeWeight(node);
+                                EdgeRatingType max_rating = 0.0;
+                                NodeID max_neighbor = node;
+
+                                forall_out_edges(G, e, node) {
+                                        NodeID target = G.getEdgeTarget(e);
+
+                                        EdgeRatingType edge_rating = G.getEdgeRating(e);
+                                        NodeWeight coarser_weight = G.getNodeWeight(target) + node_weight;
+                                        ALWAYS_ASSERT(edge_rating > 0.0);
+
+                                        if ((edge_rating > max_rating || (edge_rating == max_rating && target < max_neighbor))
+                                            && vertex_mark[target] != MATCHED && coarser_weight <= partition_config.max_vertex_weight) {
+                                                max_neighbor = target;
+                                                max_rating = edge_rating;
+                                        }
+                                } endfor
+
+                                edge_matching[node] = max_neighbor;
+
+                                // put vertex in the other queue
+                                next_block.push_back(node);
+                                this_thread_block_size += G.getNodeDegree(node);
+                                if (this_thread_block_size >= block_size_edges) {
+                                        node_queue_next->push(std::move(next_block));
+                                        next_block.clear();
+                                        next_block.reserve(block_size_edges);
+                                        this_thread_block_size = 0;
+                                }
+                        }
+                }
+                if (!next_block.empty()) {
+                        node_queue_next->push(std::move(next_block));
+                }
+        };
+
+        auto task1 = [&]() {
+                size_t this_thread_block_size = 0;
+                block_type cur_block;
+                block_type next_block;
+                next_block.reserve(block_size_edges);
+                NodeID matched_vertices = 0;
+
+                while (node_queue_next->try_pop(cur_block)) {
+                        for (NodeID node : cur_block) {
+                                NodeID matched_candidate = edge_matching[node];
+                                bool match = edge_matching[matched_candidate] == node;
+                                if (match) {
+                                        if (node < matched_candidate) {
+                                                vertex_mark[node] = MATCHED;
+                                                vertex_mark[matched_candidate] = MATCHED;
+                                                ++matched_vertices;
+                                        }
+                                } else {
+                                        next_block.push_back(node);
+                                        this_thread_block_size += G.getNodeDegree(node);
+                                        if (this_thread_block_size >= block_size_edges) {
+                                                node_queue->push(std::move(next_block));
+                                                next_block.clear();
+                                                next_block.reserve(block_size_edges);
+                                                this_thread_block_size = 0;
+                                        }
+                                }
+                        }
+                }
+                if (!next_block.empty()) {
+                        node_queue->push(std::move(next_block));
+                }
+                return matched_vertices;
+        };
+
+        CLOCK_START_N;
+        // add loop for rounds with two queues
+        std::vector<std::future<NodeID>> futures;
+        futures.reserve(num_threads);
+        NodeID coarse_vertices = G.number_of_nodes();
+        while (!node_queue->empty()) {
+                std::cout << round - 1 << std::endl;
+                std::cout << coarse_vertices << std::endl;
+
+                NodeID old_coarse_vertices = coarse_vertices;
+                CLOCK_START;
+                parallel::submit_for_all(task);
+                coarse_vertices -= parallel::submit_for_all(task1, std::plus<uint32_t>(), uint32_t(0));
+                ++round;
+                CLOCK_END("Round time");
+
+                if (old_coarse_vertices == coarse_vertices) {
+                        break;
+                }
+        }
+        std::cout << coarse_vertices << std::endl;
+
+        CLOCK_END("Coarsening: Matching: Main");
+
+        CLOCK_START_N;
+        no_of_coarse_vertices = coarse_vertices;
+        remap_matching(partition_config, G, edge_matching, mapping, no_of_coarse_vertices);
+        CLOCK_END("Coarsening: Matching: Remap");
+}
+
+void local_max_matching::parallel_match_with_queue_exp_with_removal(const PartitionConfig& partition_config,
+                                                   graph_access& G,
+                                                   Matching& edge_matching,
+                                                   CoarseMapping& mapping,
+                                                   NodeID& no_of_coarse_vertices) {
+
+        // init
+        CLOCK_START;
+        uint32_t num_threads = partition_config.num_threads;
+
+        parallel::ParallelVector<int> vertex_mark(G.number_of_nodes());
+        parallel::ParallelVector<NodeID> new_degrees(G.number_of_nodes());
+        parallel::ParallelVector<NodeID> permutation(G.number_of_nodes());
+
+        parallel::parallel_for_index(NodeID(0), G.number_of_nodes(), [&](NodeID node) {
+                permutation[node] = node;
+                vertex_mark[node] = NOT_STARTED;
+                new_degrees[node] = G.getNodeDegree(node);
+        });
+
+        edge_matching.reserve(G.number_of_nodes());
+        for (NodeID i = 0; i < G.number_of_nodes(); ++i) {
+                edge_matching.push_back(i);
+        }
+
+        {
+                CLOCK_START;
+                parallel::random_shuffle(permutation.begin(), permutation.end(), partition_config.num_threads);
+                CLOCK_END("Shuffle");
+        }
+
+        std::unique_ptr<tbb::concurrent_queue<block_type>> node_queue = std::make_unique<tbb::concurrent_queue<block_type>>();
+        std::unique_ptr<tbb::concurrent_queue<block_type>> node_queue_next = std::make_unique<tbb::concurrent_queue<block_type>>();
+
+        const size_t block_size_edges = std::max((uint32_t) sqrt(G.number_of_edges()), 1000u);
+        std::atomic<NodeID> offset(0);
+        const NodeID block_size = std::max<NodeID>(sqrt(permutation.size()), 1000);
+        parallel::submit_for_all([&]() {
+                block_type block;
+                block.reserve(block_size_edges);
+                size_t cur_block_size = 0;
+                NodeID begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+
+                while (begin < permutation.size()) {
+                        NodeID end = std::min<NodeID>(begin + block_size, permutation.size());
+                        for (NodeID node = begin; node != end; ++node) {
+                                block.push_back(node);
+                                cur_block_size += G.getNodeDegree(node);
+                                if (cur_block_size >= block_size_edges) {
+                                        node_queue->push(std::move(block));
+                                        block.clear();
+                                        block.reserve(block_size_edges);
+                                        cur_block_size = 0;
+                                }
+                        }
+                        begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+
+                }
+                if (!block.empty()) {
+                        node_queue->push(std::move(block));
+                }
+        });
+
+        CLOCK_END("Coarsening: Matching: Init");
+        uint32_t round = 1;
+
+        auto task = [&]() {
+                size_t this_thread_block_size = 0;
+                block_type cur_block;
+                block_type next_block;
+                next_block.reserve(block_size_edges);
+
+                while (node_queue->try_pop(cur_block)) {
+                        for (NodeID node : cur_block) {
+                                NodeWeight node_weight = G.getNodeWeight(node);
+                                EdgeRatingType max_rating = 0.0;
+                                NodeID max_neighbor = node;
+
+                                EdgeID end = G.get_first_edge(node) + new_degrees[node];
+                                for (EdgeID e = G.get_first_edge(node); e < end; ++e) {
+                                        NodeID target = G.getEdgeTarget(e);
+
+                                        EdgeRatingType edge_rating = G.getEdgeRating(e);
+                                        NodeWeight coarser_weight = G.getNodeWeight(target) + node_weight;
+                                        ALWAYS_ASSERT(vertex_mark[target] != MATCHED);
+                                        ALWAYS_ASSERT(edge_rating > 0.0);
+
+                                        if ((edge_rating > max_rating || (edge_rating == max_rating && target < max_neighbor))
+                                            && coarser_weight <= partition_config.max_vertex_weight) {
+                                                max_neighbor = target;
+                                                max_rating = edge_rating;
+                                        }
+                                }
+
+                                edge_matching[node] = max_neighbor;
+
+                                // put vertex in the other queue
+                                next_block.push_back(node);
+                                this_thread_block_size += G.getNodeDegree(node);
+                                if (this_thread_block_size >= block_size_edges) {
+                                        node_queue_next->push(std::move(next_block));
+                                        next_block.clear();
+                                        next_block.reserve(block_size_edges);
+                                        this_thread_block_size = 0;
+                                }
+                        }
+                }
+                if (!next_block.empty()) {
+                        node_queue_next->push(std::move(next_block));
+                }
+        };
+
+        auto task1 = [&]() {
+                size_t this_thread_block_size = 0;
+                block_type cur_block;
+                block_type next_block;
+                next_block.reserve(block_size_edges);
+                NodeID matched_vertices = 0;
+
+                while (node_queue_next->try_pop(cur_block)) {
+                        for (NodeID node : cur_block) {
+                                NodeID matched_candidate = edge_matching[node];
+                                bool match = edge_matching[matched_candidate] == node;
+                                if (match) {
+                                        if (node < matched_candidate) {
+                                                vertex_mark[node] = MATCHED;
+                                                vertex_mark[matched_candidate] = MATCHED;
+                                                ++matched_vertices;
+                                        }
+                                } else {
+                                        next_block.push_back(node);
+                                        this_thread_block_size += G.getNodeDegree(node);
+                                        if (this_thread_block_size >= block_size_edges) {
+                                                node_queue->push(std::move(next_block));
+                                                next_block.clear();
+                                                next_block.reserve(block_size_edges);
+                                                this_thread_block_size = 0;
+                                        }
+                                }
+                        }
+                }
+                if (!next_block.empty()) {
+                        node_queue->push(std::move(next_block));
+                }
+                return matched_vertices;
+        };
+
+        // remove edges
+        auto task2 = [&](uint32_t id) {
+                size_t this_thread_block_size = 0;
+                block_type cur_block;
+                block_type next_block;
+                next_block.reserve(block_size_edges);
+
+                std::vector<EdgeID> to_remove;
+                to_remove.reserve(20);
+                while (node_queue->try_pop(cur_block)) {
+                        for (NodeID node : cur_block) {
+                                EdgeID end = G.get_first_edge(node) + new_degrees[node];
+                                for (EdgeID e = G.get_first_edge(node); e < end; ++e) {
+                                        NodeID target = G.getEdgeTarget(e);
+                                        if (vertex_mark[target] == MATCHED) {
+                                                to_remove.push_back(e);
+                                        }
+                                }
+
+                                for (size_t i = 0; i < to_remove.size(); ++i) {
+                                        EdgeID e = to_remove[to_remove.size() - 1 - i];
+                                        G.remove_edge(e, end);
+                                        --end;
+                                }
+                                new_degrees[node] -= to_remove.size();
+                                to_remove.clear();
+
+                                next_block.push_back(node);
+                                this_thread_block_size += G.getNodeDegree(node);
+                                if (this_thread_block_size >= block_size_edges) {
+                                        node_queue_next->push(std::move(next_block));
+                                        next_block.clear();
+                                        next_block.reserve(block_size_edges);
+                                        this_thread_block_size = 0;
+                                }
+                        }
+                }
+                if (!next_block.empty()) {
+                        node_queue_next->push(std::move(next_block));
+                }
+        };
+
+        CLOCK_START_N;
+        // add loop for rounds with two queues
+        std::vector<std::future<NodeID>> futures;
+        futures.reserve(num_threads);
+        NodeID coarse_vertices = G.number_of_nodes();
+        while (!node_queue->empty()) {
+                std::cout << round - 1 << std::endl;
+                std::cout << coarse_vertices << std::endl;
+
+                NodeID old_coarse_vertices = coarse_vertices;
+                CLOCK_START;
+                parallel::submit_for_all(task);
+                coarse_vertices -= parallel::submit_for_all(task1, std::plus<uint32_t>(), uint32_t(0));
+                parallel::submit_for_all(task2);
+                std::swap(node_queue, node_queue_next);
+                ++round;
+                CLOCK_END("Round time");
+
+                if (old_coarse_vertices == coarse_vertices) {
+                        break;
+                }
+        }
+        std::cout << coarse_vertices << std::endl;
+
+        CLOCK_END("Coarsening: Matching: Main");
+
+        CLOCK_START_N;
+        no_of_coarse_vertices = coarse_vertices;
+        remap_matching(partition_config, G, edge_matching, mapping, no_of_coarse_vertices);
         CLOCK_END("Coarsening: Matching: Remap");
 }
 
@@ -278,8 +686,7 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
                                         graph_access& G,
                                         Matching& edge_matching,
                                         CoarseMapping& mapping,
-                                        NodeID& no_of_coarse_vertices,
-                                        NodePermutationMap& permutation) {
+                                        NodeID& no_of_coarse_vertices) {
 
         // init
         CLOCK_START;
@@ -287,17 +694,16 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
 
         parallel::ParallelVector<AtomicWrapper<int>> vertex_mark(G.number_of_nodes());
         parallel::ParallelVector<atomic_pair_type> max_neighbours(G.number_of_nodes());
+        parallel::ParallelVector<NodeID> permutation(G.number_of_nodes());
 
         parallel::parallel_for_index(0u, G.number_of_nodes(), [&](NodeID node) {
                 vertex_mark[node] = MatchingPhases::NOT_STARTED;
                 new (max_neighbours.begin() + node) atomic_pair_type(0, 0);
+                permutation[node] = node;
         });
 
-        permutation.clear();
-        permutation.reserve(G.number_of_nodes());
         edge_matching.reserve(G.number_of_nodes());
         for (size_t i = 0; i < G.number_of_nodes(); ++i) {
-                permutation.push_back(i);
                 edge_matching.push_back(i);
         }
 
@@ -369,24 +775,21 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
         CLOCK_START_N;
         std::vector<std::future<NodeID>> futures;
         futures.reserve(num_threads);
-        NodeID threshold = (NodeID) (2.0 * G.number_of_nodes() / 3.0);
         NodeID coarse_vertices = G.number_of_nodes();
-        while (round < m_max_round + 1 &&  coarse_vertices > threshold) {
-                CLOCK_START;
-                offset.store(0, std::memory_order_acquire);
+        while (true) {
                 std::cout << round - 1 << std::endl;
                 std::cout << coarse_vertices << std::endl;
-                futures.clear();
-                for (uint32_t id = 1; id < num_threads; ++id) {
-                        futures.push_back(g_thread_pool.Submit(id - 1, task, id));
-                }
 
-                coarse_vertices -= task(0);
-                std::for_each(futures.begin(), futures.end(), [&coarse_vertices](auto& future) {
-                        coarse_vertices -= future.get();
-                });
+                NodeID old_coarse_vertices = coarse_vertices;
+                CLOCK_START;
+                offset.store(0, std::memory_order_acquire);
+                coarse_vertices -= parallel::submit_for_all(task, std::plus<uint32_t>(), uint32_t(0));
                 ++round;
                 CLOCK_END("Round time");
+
+                if (old_coarse_vertices == coarse_vertices) {
+                        break;
+                }
         }
         std::cout << coarse_vertices << std::endl;
 
@@ -394,16 +797,21 @@ void local_max_matching::parallel_match(const PartitionConfig& partition_config,
 
         CLOCK_START_N;
         no_of_coarse_vertices = coarse_vertices;
-        remap_matching(partition_config, G, edge_matching, mapping, no_of_coarse_vertices, permutation);
+        remap_matching(partition_config, G, edge_matching, mapping, no_of_coarse_vertices);
         CLOCK_END("Coarsening: Matching: Remap");
 }
 
 void local_max_matching::remap_matching(const PartitionConfig& partition_config, graph_access& G,
-                                        Matching& edge_matching, CoarseMapping& mapping, NodeID& no_of_coarse_vertices,
-                                        NodePermutationMap& permutation) {
+                                        Matching& edge_matching, CoarseMapping& mapping, NodeID& no_of_coarse_vertices) {
         parallel::ParallelVector<NodeID> aux_edge_matching(G.number_of_nodes());
-        parallel::parallel_for_index(NodeID(0), G.number_of_nodes(), [&](NodeID node) {
+        parallel::parallel_for_index(NodeID(0), G.number_of_nodes(), [&](NodeID node, uint32_t id) {
                 NodeID matched = edge_matching[node];
+                if (id == 0) {
+                        if (node != edge_matching[matched]) {
+                                std::cout << node << ' ' << matched << ' ' << edge_matching[matched] << std::endl;
+                        }
+                        ALWAYS_ASSERT(node == edge_matching[matched]);
+                }
                 ALWAYS_ASSERT(node == edge_matching[matched]);
                 if (node <= matched) {
                         aux_edge_matching[node] = 1;
@@ -412,16 +820,16 @@ void local_max_matching::remap_matching(const PartitionConfig& partition_config,
                 }
         });
 
-        std::vector<NodeID> n(G.number_of_nodes());
-        parallel::partial_sum(aux_edge_matching.begin(), aux_edge_matching.end(), n.begin(),
+        std::vector<NodeID> num_node(G.number_of_nodes());
+        parallel::partial_sum(aux_edge_matching.begin(), aux_edge_matching.end(), num_node.begin(),
                               partition_config.num_threads);
 
-        ALWAYS_ASSERT(no_of_coarse_vertices == n.back());
+        ALWAYS_ASSERT(no_of_coarse_vertices == num_node.back());
 
         mapping.resize(G.number_of_nodes());
         parallel::parallel_for_index(NodeID(0), G.number_of_nodes(), [&](NodeID node) {
                 if (node <= edge_matching[node]) {
-                        NodeID coarse_node = n[node] - 1;
+                        NodeID coarse_node = num_node[node] - 1;
                         mapping[edge_matching[node]] = coarse_node;
                         mapping[node] = coarse_node;
                 }
@@ -513,14 +921,17 @@ NodeID
 local_max_matching::find_max_neighbour_parallel(NodeID node, graph_access& G, const PartitionConfig& partition_config,
                                                 ParallelVector<AtomicWrapper<int>>& vertex_mark, random& rnd) const {
         NodeWeight node_weight = G.getNodeWeight(node);
-        EdgeRatingType max_rating = 0;
+        EdgeRatingType max_rating = 0.0;
         NodeID max_target = m_none;
+        //uint32_t rnd_tie_breaking = rnd.random_number();
+        //uint32_t new_rnd_tie_breaing = 0;
         forall_out_edges(G, e, node) {
                 NodeID target = G.getEdgeTarget(e);
                 EdgeRatingType edge_rating = G.getEdgeRating(e);
                 NodeWeight coarser_weight = G.getNodeWeight(target) + node_weight;
 
-                if ((edge_rating > max_rating || (edge_rating == max_rating && rnd.bit())) &&
+//                if ((edge_rating > max_rating || (edge_rating == max_rating && (new_rnd_tie_breaing = rnd.random_number()) > rnd_tie_breaking)) &&
+                if ((edge_rating > max_rating) &&
                     vertex_mark[target].load(std::memory_order_relaxed) != MatchingPhases::MATCHED &&
                     coarser_weight <= partition_config.max_vertex_weight) {
 
@@ -534,10 +945,17 @@ local_max_matching::find_max_neighbour_parallel(NodeID node, graph_access& G, co
                                 continue;
                         }
 
+//                        if (edge_rating == max_rating) {
+//                                rnd_tie_breaking = new_rnd_tie_breaing;
+//                        } else {
+//                                rnd_tie_breaking = rnd.random_number();
+//                        }
+
                         max_target = target;
                         max_rating = edge_rating;
                 }
         } endfor
+
         return max_target;
 }
 

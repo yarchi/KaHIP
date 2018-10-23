@@ -33,6 +33,7 @@ public:
 
         void rate(graph_access & G, unsigned level);
         void rate_expansion_star_2(graph_access & G);
+        void parallel_rate_expansion_star_2(graph_access & G);
         void rate_expansion_star(graph_access & G);
         void rate_expansion_star_2_algdist(graph_access & G);
         void rate_inner_outer(graph_access & G);

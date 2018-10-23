@@ -180,7 +180,7 @@ EdgeWeight kway_graph_refinement_core::apply_moves(uint32_t num_threads,
                                                    std::vector<NodeID>& reactivated_vertices) const {
 
         EdgeWeight overall_gain = 0;
-        CLOCK_START;
+        //CLOCK_START;
         std::vector<std::future<void>> futures;
         std::atomic<uint32_t> thread_id(0);
         std::vector<AtomicWrapper<uint32_t>> offsets(num_threads, 0);
@@ -192,13 +192,13 @@ EdgeWeight kway_graph_refinement_core::apply_moves(uint32_t num_threads,
 
                 futures = prepare_boundary(num_threads, threads_data, thread_id, offsets);
         }
-        CLOCK_END("prepare boundary movements 1");
+        //CLOCK_END("prepare boundary movements 1");
 
         for (size_t id = 0; id < num_threads; ++id) {
                 overall_gain += apply_moves(threads_data[id].get(), reactivated_vertices, futures);
         }
 
-        CLOCK_START_N;
+        //CLOCK_START_N;
         {
                 CLOCK_START;
                 std::for_each(futures.begin(), futures.end(), [&](auto& future) {
@@ -206,7 +206,7 @@ EdgeWeight kway_graph_refinement_core::apply_moves(uint32_t num_threads,
                 });
                 threads_data[0].get().time_move_nodes_change_boundary += CLOCK_END_TIME;
         }
-        CLOCK_END("prepare boundary movements 2");
+        //CLOCK_END("prepare boundary movements 2");
         return overall_gain;
 }
 
