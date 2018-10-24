@@ -667,6 +667,7 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                                                                                std::vector<AtomicWrapper<NodeWeight>>& cluster_sizes,
                                                                                std::vector<std::vector<PartitionID>>& hash_maps,
                                                                                const parallel::ParallelVector<Triple>& permutation) {
+
         CLOCK_START;
         ALWAYS_ASSERT(config.block_size_unit == BlockSizeUnit::EDGES);
         auto queue = std::make_unique<ConcurrentQueue>();
@@ -682,12 +683,25 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
         par_init_for_edge_unit(G, max_block_size, permutation, queue);
         CLOCK_END("Parallel lp: Init queue lp");
 
-        std::vector<std::future<NodeWeight>> futures;
-        futures.reserve(parallel::g_thread_pool.NumThreads());
-        NodeWeight num_changed_label = 0;
-
+        NodeID num_changed_label = 0;
         ALWAYS_ASSERT(!config.graph_allready_partitioned);
         ALWAYS_ASSERT(!config.combine);
+
+        CLOCK_START_N;
+        static uint32_t multplier = 1;
+        NodeID block_upperbound_card = std::numeric_limits<NodeID>::max() / 2;
+        if (block_upperbound_card != config.block_upperbound_cardinality) {
+                block_upperbound_card = G.getMaxDegree();
+                block_upperbound_card = std::max(config.block_upperbound_cardinality / multplier, 5u);
+        }
+        multplier *= 2;
+        std::cout << "block_upperbound_cardinality = " << block_upperbound_card << std::endl;
+
+        parallel::ParallelVector<AtomicWrapper<NodeID>> cluster_cardinality(G.number_of_nodes());
+        parallel::parallel_for_index(NodeID(0), G.number_of_nodes(), [&](NodeID node) {
+                cluster_cardinality[node] = 1;
+        });
+        CLOCK_END("Cluster cardinality init");
 
         CLOCK_START_N;
         std::cout << "Num blocks\t" << queue->unsafe_size() << std::endl;
@@ -695,12 +709,12 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                 if (queue->empty()) {
                         break;
                 }
-                auto process = [&](const size_t id) {
+                auto task = [&](uint32_t id) {
                         //hash_maps[id].resize(G.number_of_nodes());
                         parallel::HashMap<NodeID, EdgeWeight, TabularHash<NodeID, 3, 2, 10, true>, true> hash_map(128);
                         //parallel::HashMap<NodeID, EdgeWeight, xxhash<NodeID>, true> hash_map(128);
 
-                        NodeWeight num_changed_label = 0;
+                        NodeID num_changed_label = 0;
                         Block cur_block;
                         Block new_block;
                         size_t new_block_size = 0;
@@ -732,6 +746,9 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                                         NodeWeight max_cluster_size = cluster_sizes[max_block].load(
                                                 std::memory_order_relaxed);
 
+                                        NodeID max_cluster_card = cluster_cardinality[max_block].load(
+                                                std::memory_order_relaxed);
+
                                         EdgeWeight max_value = 0;
                                         NodeWeight node_weight = G.getNodeWeight(node);
                                         for (auto cur_block : neighbor_parts) {
@@ -740,11 +757,16 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                                                 NodeWeight cur_cluster_size = cluster_sizes[cur_block].load(
                                                         std::memory_order_relaxed);
 
+                                                NodeID cur_cluster_card = cluster_cardinality[cur_block].load(
+                                                        std::memory_order_relaxed);
+
                                                 if ((cur_value > max_value || (cur_value == max_value && rnd.bit())) &&
-                                                    (cur_cluster_size + node_weight < block_upperbound || cur_block == my_block)) {
+                                                    ((cur_cluster_size + node_weight < block_upperbound && cur_cluster_card + 1 <= block_upperbound_card) ||
+                                                     cur_block == my_block)) {
                                                         max_value = cur_value;
                                                         max_block = cur_block;
                                                         max_cluster_size = cur_cluster_size;
+                                                        max_cluster_card = cur_cluster_card;
                                                 }
                                                 //hash_map[cur_block] = 0;
                                         }
@@ -755,17 +777,58 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                                                 // try update size of the cluster
                                                 bool perform_move = true;
                                                 auto& atomic_val = cluster_sizes[max_block];
-                                                while (!atomic_val.compare_exchange_weak(max_cluster_size,
-                                                                                         max_cluster_size + node_weight,
-                                                                                         std::memory_order_relaxed)) {
-                                                        if (max_cluster_size + node_weight > block_upperbound) {
-                                                                perform_move = false;
-                                                                break;
+                                                auto& atomic_val1 = cluster_cardinality[max_block];
+//                                                while (!atomic_val.compare_exchange_weak(max_cluster_size,
+//                                                                                         max_cluster_size + node_weight,
+//                                                                                         std::memory_order_relaxed)) {
+//                                                        if (max_cluster_size + node_weight > block_upperbound) {
+//                                                                perform_move = false;
+//                                                                break;
+//                                                        }
+//                                                }
+
+                                                bool update_size = false;
+                                                bool update_card = false;
+                                                bool stop = false;
+                                                do {
+                                                        if (!update_size) {
+                                                                update_size = atomic_val.compare_exchange_weak(
+                                                                        max_cluster_size,
+                                                                        max_cluster_size + node_weight,
+                                                                        std::memory_order_relaxed);
                                                         }
-                                                }
+
+                                                        if (!update_card) {
+                                                                update_card = atomic_val1.compare_exchange_weak(
+                                                                        max_cluster_card,
+                                                                        max_cluster_card + 1,
+                                                                        std::memory_order_relaxed);
+                                                        }
+
+                                                        if (max_cluster_size + node_weight > block_upperbound) {
+                                                                ALWAYS_ASSERT(!update_size);
+                                                                perform_move = false;
+                                                                if (update_card) {
+                                                                        atomic_val1.fetch_sub(1, std::memory_order_relaxed);
+                                                                }
+                                                                stop = true;
+                                                        }
+
+                                                        if (max_cluster_card + 1 > block_upperbound_card) {
+                                                                ALWAYS_ASSERT(!update_card);
+                                                                perform_move = false;
+                                                                if (update_size) {
+                                                                        atomic_val.fetch_sub(node_weight, std::memory_order_relaxed);
+                                                                }
+                                                                stop = true;
+                                                        }
+                                                } while ((!update_size || !update_card) && !stop);
 
                                                 if (perform_move) {
                                                         cluster_sizes[my_block].fetch_sub(node_weight,
+                                                                                          std::memory_order_relaxed);
+
+                                                        cluster_cardinality[my_block].fetch_sub(1,
                                                                                           std::memory_order_relaxed);
 
                                                         cluster_id[node] = max_block;
@@ -798,24 +861,29 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                 };
 
 
-                //!for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
-                //coarsening with one thread:
-                for (size_t i = 0; i + 1 < config.num_threads; ++i) {
-                        futures.push_back(parallel::g_thread_pool.Submit(i, process, i + 1));
-                        //futures.push_back(parallel::g_thread_pool.Submit(process, i + 1));
-                }
-
                 //CLOCK_START;
-                num_changed_label += process(0);
-                std::for_each(futures.begin(), futures.end(), [&](auto& future){
-                        num_changed_label += future.get();
-                });
+                num_changed_label += parallel::submit_for_all(task, std::plus<NodeID>(), NodeID(0));
                 //CLOCK_END(std::string("Iteration ") + std::to_string(j) + " time");
+
                 std::swap(queue, next_queue);
                 std::swap(queue_contains, next_queue_contains);
-                futures.clear();
         }
         CLOCK_END("Parallel lp: iterations");
+
+        std::vector<NodeID> clst_crd(G.number_of_nodes());
+        std::vector<NodeID> clst_sz(G.number_of_nodes());
+        for (size_t i = 0; i < G.number_of_nodes(); ++i) {
+                clst_crd[cluster_id[i]]++;
+                clst_sz[cluster_id[i]] += G.getNodeWeight(i);
+        }
+
+        for (size_t i = 0; i < G.number_of_nodes(); ++i) {
+                if (cluster_sizes[i] != clst_sz[i]) {
+                        std::cout << i << ' ' << cluster_sizes[i] << ' ' <<  clst_sz[i] << std::endl;
+                        ALWAYS_ASSERT(cluster_sizes[i] == clst_sz[i]);
+                }
+                ALWAYS_ASSERT(clst_crd[i] == clst_crd[i]);
+        }
 
         return num_changed_label;
 }

@@ -625,7 +625,8 @@ inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partitio
 
 inline void configuration::ecosocialmultitry_parallel(PartitionConfig& partition_config) {
         fastsocialmultitry_parallel(partition_config);
-        partition_config.matching_type = MATCHING_PARALLEL_LOCAL_MAX;
+        //partition_config.matching_type = MATCHING_PARALLEL_LOCAL_MAX;
+        partition_config.matching_type = CLUSTER_COARSENING;
         partition_config.stop_rule = STOP_RULE_MULTIPLE_K_WITH_MATCHING;
 }
 

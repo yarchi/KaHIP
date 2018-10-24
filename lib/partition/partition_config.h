@@ -429,6 +429,7 @@ struct PartitionConfig
         uint32_t l3_cache_size = 20480 * 1024;
         bool balls_and_bins_ht = false;
         bool remove_edges_in_matching  = false;
+        NodeID block_upperbound_cardinality = 64;
         //bool accept_small_coarser_graphs = false;
 };
 

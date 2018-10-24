@@ -55,6 +55,7 @@ private:
                                         config,
                                         [](PartitionConfig& config) {
                                                 config.matching_type = CLUSTER_COARSENING;
+                                                config.block_upperbound_cardinality = std::numeric_limits<NodeID>::max() / 2;
                                         },
                                         G.number_of_nodes(), G.number_of_edges());
                         } else if (config.stop_rule == STOP_RULE_MULTIPLE_K_STRONG_CONTRACTION_WITH_MATCHING) {
