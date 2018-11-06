@@ -38,6 +38,10 @@ struct xxhash {
                 : _seed(seed)
         {}
 
+        inline void reset(uint32_t seed) {
+                _seed = seed;
+        }
+
         inline hash_type operator()(const T& x) const {
                 return XXH64(&x, sizeof(x), _seed);
         }
@@ -53,6 +57,10 @@ struct xxhash<std::pair<T, T>> {
         explicit xxhash(uint32_t seed = 0)
                 : _h(seed)
         {}
+
+        inline void reset(uint32_t seed) {
+                _h.reset(seed);
+        }
 
         uint64_t operator()(const std::pair<T, T>& x) const {
                 return _h(x.first) ^ _h(x.second);
@@ -71,7 +79,7 @@ public:
         explicit MurmurHash(uint32_t seed = 0)
                 : _seed(seed) {}
 
-        void reset(uint32_t seed) {
+        inline void reset(uint32_t seed) {
                 _seed = seed;
         }
 
@@ -134,11 +142,15 @@ template <typename T>
 struct MurmurHash<std::pair<T, T>> {
         using hash_type = uint64_t;
 
-        MurmurHash<T> h;
-
         uint64_t operator()(const std::pair<T, T>& x) const {
-                return h(x.first) ^ h(x.second);
+                return _h(x.first) ^ _h(x.second);
         }
+
+        inline void reset(uint32_t seed) {
+                _h.reset(seed);
+        }
+private:
+        MurmurHash<T> _h;
 };
 
 template <typename T, uint8_t _key_bits_num = 9, uint8_t _num_tables = 2, uint8_t _table_bits_num = 8,

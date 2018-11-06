@@ -663,6 +663,7 @@ inline void configuration::fastsocial_parallel( PartitionConfig & partition_conf
 
         // parallel lp in refinement
         partition_config.parallel_lp = true;
+        partition_config.lp_before_local_search = true;
 
 }
 

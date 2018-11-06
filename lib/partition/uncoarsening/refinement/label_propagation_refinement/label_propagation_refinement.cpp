@@ -682,12 +682,13 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
         par_init_for_edge_unit(G, max_block_size, permutation, queue);
         CLOCK_END("Parallel lp: Init queue lp");
 
-        std::vector<std::future<NodeWeight>> futures;
-        futures.reserve(parallel::g_thread_pool.NumThreads());
         NodeWeight num_changed_label = 0;
 
         ALWAYS_ASSERT(!config.graph_allready_partitioned);
         ALWAYS_ASSERT(!config.combine);
+
+        using hash_function_type = parallel::MurmurHash<NodeID>;
+        using hash_value_type = hash_function_type::hash_type;
 
         CLOCK_START_N;
         std::cout << "Num blocks\t" << queue->unsafe_size() << std::endl;
@@ -695,10 +696,10 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                 if (queue->empty()) {
                         break;
                 }
+
                 auto process = [&](const size_t id) {
-                        //hash_maps[id].resize(G.number_of_nodes());
+                        hash_function_type hash;
                         parallel::HashMap<NodeID, EdgeWeight, TabularHash<NodeID, 3, 2, 10, true>, true> hash_map(128);
-                        //parallel::HashMap<NodeID, EdgeWeight, xxhash<NodeID>, true> hash_map(128);
 
                         NodeWeight num_changed_label = 0;
                         Block cur_block;
@@ -710,14 +711,13 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                         std::vector<NodeID> neighbor_parts;
                         while (queue->try_pop(cur_block)) {
                                 for (auto node : cur_block) {
+                                        hash.reset(config.seed + j + node);
                                         queue_contains[node].store(false, std::memory_order_relaxed);
-                                        //auto& hash_map = hash_maps[id];
 
-                                        const PartitionID my_block = cluster_id[node];
                                         //now move the node to the cluster that is most common in the neighborhood
                                         neighbor_parts.clear();
                                         neighbor_parts.reserve(G.getNodeDegree(node));
-                                        forall_out_edges(G, e, node) {
+                                        forall_out_edges(G, e, node){
                                                 NodeID target = G.getEdgeTarget(e);
                                                 NodeID cluster = cluster_id[target];
                                                 auto& clst_size = hash_map[cluster];
@@ -728,25 +728,27 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                                         } endfor
 
                                         //second sweep for finding max and resetting array
+                                        const PartitionID my_block = cluster_id[node];
                                         PartitionID max_block = my_block;
-                                        NodeWeight max_cluster_size = cluster_sizes[max_block].load(
-                                                std::memory_order_relaxed);
-
-                                        EdgeWeight max_value = 0;
+                                        NodeWeight max_cluster_size = cluster_sizes[max_block].load(std::memory_order_relaxed);
                                         NodeWeight node_weight = G.getNodeWeight(node);
+                                        EdgeWeight max_value = 0;
+                                        hash_value_type max_block_hash = 0;
                                         for (auto cur_block : neighbor_parts) {
                                                 EdgeWeight cur_value = hash_map[cur_block];
+                                                NodeWeight cur_cluster_size = cluster_sizes[cur_block].load(std::memory_order_relaxed);
+                                                hash_value_type cur_block_hash = 0;
 
-                                                NodeWeight cur_cluster_size = cluster_sizes[cur_block].load(
-                                                        std::memory_order_relaxed);
-
-                                                if ((cur_value > max_value || (cur_value == max_value && rnd.bit())) &&
+                                                if ((cur_value > max_value || (cur_value == max_value && max_block_hash < (cur_block_hash = hash(cur_block)))) &&
                                                     (cur_cluster_size + node_weight < block_upperbound || cur_block == my_block)) {
+                                                        if (cur_value > max_value) {
+                                                                cur_block_hash = hash(cur_block);
+                                                        }
                                                         max_value = cur_value;
                                                         max_block = cur_block;
                                                         max_cluster_size = cur_cluster_size;
+                                                        max_block_hash = cur_block_hash;
                                                 }
-                                                //hash_map[cur_block] = 0;
                                         }
                                         hash_map.clear();
 
@@ -797,20 +799,10 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                         return num_changed_label;
                 };
 
+                CLOCK_START;
+                num_changed_label += parallel::submit_for_all(process, std::plus<NodeWeight>(), NodeWeight(0));
+                CLOCK_END(std::string("Iteration ") + std::to_string(j) + " time");
 
-                //!for (size_t i = 0; i < parallel::g_thread_pool.NumThreads(); ++i) {
-                //coarsening with one thread:
-                for (size_t i = 0; i + 1 < config.num_threads; ++i) {
-                        futures.push_back(parallel::g_thread_pool.Submit(i, process, i + 1));
-                        //futures.push_back(parallel::g_thread_pool.Submit(process, i + 1));
-                }
-
-                //CLOCK_START;
-                num_changed_label += process(0);
-                std::for_each(futures.begin(), futures.end(), [&](auto& future){
-                        num_changed_label += future.get();
-                });
-                //CLOCK_END(std::string("Iteration ") + std::to_string(j) + " time");
                 std::swap(queue, next_queue);
                 std::swap(queue_contains, next_queue_contains);
                 futures.clear();

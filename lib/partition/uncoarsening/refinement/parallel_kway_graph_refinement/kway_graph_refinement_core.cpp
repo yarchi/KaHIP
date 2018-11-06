@@ -63,6 +63,7 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
 
         //roll forwards
         EdgeWeight best_cut = cut;
+        NodeID max_rnd = 0;
         int number_of_swaps = 0;
         uint32_t movements = 0;
 
@@ -123,13 +124,16 @@ kway_graph_refinement_core::single_kway_refinement_round_internal(thread_data_re
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
                         bool accept_equal = random_functions::nextBool();
 #else
-                        bool accept_equal = td.rnd.bit();
+                        //bool accept_equal = td.rnd.bit();
+                        NodeID cur_rnd = 0;
 #endif
-                        if (cut < best_cut || (cut == best_cut && accept_equal)) {
+                        if (cut < best_cut || (cut == best_cut && max_rnd < (cur_rnd = td.rnd.random_number<NodeID>()) )) {
                                 if (cut < best_cut) {
+                                        cur_rnd = td.rnd.random_number<NodeID>();
                                         stopping_rule->reset_statistics();
                                 }
                                 best_cut = cut;
+                                max_rnd = cur_rnd;
                                 min_cut_index = previously_moved + number_of_swaps;
                         }
                         td.from_partitions.push_back(from);
@@ -312,6 +316,8 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
 
                 int best_total_gain = 0;
                 int total_gain = 0;
+                NodeID max_rnd = 0;
+
                 transpositions.reserve(min_cut_index - index + 1);
                 from_partitions.reserve(min_cut_index - index + 1);
                 gains.reserve(min_cut_index - index + 1);
@@ -369,8 +375,14 @@ EdgeWeight kway_graph_refinement_core::apply_moves(thread_data_refinement_core& 
                                 cut_improvement += gain;
                                 total_gain += gain;
 
-                                if (total_gain > best_total_gain || (total_gain == best_total_gain && (td.rnd.bit() || same_move))) {
+                                NodeID cur_rnd = 0;
+                                if (total_gain > best_total_gain || (total_gain == best_total_gain && ( (cur_rnd = td.rnd.random_number<NodeID>()) > max_rnd || same_move))) {
+                                        if (total_gain > best_total_gain) {
+                                                cur_rnd = td.rnd.random_number<NodeID>();
+                                        }
+
                                         best_total_gain = total_gain;
+                                        max_rnd = cur_rnd;
 
                                         for (size_t i = 0; i < transpositions.size(); ++i) {
                                                 NodeID node = transpositions[i];

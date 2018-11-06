@@ -230,6 +230,7 @@ public:
                 //return max gain and "to" partition
                 EdgeWeight max_degree = 0;
                 to = INVALID_PARTITION;
+                NodeID max_rnd = 0;
 
                 m_round++;//can become zero again
                 forall_out_edges(G, e, node) {
@@ -250,19 +251,23 @@ public:
 
 
                         if (target_partition != from && m_local_degrees[target_partition].local_degree >= max_degree) {
+                                NodeID cur_rnd = rnd.random_number<NodeID>();
                                 if (m_local_degrees[target_partition].local_degree > max_degree) {
                                         max_degree = m_local_degrees[target_partition].local_degree;
                                         to = target_partition;
+                                        max_rnd = cur_rnd;
                                 } else {
                                         //break ties randomly
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
                                         bool accept = random_functions::nextBool();
 #else
-                                        bool accept = rnd.bit();
+                                        //bool accept = rnd.bit();
+                                        bool accept = cur_rnd > max_rnd;
 #endif
                                         if (accept) {
                                                 max_degree = m_local_degrees[target_partition].local_degree;
                                                 to = target_partition;
+                                                max_rnd = cur_rnd;
                                         }
                                 }
                         }
@@ -290,6 +295,7 @@ public:
                 to = INVALID_PARTITION;
                 bool found_desired_to = false;
                 EdgeWeight desired_to_degree = 0;
+                NodeID max_rnd = 0;
 
                 m_round++;//can become zero again
                 forall_out_edges(G, e, node) {
@@ -304,6 +310,7 @@ public:
                         }
 
                         if (target_partition != from && m_local_degrees[target_partition].local_degree >= max_degree) {
+                                NodeID cur_rnd = rnd.random_number<NodeID>();
                                 if (target_partition == desired_to) {
                                         found_desired_to = true;
                                         desired_to_degree = m_local_degrees[target_partition].local_degree;
@@ -311,16 +318,19 @@ public:
                                 if (m_local_degrees[target_partition].local_degree > max_degree) {
                                         max_degree = m_local_degrees[target_partition].local_degree;
                                         to = target_partition;
+                                        max_rnd = cur_rnd;
                                 } else {
                                         //break ties randomly
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
                                         bool accept = random_functions::nextBool();
 #else
-                                        bool accept = rnd.bit();
+                                        //bool accept = rnd.bit();
+                                        bool accept = cur_rnd > max_rnd;
 #endif
                                         if (accept) {
                                                 max_degree = m_local_degrees[target_partition].local_degree;
                                                 to = target_partition;
+                                                max_rnd = cur_rnd;
                                         }
                                 }
                         }

@@ -135,6 +135,12 @@ int graph_io::readGraphWeighted(graph_access & G, std::string filename) {
         } else if (ew == 10) {
                 read_nw = true;
         }
+
+        if (read_ew) {
+                G.setUnitWeightEdges(false);
+        } else {
+                G.setUnitWeightEdges(true);
+        }
         nmbEdges *= 2; //since we have forward and backward edges
         
         NodeID node_counter   = 0;

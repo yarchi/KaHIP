@@ -174,7 +174,7 @@ class complete_boundary;
 class graph_access {
         friend class complete_boundary;
         public:
-                graph_access() { m_max_degree_computed = false; m_max_degree = 0; graphref = new basicGraph(); m_separator_block_ID = 2;}
+                graph_access() { m_max_degree_computed = false; m_unit_weighted_edges = true; m_max_degree = 0; graphref = new basicGraph(); m_separator_block_ID = 2;}
                 virtual ~graph_access(){ delete graphref; };
 
                 /* ============================================================= */
@@ -192,6 +192,9 @@ class graph_access {
                 /* ============================================================= */
                 NodeID number_of_nodes();
                 EdgeID number_of_edges();
+
+                void setUnitWeightEdges(bool unit_weighted_edges);
+                bool getUnitWeightEdges() const;
 
                 EdgeID get_first_edge(NodeID node);
                 EdgeID get_first_invalid_edge(NodeID node);
@@ -249,6 +252,7 @@ class graph_access {
         //private:
                 basicGraph * graphref;     
                 bool         m_max_degree_computed;
+                bool         m_unit_weighted_edges;
                 unsigned int m_partition_count;
                 EdgeWeight   m_max_degree;
                 PartitionID  m_separator_block_ID;
@@ -291,6 +295,14 @@ inline NodeID graph_access::number_of_nodes() {
 
 inline EdgeID graph_access::number_of_edges() {
         return graphref->number_of_edges();
+}
+
+inline void graph_access::setUnitWeightEdges(bool unit_weighted_edges) {
+        m_unit_weighted_edges = unit_weighted_edges;
+}
+
+inline bool graph_access::getUnitWeightEdges() const {
+        return m_unit_weighted_edges;
 }
 
 inline void graph_access::resizeSecondPartitionIndex(unsigned no_nodes) {

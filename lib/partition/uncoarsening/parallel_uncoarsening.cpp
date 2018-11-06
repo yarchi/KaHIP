@@ -14,25 +14,29 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig& config, graph_
         std::unique_ptr<graph_access> coarsest(hierarchy.get_coarsest());
         PRINT(std::cout << "log>" << "unrolling graph with " << coarsest->number_of_nodes() << std::endl;)
 
-        CLOCK_START;
-        perform_label_propagation(cfg, *coarsest);
-        CLOCK_END(">> Uncoarsening: Label propagation");
-
-        CLOCK_START_N;
-        boundary_type boundary(*coarsest, cfg);
-        boundary.construct_boundary();
-        if (config.check_cut) {
-                boundary.check_boundary();
+        if (config.lp_before_local_search) {
+                CLOCK_START;
+                perform_label_propagation(cfg, *coarsest);
+                CLOCK_END(">> Uncoarsening: Label propagation");
         }
-        CLOCK_END(">> Build boundary");
 
         double factor = config.balance_factor;
         cfg.upper_bound_partition = ((!hierarchy.isEmpty()) * factor + 1.0) * config.upper_bound_partition;
 
         EdgeWeight improvement = 0;
-        CLOCK_START_N;
-        improvement += perform_multitry_kway(cfg, *coarsest, boundary);
-        CLOCK_END(">> Refinement");
+        if (config.parallel_multitry_kway) {
+                CLOCK_START;
+                boundary_type boundary(*coarsest, cfg);
+                boundary.construct_boundary();
+                if (config.check_cut) {
+                        boundary.check_boundary();
+                }
+                CLOCK_END(">> Build boundary");
+
+                CLOCK_START_N;
+                improvement += perform_multitry_kway(cfg, *coarsest, boundary);
+                CLOCK_END(">> Refinement");
+        }
 
         uint32_t hierarchy_deepth = hierarchy.size();
         std::vector<std::unique_ptr<graph_access>> graphs_to_delete;
@@ -44,32 +48,32 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig& config, graph_
 
                 PRINT(std::cout << "log>" << "unrolling graph with " << G->number_of_nodes() << std::endl;)
 
-                CLOCK_START_N;
-                perform_label_propagation(cfg, *G);
-                CLOCK_END(">> Uncoarsening: Label propagation");
-
-                CLOCK_START_N;
-                boundary_type boundary(*G, cfg);
-                boundary.construct_boundary();
-                if (config.check_cut) {
-                        boundary.check_boundary();
+                if (config.lp_before_local_search) {
+                        CLOCK_START_N;
+                        perform_label_propagation(cfg, *G);
+                        CLOCK_END(">> Uncoarsening: Label propagation");
                 }
-                CLOCK_END(">> Build boundary");
 
                 //call refinement
                 double cur_factor = factor / (hierarchy_deepth - hierarchy.size());
                 cfg.upper_bound_partition = ((!hierarchy.isEmpty()) * cur_factor + 1.0) * config.upper_bound_partition;
                 PRINT(std::cout << "cfg upperbound " << cfg.upper_bound_partition << std::endl;)
 
-                CLOCK_START_N;
-                improvement += perform_multitry_kway(cfg, *G, boundary);
-                CLOCK_END(">> Refinement");
+                if (config.parallel_multitry_kway) {
+                        CLOCK_START_N;
+                        boundary_type boundary(*G, cfg);
+                        boundary.construct_boundary();
+                        if (config.check_cut) {
+                                boundary.check_boundary();
+                        }
+                        CLOCK_END(">> Build boundary");
+
+                        CLOCK_START_N;
+                        improvement += perform_multitry_kway(cfg, *G, boundary);
+                        CLOCK_END(">> Refinement");
+                }
 
                 ASSERT_TRUE(graph_partition_assertions::assert_graph_has_kway_partition(config, *G));
-
-                if (config.use_balance_singletons) {
-                        boundary.balance_singletons();
-                }
 
                 if (!hierarchy.isEmpty()) {
                         graphs_to_delete.emplace_back(G);
@@ -80,25 +84,23 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig& config, graph_
 }
 
 void uncoarsening::perform_label_propagation(PartitionConfig& config, graph_access& G) {
-        if (config.lp_before_local_search) {
-                quality_metrics qm;
-                EdgeWeight old_cut = 0;
-                if (config.check_cut) {
-                        old_cut = qm.edge_cut(G);
-                        std::cout << "before\t" << old_cut << std::endl;
-                        std::cout << "upper_bound_partition\t" << config.upper_bound_partition << std::endl;
-                        std::cout << "before balance\t" << qm.balance(G) << std::endl;
-                }
+        quality_metrics qm;
+        EdgeWeight old_cut = 0;
+        if (config.check_cut) {
+                old_cut = qm.edge_cut(G);
+                std::cout << "before\t" << old_cut << std::endl;
+                std::cout << "upper_bound_partition\t" << config.upper_bound_partition << std::endl;
+                std::cout << "before balance\t" << qm.balance(G) << std::endl;
+        }
 
-                EdgeWeight changed = label_propagation_refinement().perform_refinement(config, G);
+        EdgeWeight changed = label_propagation_refinement().perform_refinement(config, G);
 
-                if (config.check_cut) {
-                        EdgeWeight new_cut = qm.edge_cut(G);
-                        std::cout << "after\t" << new_cut << std::endl;
-                        std::cout << "upper_bound_partition\t" << config.upper_bound_partition << std::endl;
-                        std::cout << "after balance\t" << qm.balance(G) << std::endl;
-                        std::cout << "changed\t" << changed << std::endl;
-                }
+        if (config.check_cut) {
+                EdgeWeight new_cut = qm.edge_cut(G);
+                std::cout << "after\t" << new_cut << std::endl;
+                std::cout << "upper_bound_partition\t" << config.upper_bound_partition << std::endl;
+                std::cout << "after balance\t" << qm.balance(G) << std::endl;
+                std::cout << "changed\t" << changed << std::endl;
         }
 }
 
