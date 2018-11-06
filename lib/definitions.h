@@ -45,7 +45,8 @@
 typedef unsigned int 	NodeID;
 typedef double 		EdgeRatingType;
 //typedef unsigned int 	EdgeID;
-typedef uint64_t	EdgeID;
+typedef uint32_t	EdgeID;
+//typedef uint64_t	EdgeID;
 typedef unsigned int 	PathID;
 typedef unsigned int 	PartitionID;
 typedef unsigned int 	NodeWeight;

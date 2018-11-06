@@ -80,15 +80,6 @@ int main(int argn, char **argv) {
         std::cout << "COMPARE WITH SEQUENTIAL MODE IS ON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
         std::cout << "THIS SLOWS DOWN THE APP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::end;
 #endif
-
-#ifdef __gnu_linux__
-        if (numa_available() < 0) {
-		printf("No NUMA support available on this system.\n");
-		exit(1);
-	}
-        numa_set_interleave_mask(numa_all_nodes_ptr);
-#endif
-
         std::cout << "Git revision\t" << GIT_DESC << std::endl;
         PartitionConfig partition_config;
         std::string graph_filename;
@@ -106,6 +97,20 @@ int main(int argn, char **argv) {
         if(ret_code) {
                 return 0;
         }
+
+#ifdef __gnu_linux__
+        if (numa_available() < 0) {
+		printf("No NUMA support available on this system.\n");
+		exit(1);
+	}
+	if (partition_config.num_threads > 1) {
+                numa_set_interleave_mask(numa_all_nodes_ptr);
+        } else {
+                auto* mask_ptr = numa_parse_nodestring("0");
+                numa_set_interleave_mask(mask_ptr);
+                numa_free_nodemask(mask_ptr);
+        }
+#endif
 
         std::streambuf* backup = std::cout.rdbuf();
         std::ofstream ofs;

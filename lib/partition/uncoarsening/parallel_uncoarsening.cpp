@@ -12,7 +12,7 @@ namespace parallel {
 int uncoarsening::perform_uncoarsening_cut(const PartitionConfig& config, graph_hierarchy& hierarchy) {
         PartitionConfig cfg = config;
         std::unique_ptr<graph_access> coarsest(hierarchy.get_coarsest());
-        PRINT(std::cout << "log>" << "unrolling graph with " << coarsest->number_of_nodes() << std::endl;)
+        std::cout << ">> Unrolling graph with " << coarsest->number_of_nodes() << std::endl;
 
         if (config.lp_before_local_search) {
                 CLOCK_START;
@@ -46,7 +46,7 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig& config, graph_
                 graph_access* G = hierarchy.parallel_pop_finer_and_project();
                 CLOCK_END("Projection");
 
-                PRINT(std::cout << "log>" << "unrolling graph with " << G->number_of_nodes() << std::endl;)
+                std::cout << ">> Unrolling graph with " << G->number_of_nodes() << std::endl;
 
                 if (config.lp_before_local_search) {
                         CLOCK_START_N;
