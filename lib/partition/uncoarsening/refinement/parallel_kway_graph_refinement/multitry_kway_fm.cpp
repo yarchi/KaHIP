@@ -16,9 +16,9 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
         config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
         int overall_improvement = 0;
 
-        for( unsigned i = 0; i < rounds; i++) {
-        //int i = 0;
-        //while (true) {
+        //for( unsigned i = 0; i < rounds; i++) {
+        int i = 0;
+        while (true) {
                 CLOCK_START;
                 setup_start_nodes_all(G, config, boundary);
                 if (config.check_cut) {
@@ -40,11 +40,12 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
                         break;
                 }
 
-//                if (overall_improvement * 0.05 > improvement) {
-//                        break;
-//                }
+                if (overall_improvement * (config.stop_mls_threshold / 100.0) > improvement) {
+                        break;
+                }
 
                 overall_improvement += improvement;
+                ++i;
         }
         std::cout << "Total gain improvement\t" << overall_improvement << std::endl;
         config.kway_adaptive_limits_alpha = tmp_alpha;
