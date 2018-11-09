@@ -18,7 +18,8 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
 
         //for( unsigned i = 0; i < rounds; i++) {
         int i = 0;
-        while (true) {
+        bool stop = false;
+        while (!stop) {
                 CLOCK_START;
                 setup_start_nodes_all(G, config, boundary);
                 if (config.check_cut) {
@@ -37,11 +38,11 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
 
                 std::cout << "Gain improvement\t" << improvement << std::endl;
                 if (improvement == 0) {
-                        break;
+                        stop = true;
                 }
 
-                if (overall_improvement * (config.stop_mls_threshold / 100.0) > improvement) {
-                        break;
+                if (overall_improvement * (config.stop_mls_global_threshold / 100.0) > improvement) {
+                        stop = true;
                 }
 
                 overall_improvement += improvement;
@@ -259,7 +260,7 @@ int multitry_kway_fm::start_more_locallized_search(graph_access& G, PartitionCon
                 ALWAYS_ASSERT(real_gain_improvement >= 0);
                 total_gain_improvement += real_gain_improvement;
 
-                if (total_gain_improvement * (config.stop_mls_threshold / 100.0) > real_gain_improvement) {
+                if (total_gain_improvement * (config.stop_mls_local_threshold / 100.0) > real_gain_improvement) {
                         m_factory.time_move_nodes += CLOCK_END_TIME;
                         break;
                 }

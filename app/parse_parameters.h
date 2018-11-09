@@ -186,7 +186,8 @@ int parse_parameters(int argn, char **argv,
         struct arg_lit *fast_contract_clustering             = arg_lit0(NULL, "fast_contract_clustering", "(Default: disabled)");
         struct arg_lit *shuffle_graph                        = arg_lit0(NULL, "shuffle_graph", "(Default: disabled)");
         struct arg_lit *sort_edges                           = arg_lit0(NULL, "sort_edges", "(Default: disabled)");
-        struct arg_int *stop_mls_threshold                   = arg_int0(NULL, "stop_mls_threshold", NULL, "Sets percent threshold to stop iteration of MLS");
+        struct arg_dbl *stop_mls_global_threshold            = arg_dbl0(NULL, "stop_mls_global_threshold", NULL, "Sets percent threshold to stop iteration of global loop in MLS");
+        struct arg_dbl *stop_mls_local_threshold             = arg_dbl0(NULL, "stop_mls_local_threshold", NULL, "Sets percent threshold to stop iteration of local loop in MLS");
         struct arg_lit *common_neighborhood_clustering       = arg_lit0(NULL, "common_neighborhood_clustering", "(Default: disabled)");
         struct arg_lit *use_numa_aware_graph                 = arg_lit0(NULL, "use_numa_aware_graph", "(Default: disabled)");
         struct arg_int *threads_per_socket                   = arg_int0(NULL, "threads_per_socket", NULL, "Sets the maximum number of threads per socket (Default: 8)");
@@ -261,7 +262,8 @@ int parse_parameters(int argn, char **argv,
                 sort_edges,
                 stop_rule,
                 num_vert_stop_factor,
-                stop_mls_threshold,
+                stop_mls_global_threshold,
+                stop_mls_local_threshold,
                 common_neighborhood_clustering,
                 use_numa_aware_graph,
                 threads_per_socket,
@@ -1203,8 +1205,12 @@ int parse_parameters(int argn, char **argv,
                 partition_config.sort_edges = true;
         }
 
-        if (stop_mls_threshold->count > 0) {
-                partition_config.stop_mls_threshold = stop_mls_threshold->ival[0];
+        if (stop_mls_global_threshold->count > 0) {
+                partition_config.stop_mls_global_threshold = stop_mls_global_threshold->dval[0];
+        }
+
+        if (stop_mls_local_threshold->count > 0) {
+                partition_config.stop_mls_local_threshold = stop_mls_local_threshold->dval[0];
         }
 
         if (common_neighborhood_clustering->count > 0) {
