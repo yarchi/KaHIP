@@ -620,7 +620,7 @@ inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partitio
         partition_config.apply_move_strategy = ApplyMoveStrategy::SKIP;
         partition_config.parallel_multitry_kway = true;
         partition_config.global_multitry_rounds = 3;
-        partition_config.stop_mls_threshold = 10;
+        partition_config.stop_mls_local_threshold = 10;
 }
 
 inline void configuration::ecosocialmultitry_parallel(PartitionConfig& partition_config) {

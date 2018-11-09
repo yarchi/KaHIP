@@ -739,16 +739,22 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
                                                 NodeWeight cur_cluster_size = cluster_sizes[cur_block].load(std::memory_order_relaxed);
                                                 hash_value_type cur_block_hash = 0;
 
-                                                if ((cur_value > max_value || (cur_value == max_value && max_block_hash < (cur_block_hash = hash(cur_block)))) &&
+                                                if ((cur_value > max_value || (cur_value == max_value && rnd.bit())) &&
                                                     (cur_cluster_size + node_weight < block_upperbound || cur_block == my_block)) {
-                                                        if (cur_value > max_value) {
-                                                                cur_block_hash = hash(cur_block);
-                                                        }
                                                         max_value = cur_value;
                                                         max_block = cur_block;
                                                         max_cluster_size = cur_cluster_size;
-                                                        max_block_hash = cur_block_hash;
                                                 }
+//                                                if ((cur_value > max_value || (cur_value == max_value && max_block_hash < (cur_block_hash = hash(cur_block)))) &&
+//                                                    (cur_cluster_size + node_weight < block_upperbound || cur_block == my_block)) {
+//                                                        if (cur_value > max_value) {
+//                                                                cur_block_hash = hash(cur_block);
+//                                                        }
+//                                                        max_value = cur_value;
+//                                                        max_block = cur_block;
+//                                                        max_cluster_size = cur_cluster_size;
+//                                                        max_block_hash = cur_block_hash;
+//                                                }
                                         }
                                         hash_map.clear();
 
@@ -805,7 +811,6 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
 
                 std::swap(queue, next_queue);
                 std::swap(queue_contains, next_queue_contains);
-                futures.clear();
         }
         CLOCK_END("Parallel lp: iterations");
 

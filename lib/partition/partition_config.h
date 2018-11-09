@@ -420,7 +420,8 @@ struct PartitionConfig
         bool check_cut = false;
         bool fast_contract_clustering = false;
         bool shuffle_graph = false;
-        uint32_t stop_mls_threshold = 5;
+        double stop_mls_global_threshold = 3;
+        double stop_mls_local_threshold = 3;
         bool sort_edges = false;
         bool common_neighborhood_clustering = false;
         bool use_numa_aware_graph = false;
