@@ -42,7 +42,7 @@ private:
         void init_queue_with_boundary(thread_data_refinement_core& config,
                                       std::unique_ptr<refinement_pq>& queue);
 
-        inline bool local_move_node(thread_data_refinement_core& config, NodeID node, PartitionID from, PartitionID& to,
+        inline bool local_move_node(thread_data_refinement_core& config, NodeID node, PartitionID from, PartitionID to,
                                     std::unique_ptr<refinement_pq>& queue, Gain gain);
 
         void unroll_relaxed_moves(thread_data_refinement_core& td,
