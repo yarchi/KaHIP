@@ -1,3 +1,4 @@
+#include "data_structure/parallel/stat.h"
 #include "data_structure/parallel/thread_pool.h"
 #include "data_structure/parallel/time.h"
 
@@ -15,10 +16,12 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
         config.kway_adaptive_limits_alpha = alpha;
         config.kway_stop_rule = KWAY_ADAPTIVE_STOP_RULE;
         int overall_improvement = 0;
+        uint64_t total_work = 0;
 
         //for( unsigned i = 0; i < rounds; i++) {
         int i = 0;
         bool stop = false;
+        estimator<double> est;
         while (!stop) {
                 CLOCK_START;
                 setup_start_nodes_all(G, config, boundary);
@@ -32,19 +35,49 @@ int multitry_kway_fm::perform_refinement(PartitionConfig& config, graph_access& 
                 m_factory.time_setup_start_nodes += CLOCK_END_TIME;
 
                 std::cout << "Iter\t" << i << std::endl;
+                uint64_t accesses_before = m_factory.get_total_num_part_accesses();
                 CLOCK_START_N;
                 EdgeWeight improvement = start_more_locallized_search(G, config, init_neighbors);
                 m_factory.time_local_search += CLOCK_END_TIME;
+                uint64_t work = m_factory.get_total_num_part_accesses() - accesses_before;
 
                 std::cout << "Gain improvement\t" << improvement << std::endl;
                 if (improvement == 0) {
                         stop = true;
                 }
 
-                if (overall_improvement * (config.stop_mls_global_threshold / 100.0) > improvement) {
-                        stop = true;
+                if (!use_exp) {
+                        if (overall_improvement > 0) {
+                                //std::cout << "GLOBAL tw / tg * qm\t" << (total_work + 0.0) / overall_improvement * global_quantile_multiplicator << std::endl;
+                                std::cout << "GLOBAL w / g\t" << (work + 0.0) / improvement << std::endl;
+                        }
+
+                        if (overall_improvement > 0 && improvement > 0 &&
+                            (total_work + 0.0) / overall_improvement * global_quantile_multiplicator < (work + 0.0) / improvement) {
+                                stop = true;
+                        }
+                        total_work += work;
+                } else {
+                        if (overall_improvement > 0) {
+                                std::cout << "GLOBAL exp\t" << est.get_expectation() << std::endl;
+//                                std::cout << "GLOBAL std_dev\t" << est.get_std_deviation() << std::endl;
+                                std::cout << "GLOBAL exp * qm\t" << est.get_expectation() * global_quantile_multiplicator << std::endl;
+//                                std::cout << "GLOBAL w\t" << work << std::endl;
+//                                std::cout << "GLOBAL g\t" << improvement << std::endl;
+                                std::cout << "GLOBAL w / g\t" << (work + 0.0) / improvement << std::endl;
+                        }
+
+                        if (overall_improvement > 0 && improvement > 0 && i > 1 &&
+                            (est.get_expectation() * global_quantile_multiplicator < (work + 0.0) / improvement)) {
+                                stop = true;
+                        }
+
+                        est.put((work + 0.0) / improvement);
                 }
 
+//                if (overall_improvement * (config.stop_mls_global_threshold / 100.0) > improvement) {
+//                        stop = true;
+//                }
                 overall_improvement += improvement;
                 ++i;
         }
@@ -114,6 +147,9 @@ int multitry_kway_fm::start_more_locallized_search(graph_access& G, PartitionCon
         random_functions::permutate_vector_good(todolist, false);
 #endif
         Gain total_gain_improvement = 0;
+        uint64_t total_work = 0;
+        estimator<double> est;
+        size_t i = 0;
 
 #ifdef COMPARE_WITH_SEQUENTIAL_KAHIP
         while (!todolist.empty()) {
@@ -232,6 +268,8 @@ int multitry_kway_fm::start_more_locallized_search(graph_access& G, PartitionCon
                 std::vector<std::future<bool>> futures;
                 futures.reserve(num_threads - 1);
 
+                auto accesses_before = m_factory.get_total_num_part_accesses();
+
                 for (uint32_t id = 1; id < num_threads; ++id) {
                         futures.push_back(parallel::g_thread_pool.Submit(id - 1, task, id));
                 }
@@ -258,12 +296,49 @@ int multitry_kway_fm::start_more_locallized_search(graph_access& G, PartitionCon
                                                                     reactivated_vertices);
 
                 ALWAYS_ASSERT(real_gain_improvement >= 0);
+                uint64_t work = m_factory.get_total_num_part_accesses() - accesses_before;
+
+                //std::cout << "LOCAL iter\t" << i << std::endl;
+                if (!use_exp) {
+                        if (total_gain_improvement > 0) {
+                                //std::cout << "LOCAL tw / tg * qm\t" << (total_work + 0.0) / total_gain_improvement * local_quantile_multiplicator << std::endl;
+                                std::cout << "LOCAL w / g\t" << (work + 0.0) / real_gain_improvement << std::endl;
+                        }
+
+                        if (total_gain_improvement > 0 && real_gain_improvement > 0 &&
+                            (total_work + 0.0) / total_gain_improvement * local_quantile_multiplicator < (work + 0.0) / real_gain_improvement) {
+                                m_factory.time_move_nodes += CLOCK_END_TIME;
+                                total_gain_improvement += real_gain_improvement;
+                                break;
+                        }
+                        total_work += work;
+                } else {
+                        if (total_gain_improvement > 0) {
+//                                std::cout << "LOCAL exp\t" << est.get_expectation() << std::endl;
+//                                std::cout << "LOCAL std_dev\t" << est.get_std_deviation() << std::endl;
+//                                std::cout << "LOCAL exp * qm\t" << est.get_expectation() * local_quantile_multiplicator << std::endl;
+//                                std::cout << "LOCAL w\t" << work << std::endl;
+//                                std::cout << "LOCAL g\t" << real_gain_improvement << std::endl;
+                                std::cout << "LOCAL w / g\t" << (work + 0.0) / real_gain_improvement << std::endl;
+                        }
+
+                        if (total_gain_improvement > 0 && real_gain_improvement > 0 && i > 1 &&
+                            (est.get_expectation() * local_quantile_multiplicator < (work + 0.0) / real_gain_improvement)) {
+                                m_factory.time_move_nodes += CLOCK_END_TIME;
+                                total_gain_improvement += real_gain_improvement;
+                                break;
+                        }
+
+                        est.put((work + 0.0) / real_gain_improvement);
+                }
+
+
                 total_gain_improvement += real_gain_improvement;
 
-                if (total_gain_improvement * (config.stop_mls_local_threshold / 100.0) > real_gain_improvement) {
-                        m_factory.time_move_nodes += CLOCK_END_TIME;
-                        break;
-                }
+//                if (total_gain_improvement * (config.stop_mls_local_threshold / 100.0) > real_gain_improvement) {
+//                        m_factory.time_move_nodes += CLOCK_END_TIME;
+//                        break;
+//                }
 
                 m_factory.partial_reset_global_data();
 
@@ -288,6 +363,7 @@ int multitry_kway_fm::start_more_locallized_search(graph_access& G, PartitionCon
                 if (!config.kway_all_boundary_nodes_refinement && is_more_that_5percent_moved) {
                         break;
                 }
+                ++i;
         }
 
         CLOCK_START_N;
@@ -326,39 +402,30 @@ void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& c
 void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& config, parallel::fast_parallel_boundary& boundary) {
         ALWAYS_ASSERT(config.num_threads > 0);
 
-        CLOCK_START;
+        //CLOCK_START;
         parallel::submit_for_all([this, &boundary](uint32_t thread_id) {
-                CLOCK_START;
                 auto& thread_container = m_factory.queue[thread_id];
                 auto& ht = boundary[thread_id];
                 thread_container.reserve(ht.size());
                 for (const auto& elem : ht) {
                         thread_container.push_back(elem.first);
                 }
-                if (thread_id == 0) {
-                        CLOCK_END("Time copy from ht");
-                }
 
-                CLOCK_START_N;
                 auto& td = m_factory.get_thread_data(thread_id);
                 td.rnd.shuffle(thread_container.begin(), thread_container.end());
-                if (thread_id == 0) {
-                        CLOCK_END("Time shuffle");
-                }
         });
-        CLOCK_END("Copy and shuffle");
+        //CLOCK_END("Copy and shuffle");
 
-        CLOCK_START_N;
+        //CLOCK_START_N;
         shuffle_task_queue();
-        CLOCK_END("Additional shuffle");
+        //CLOCK_END("Additional shuffle");
 }
 
 void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& config, parallel::fast_parallel_boundary_exp& boundary) {
         ALWAYS_ASSERT(config.num_threads > 0);
-        CLOCK_START;
+        //CLOCK_START;
         std::atomic<size_t> offset(0);
         parallel::submit_for_all([this, &boundary, &offset](uint32_t thread_id) {
-                CLOCK_START;
                 auto& thread_container = m_factory.queue[thread_id];
                 auto& ht_hadle = boundary[thread_id];
                 size_t size = ht_hadle.capacity();
@@ -374,23 +441,15 @@ void multitry_kway_fm::setup_start_nodes_all(graph_access& G, PartitionConfig& c
                         }
                         begin = offset.fetch_add(block_size);
                 }
-                if (thread_id == 0) {
-                        CLOCK_END("Time copy from ht");
-                }
-
-                CLOCK_START_N;
 
                 auto& td = m_factory.get_thread_data(thread_id);
                 td.rnd.shuffle(thread_container.begin(), thread_container.end());
-                if (thread_id == 0) {
-                        CLOCK_END("Time shuffle");
-                }
         });
-        CLOCK_END("Copy and shuffle");
+        //CLOCK_END("Copy and shuffle");
 
-        CLOCK_START_N;
+        //CLOCK_START_N;
         shuffle_task_queue();
-        CLOCK_END("Additional shuffle");
+        //CLOCK_END("Additional shuffle");
 }
 
 void  multitry_kway_fm::shuffle_task_queue() {
