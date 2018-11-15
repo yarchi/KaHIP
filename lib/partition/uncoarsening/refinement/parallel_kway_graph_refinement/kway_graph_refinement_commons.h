@@ -24,6 +24,7 @@ public:
         //using nodes_partitions_hash_table = std::unordered_map<NodeID, PartitionID>;
         //using nodes_partitions_hash_table = std::vector<int>;
         //using nodes_partitions_hash_table = std::map<NodeID, PartitionID>;
+        using ht_with_erase = parallel::HashMapWithErase<NodeID, int32_t, parallel::xxhash<NodeID>, true, false>;
 
         // global data
         PartitionConfig& config;
@@ -45,6 +46,7 @@ public:
         boundary_starting_nodes start_nodes;
         std::unique_ptr<nodes_partitions_hash_table> nodes_partitions;
         std::unique_ptr<refinement_pq> queue;
+        std::unique_ptr<ht_with_erase> move_to;
         std::vector<std::pair<int, int>> min_cut_indices;
         std::vector<NodeID> transpositions;
         std::vector<PartitionID> from_partitions;
@@ -104,6 +106,7 @@ public:
                 ,       num_threads_finished(_num_threads_finished)
                 ,       nodes_partitions(nullptr)
                 ,       queue(nullptr)
+                ,       move_to(nullptr)
                 ,       total_thread_time(0.0)
                 ,       tried_movements(0)
                 ,       accepted_movements(0)
@@ -168,6 +171,18 @@ public:
                 //return nodes_partitions[node] != -1 ? nodes_partitions[node] :  G.getPartitionIndex(node);
         }
 
+        inline PartitionID get_local_partition_to_move(NodeID node) {
+                return (*move_to)[node];
+        }
+
+        inline void set_local_partition_to_move(NodeID node, PartitionID part_id) {
+                (*move_to)[node] = part_id;
+        }
+
+        inline void remove_local_partition_to_move(NodeID node) {
+                move_to->erase(node);
+        }
+
         inline void set_local_partition(NodeID id, PartitionID part_id) {
                 (*nodes_partitions)[id] = part_id;
         }
@@ -190,6 +205,10 @@ public:
                         }
                 }
 
+                if (move_to.get() == nullptr) {
+                        move_to = std::make_unique<ht_with_erase>(128);
+                }
+
                 for (PartitionID block = 0; block < config.k; ++block) {
                         parts_weights[block] = boundary.get_block_weight(block);
                         parts_sizes[block] = boundary.get_block_size(block);
@@ -205,6 +224,7 @@ public:
 
                 ////////nodes_partitions.reserve(nodes_partitions_hash_table::get_max_size_to_fit_l1());
                 queue->clear();
+                move_to->clear();
                 min_cut_indices.clear();
                 transpositions.clear();
                 from_partitions.clear();
