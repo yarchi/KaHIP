@@ -98,6 +98,14 @@ public:
                 return m_thread_data;
         }
 
+        uint64_t get_total_num_part_accesses() const {
+                uint64_t res = 0;
+                for (uint32_t id = 0; id < m_thread_data.size(); ++id) {
+                        res += m_thread_data[id].get().num_part_accesses;
+                }
+                return res;
+        }
+
         void print_iteration_statistics() {
                 statistics_type stat;
 
@@ -495,7 +503,19 @@ public:
 
         multitry_kway_fm(PartitionConfig& config, graph_access& G, boundary_type& boundary)
                 :       m_factory(config, G, boundary)
-        {}
+        {
+                // 0.75 quantile for exponential distribution
+                // global_quantile_multiplicator = 1.609;
+                //global_quantile_multiplicator = 10;
+                ALWAYS_ASSERT(config.stop_mls_global_threshold / 100.0 < 1.0);
+                global_quantile_multiplicator = std::log(1.0 / (1.0 - config.stop_mls_global_threshold / 100.0));
+
+                // 0.95 quantile for exponential distribution
+                //local_quantile_multiplicator = 4.6;
+                //local_quantile_multiplicator = 2;
+                ALWAYS_ASSERT(config.stop_mls_local_threshold / 100.0 < 1.0);
+                local_quantile_multiplicator = std::log(1.0 / (1.0 - config.stop_mls_local_threshold / 100.0));
+        }
 
         static void print_full_statistics() {
                 thread_data_factory::print_full_statistics();
@@ -519,6 +539,10 @@ public:
         void shuffle_task_queue();
 
 private:
+        static constexpr bool use_exp = true;
+
+        double global_quantile_multiplicator;
+        double local_quantile_multiplicator;
         thread_data_factory m_factory;
 
         int start_more_locallized_search(graph_access& G, PartitionConfig& config, bool init_neighbors);
