@@ -1,9 +1,11 @@
 #pragma once
 
 
+#include "data_structure/parallel/stat.h"
 #include "data_structure/parallel/task_queue.h"
 #include "partition/uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_commons.h"
 
+#include "stats.hpp"
 #include <tbb/concurrent_queue.h>
 
 #include <fstream>
@@ -504,17 +506,10 @@ public:
         multitry_kway_fm(PartitionConfig& config, graph_access& G, boundary_type& boundary)
                 :       m_factory(config, G, boundary)
         {
-                // 0.75 quantile for exponential distribution
-                // global_quantile_multiplicator = 1.609;
-                //global_quantile_multiplicator = 10;
                 ALWAYS_ASSERT(config.stop_mls_global_threshold / 100.0 < 1.0);
-                global_quantile_multiplicator = std::log(1.0 / (1.0 - config.stop_mls_global_threshold / 100.0));
-
-                // 0.95 quantile for exponential distribution
-                //local_quantile_multiplicator = 4.6;
-                //local_quantile_multiplicator = 2;
                 ALWAYS_ASSERT(config.stop_mls_local_threshold / 100.0 < 1.0);
-                local_quantile_multiplicator = std::log(1.0 / (1.0 - config.stop_mls_local_threshold / 100.0));
+                global_quantile = config.stop_mls_global_threshold / 100.0;
+                local_quantile = config.stop_mls_local_threshold / 100.0;
         }
 
         static void print_full_statistics() {
@@ -539,13 +534,56 @@ public:
         void shuffle_task_queue();
 
 private:
-        static constexpr bool use_exp = true;
+        enum class LoopType {
+                Global,
+                Local
+        };
 
-        double global_quantile_multiplicator;
-        double local_quantile_multiplicator;
+        enum class DistributionType {
+                Exponential,
+                LogNormal
+        };
+
+        static constexpr DistributionType distribution_type = DistributionType::LogNormal;
+
+        double global_quantile;
+        double local_quantile;
         thread_data_factory m_factory;
 
-        int start_more_locallized_search(graph_access& G, PartitionConfig& config, bool init_neighbors);
+        double get_quantile(estimator<double>& est, double p) const {
+                if (distribution_type == DistributionType::Exponential) {
+                        return stats::qexp(p, 1.0 / est.get_expectation());
+                } else if (distribution_type == DistributionType::LogNormal) {
+                        return stats::qlnorm(p, est.get_expectation(), est.get_std_deviation());
+                } else {
+                        throw std::logic_error("Undefined distribution type");
+                }
+        }
+
+        std::string get_distribution_name() const {
+                if (distribution_type == DistributionType::Exponential) {
+                        return "exponential";
+                } else if (distribution_type == DistributionType::LogNormal) {
+                        return "lognormal";
+                } else {
+                        throw std::logic_error("Undefined distribution type");
+                }
+        }
+
+        void add_value(estimator<double>& est, double value) const {
+                if (distribution_type == DistributionType::Exponential) {
+                        est.put(value);
+                } else if (distribution_type == DistributionType::LogNormal) {
+                        est.put(log(value));
+                } else {
+                        throw std::logic_error("Undefined distribution type");
+                }
+        }
+
+        void decide_if_stop(LoopType type, PartitionConfig& config, uint32_t iter, uint32_t rounds,
+                            estimator<double>& est, uint64_t work, EdgeWeight improvement, EdgeWeight overall_improvement, bool& stop) const;
+
+        int start_more_locallized_search(graph_access& G, PartitionConfig& config, bool init_neighbors, uint32_t rounds);
 
         int start_more_locallized_search_experimental(PartitionConfig& config, graph_access& G, bool init_neighbors,
                                                       std::vector<NodeID>& todolist);

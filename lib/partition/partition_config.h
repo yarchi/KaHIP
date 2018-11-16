@@ -430,6 +430,8 @@ struct PartitionConfig
         uint32_t l3_cache_size = 20480 * 1024;
         bool balls_and_bins_ht = false;
         bool remove_edges_in_matching  = false;
+        MultitryKwayLoopStoppingRule multitry_kway_global_loop_stopping_rule = MultitryKwayLoopStoppingRule::ITERATION;
+        MultitryKwayLoopStoppingRule multitry_kway_local_loop_stopping_rule = MultitryKwayLoopStoppingRule::PERCENTAGE;
         //bool accept_small_coarser_graphs = false;
 };
 

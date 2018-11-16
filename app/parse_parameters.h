@@ -195,6 +195,9 @@ int parse_parameters(int argn, char **argv,
         struct arg_int *l3_cache_size                        = arg_int0(NULL, "l3_cache_size", NULL, "Size of l3 cache in bytes (Default: 20480 * 1024 bytes)");
         struct arg_lit *balls_and_bins_ht                    = arg_lit0(NULL, "balls_and_bins_ht", "Use bins and ball for parallel for on hash tables. (Default: false)");
         struct arg_lit *remove_edges_in_matching             = arg_lit0(NULL, "remove_edges_in_matching", "Remove edges in parallel local max or not. (Default: false)");
+        struct arg_rex *multitry_kway_global_loop_stopping_rule = arg_rex0(NULL, "multitry_kway_global_loop_stopping_rule", "^(iteration|percentage|quantile)$", "VARIANT", REG_EXTENDED, "Stopping rule for global loop :iteration, percentage, quantile. Default: iteration.");
+        struct arg_rex *multitry_kway_local_loop_stopping_rule = arg_rex0(NULL, "multitry_kway_local_loop_stopping_rule", "^(iteration|percentage|quantile)$", "VARIANT", REG_EXTENDED, "Stopping rule for local loop :iteration, percentage, quantile. Default: percentage.");
+
         struct arg_end *end                                  = arg_end(100);
 
         // Define argtable.
@@ -272,6 +275,8 @@ int parse_parameters(int argn, char **argv,
                 matching_type,
                 balls_and_bins_ht,
                 remove_edges_in_matching,
+                multitry_kway_global_loop_stopping_rule,
+                multitry_kway_local_loop_stopping_rule,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -1239,6 +1244,34 @@ int parse_parameters(int argn, char **argv,
 
         if (remove_edges_in_matching->count > 0) {
                 partition_config.remove_edges_in_matching = true;
+        }
+
+        if (multitry_kway_global_loop_stopping_rule->count) {
+                const char* val = multitry_kway_global_loop_stopping_rule->sval[0];
+                if(strcmp("iteration", val) == 0) {
+                        partition_config.multitry_kway_global_loop_stopping_rule = MultitryKwayLoopStoppingRule::ITERATION;
+                } else if (strcmp("percentage", val) == 0) {
+                        partition_config.multitry_kway_global_loop_stopping_rule = MultitryKwayLoopStoppingRule::PERCENTAGE;
+                } else if (strcmp("quantile", val) == 0) {
+                        partition_config.multitry_kway_global_loop_stopping_rule = MultitryKwayLoopStoppingRule::QUANTILE;
+                } else {
+                        fprintf(stderr, "Invalid global loop stopping rule: \"%s\"\n", multitry_kway_global_loop_stopping_rule->sval[0]);
+                        exit(0);
+                }
+        }
+
+        if (multitry_kway_local_loop_stopping_rule->count) {
+                const char* val = multitry_kway_local_loop_stopping_rule->sval[0];
+                if(strcmp("iteration", val) == 0) {
+                        partition_config.multitry_kway_local_loop_stopping_rule = MultitryKwayLoopStoppingRule::ITERATION;
+                } else if (strcmp("percentage", val) == 0) {
+                        partition_config.multitry_kway_local_loop_stopping_rule = MultitryKwayLoopStoppingRule::PERCENTAGE;
+                } else if (strcmp("quantile", val) == 0) {
+                        partition_config.multitry_kway_local_loop_stopping_rule = MultitryKwayLoopStoppingRule::QUANTILE;
+                } else {
+                        fprintf(stderr, "Invalid local loop stopping rule: \"%s\"\n", val);
+                        exit(0);
+                }
         }
 
         return 0;
