@@ -33,9 +33,7 @@
 #include "definitions.h"
 #include "../refinement.h"
 
-#include <tbb/scalable_allocator.h>
 #include <tbb/concurrent_queue.h>
-#include <tbb/memory_pool.h>
 
 #include <vector>
 

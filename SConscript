@@ -39,7 +39,7 @@ env.Replace(CXX = "g++")
 
 #add git revision
 def getGitDesc():
-  return Popen('cat ../GIT_COMMIT_HASH', stdout=PIPE, shell=True).stdout.read().strip()
+  return Popen('git rev-parse --short HEAD', stdout=PIPE, shell=True).stdout.read().strip()
 
 GIT_DESC = getGitDesc() 
 env.Append(CPPDEFINES = { 'GIT_DESC' : ('\\"%s\\"' % GIT_DESC) })

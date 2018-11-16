@@ -191,5 +191,11 @@ enum class ApplyMoveStrategy {
         SKIP
 };
 
+enum class MultitryKwayLoopStoppingRule {
+        ITERATION,
+        PERCENTAGE,
+        QUANTILE
+};
+
 #endif
 

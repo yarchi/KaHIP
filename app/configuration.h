@@ -597,6 +597,10 @@ inline void configuration::fastsocialmultitry( PartitionConfig & partition_confi
         partition_config.kway_all_boundary_nodes_refinement = true;
         //if(partition_config.k > 8) {
         partition_config.quotient_graph_refinement_disabled     = true;
+        partition_config.multitry_kway_global_loop_stopping_rule = MultitryKwayLoopStoppingRule::ITERATION;
+        partition_config.multitry_kway_local_loop_stopping_rule = MultitryKwayLoopStoppingRule::PERCENTAGE;
+        partition_config.global_multitry_rounds = 3;
+        partition_config.stop_mls_local_threshold = 10;
 }
 
 inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partition_config) {
@@ -619,8 +623,6 @@ inline void configuration::fastsocialmultitry_parallel(PartitionConfig& partitio
         // parallel k-way multitry local search in refinement
         partition_config.apply_move_strategy = ApplyMoveStrategy::SKIP;
         partition_config.parallel_multitry_kway = true;
-        partition_config.global_multitry_rounds = 3;
-        partition_config.stop_mls_local_threshold = 10;
 }
 
 inline void configuration::ecosocialmultitry_parallel(PartitionConfig& partition_config) {
