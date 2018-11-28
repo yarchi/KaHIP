@@ -90,6 +90,11 @@ public:
 private:
         uint32_t _seed;
 
+        //-----------------------------------------------------------------------------
+        // MurmurHash2, 64-bit versions, by Austin Appleby
+
+        // The same caveats as 32-bit MurmurHash2 apply here - beware of alignment
+        // and endian-ness issues if used across multiple platforms.
         inline hash_type hash(const void* key, uint32_t len, uint32_t seed) const {
                 const uint64_t m = 0xc6a4a7935bd1e995;
                 const int r = 47;
