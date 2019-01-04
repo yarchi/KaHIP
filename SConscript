@@ -192,3 +192,6 @@ if env['program'] == 'library':
         env.Append(CXXFLAGS = '-fPIC')
         env.Append(CCFLAGS  = '-fPIC')
         SConscript('interface/SConscript',exports='env')
+
+if env['program'] == 'convert_edge_list_to_metis':
+        env.Program('convert_edge_list_to_metis', ['app/convert_edge_list_to_metis.cpp', 'lib/data_structure/parallel/thread_pool.cpp'], LIBS=['pthread', 'atomic'])

@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <vector>
+#include <fstream>
 
 static void shuffle_graph(graph_access& graph, graph_access& shuffled_graph) {
         std::vector<NodeID> nodes_perm;
@@ -164,4 +165,101 @@ static void sort_edges(graph_access& graph, graph_access& sorted_graph) {
         }
 
         sorted_graph.finish_construction();
+}
+
+static void print_graph_stat(graph_access& graph) {
+        uint64_t edge_weight = 0;
+        uint64_t node_weight = 0;
+        double avg_degree = (graph.number_of_edges() + 0.0) / graph.number_of_nodes();
+
+        std::vector<std::pair<uint64_t, uint32_t>> topEdgeDegree;
+        topEdgeDegree.reserve(graph.number_of_nodes());
+        for (NodeID node = 0; node < graph.number_of_nodes(); ++node) {
+                node_weight += graph.getNodeWeight(node);
+                topEdgeDegree.emplace_back(graph.getNodeDegree(node), node);
+                forall_out_edges(graph, e, node) {
+                        NodeID target = graph.getEdgeTarget(e);
+                        EdgeWeight weight = graph.getEdgeWeight(e);
+
+                        edge_weight += weight;
+                } endfor
+
+        }
+
+
+
+        std::sort(topEdgeDegree.begin(), topEdgeDegree.end(), std::greater<std::pair<uint64_t, uint32_t>>());
+        uint64_t cur_deg = 0;
+
+        size_t i = 0;
+        double quantile = 0.05;
+        uint64_t total_deg = 2 * graph.number_of_edges();
+
+        std::cout << "Total degree\t" << total_deg << std::endl;
+
+        std::vector<uint32_t> to_remove;
+        while (cur_deg <= total_deg * 0.5 && i < topEdgeDegree.size())
+        {
+                cur_deg += topEdgeDegree[i].first;
+                std::cout << "Vertex " << topEdgeDegree[i].second << " has degree " << topEdgeDegree[i].first << std::endl;
+                to_remove.push_back(topEdgeDegree[i].second);
+                if (cur_deg >= total_deg * quantile) {
+                        std::cout << "Top " << i + 1 << " vertices have total degree of " <<  cur_deg
+                                  << ". This is " << (cur_deg + 0.0) / total_deg << "of all total degree" << std::endl;
+                        quantile += 0.05;
+                        break;
+                }
+                i++;
+        }
+
+        std::cout << "Remove vertices" << std::endl;
+        std::vector<uint32_t> not_remove(graph.number_of_nodes(), 1);
+        std::vector<uint32_t> new_nums(graph.number_of_nodes() + 1, 1);
+        new_nums.back() = 0;
+        for (auto n : to_remove) {
+                not_remove[n] = 0;
+                new_nums[n] = 0;
+        }
+
+        for (uint32_t node = 0; node < graph.number_of_nodes(); ++node)
+                new_nums[node + 1] += new_nums[node];
+
+        std::vector<std::vector<std::pair<uint64_t, uint64_t>>> adj_list(graph.number_of_nodes());
+        size_t edgs = 0;
+        for (uint32_t node = 0; node < graph.number_of_nodes(); ++node) {
+                if (not_remove[node] == 0) {
+                        continue;
+                }
+                uint32_t new_num = new_nums[node] - 1;
+                forall_out_edges(graph, e, node) {
+                        NodeID target = graph.getEdgeTarget(e);
+                        EdgeWeight weight = graph.getEdgeWeight(e);
+
+                        if (not_remove[target] == 1) {
+                                ALWAYS_ASSERT(new_num != new_nums[target] - 1);
+                                adj_list[new_num].emplace_back(new_nums[target] - 1, weight);
+                                ++edgs;
+                        }
+
+                } endfor
+        }
+
+        std::cout << "Write graph" << std::endl;
+        std::ofstream out("coarse_graph_without_high_degree");
+        out << new_nums.back() << ' ' << edgs / 2 << " 11\n";
+        for (uint32_t node = 0; node < graph.number_of_nodes(); ++node) {
+                if (not_remove[node] == 0) {
+                        continue;
+                }
+                out << graph.getNodeWeight(node) << ' ';
+
+                uint32_t new_num = new_nums[node] - 1;
+                std::sort(adj_list[new_num].begin(), adj_list[new_num].end());
+                for (const auto& edge : adj_list[new_num]) {
+                        out << edge.first + 1 << ' ' << edge.second << ' ';
+                }
+                out << '\n';
+        }
+
+        out.close();
 }

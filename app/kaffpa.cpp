@@ -48,6 +48,7 @@
 #include "uncoarsening/refinement/parallel_kway_graph_refinement/kway_graph_refinement_commons.h"
 
 #include "data_structure/parallel/adaptive_hash_table.h"
+#include "data_structure/parallel/graph_utils.h"
 
 #ifdef __gnu_linux__
 #include <numa.h>
@@ -178,6 +179,9 @@ int main(int argn, char **argv) {
         parallel::g_thread_pool.Resize(partition_config.num_threads - 1);
 
         std::cout <<  "graph has " <<  G.number_of_nodes() <<  " nodes and " <<  G.number_of_edges() <<  " edges"  << std::endl;
+        std::cout << "Max degree\t" << G.getMaxDegree() << std::endl;
+        print_graph_stat(G);
+
         if (partition_config.label_propagation_refinement) {
                 std::cout << "Algorithm\t" << partition_config.configuration << std::endl;
                 std::cout << "Block size\t" << partition_config.block_size << std::endl;

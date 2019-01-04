@@ -168,12 +168,12 @@ int main(int argn, char **argv)
                                 ss >> edge_weight;
                                 total_edgeweight += edge_weight;
 
-                                if(total_edgeweight > (long)std::numeric_limits<unsigned int>::max()) {
-                                        std::cout <<  "The sum of the edge weights exeeds 32 bits. Currently not supported."  << std::endl;
-                                        std::cout <<  "Please scale weights of the graph."  << std::endl;
-                                        std::cout <<  "*******************************************************************************"  << std::endl;
-                                        exit(0);
-                                }
+//                                if(total_edgeweight > (long)std::numeric_limits<unsigned int>::max()) {
+//                                        std::cout <<  "The sum of the edge weights exeeds 32 bits. Currently not supported."  << std::endl;
+//                                        std::cout <<  "Please scale weights of the graph."  << std::endl;
+//                                        std::cout <<  "*******************************************************************************"  << std::endl;
+//                                        exit(0);
+//                                }
 
                                 if( edge_weight <= 0 ) {
                                         std::cout <<  "The edge starting from node " <<  (node_counter+1) << " and ending in node " << target  
