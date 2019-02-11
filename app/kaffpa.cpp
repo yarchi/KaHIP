@@ -31,6 +31,7 @@
 #include "balance_configuration.h"
 #include "data_structure/graph_access.h"
 #include "data_structure/parallel/graph_utils.h"
+#include "data_structure/parallel/mem_numa.h"
 #include "data_structure/parallel/thread_pool.h"
 #include "graph_io.h"
 #include "macros_assertions.h"
@@ -49,6 +50,7 @@
 
 #include "data_structure/parallel/adaptive_hash_table.h"
 #include "data_structure/parallel/graph_utils.h"
+#include "data_structure/parallel/mem_numa.h"
 
 #ifdef __gnu_linux__
 #include <numa.h>
@@ -81,15 +83,6 @@ int main(int argn, char **argv) {
         std::cout << "COMPARE WITH SEQUENTIAL MODE IS ON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
         std::cout << "THIS SLOWS DOWN THE APP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::end;
 #endif
-
-#ifdef __gnu_linux__
-        if (numa_available() < 0) {
-		printf("No NUMA support available on this system.\n");
-		exit(1);
-	}
-        numa_set_interleave_mask(numa_all_nodes_ptr);
-#endif
-
         std::cout << "Git revision\t" << GIT_DESC << std::endl;
         PartitionConfig partition_config;
         std::string graph_filename;
@@ -114,9 +107,11 @@ int main(int argn, char **argv) {
         if(suppress_output) {
                 std::cout.rdbuf(ofs.rdbuf()); 
         }
-
         partition_config.LogDump(stdout);
-        graph_access G;     
+
+        parallel::numa_memory_interleave(partition_config.num_threads, partition_config.threads_per_socket);
+
+        graph_access G;
         ALWAYS_ASSERT(partition_config.main_core == 0);
 
         timer t;
@@ -179,8 +174,6 @@ int main(int argn, char **argv) {
         parallel::g_thread_pool.Resize(partition_config.num_threads - 1);
 
         std::cout <<  "graph has " <<  G.number_of_nodes() <<  " nodes and " <<  G.number_of_edges() <<  " edges"  << std::endl;
-        std::cout << "Max degree\t" << G.getMaxDegree() << std::endl;
-        print_graph_stat(G);
 
         if (partition_config.label_propagation_refinement) {
                 std::cout << "Algorithm\t" << partition_config.configuration << std::endl;
