@@ -433,6 +433,10 @@ struct PartitionConfig
         MultitryKwayLoopStoppingRule multitry_kway_global_loop_stopping_rule = MultitryKwayLoopStoppingRule::ITERATION;
         MultitryKwayLoopStoppingRule multitry_kway_local_loop_stopping_rule = MultitryKwayLoopStoppingRule::PERCENTAGE;
         //bool accept_small_coarser_graphs = false;
+        bool test_coarsening = false;
+        bool test_initial_partitioning = false;
+        bool test_uncoarsening = false;
+        bool first_try = true;
 };
 
 

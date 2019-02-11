@@ -58,7 +58,7 @@ def GetEnvironment():
     print 'Illegal value for variant: %s' % env['variant']
     sys.exit(1)
   
-  if not env['program'] in ['kaffpa', 'kaffpa_test', 'kaffpa_compare_with_sequential', 'kaffpa_test_stopping_rule', 'kaffpaE', 'partition_to_vertex_separator','improve_vertex_separator','library','graphchecker','label_propagation','evaluator','node_separator', 'convert_edge_list_to_metis']:
+  if not env['program'] in ['kaffpa', 'kaffpa_test_components', 'kaffpa_test', 'kaffpa_compare_with_sequential', 'kaffpa_test_stopping_rule', 'kaffpaE', 'partition_to_vertex_separator','improve_vertex_separator','library','graphchecker','label_propagation','evaluator','node_separator', 'convert_edge_list_to_metis']:
     print 'Illegal value for program: %s' % env['program']
     sys.exit(1)
 

@@ -198,6 +198,10 @@ int parse_parameters(int argn, char **argv,
         struct arg_rex *multitry_kway_global_loop_stopping_rule = arg_rex0(NULL, "multitry_kway_global_loop_stopping_rule", "^(iteration|percentage|quantile)$", "VARIANT", REG_EXTENDED, "Stopping rule for global loop :iteration, percentage, quantile. Default: iteration.");
         struct arg_rex *multitry_kway_local_loop_stopping_rule = arg_rex0(NULL, "multitry_kway_local_loop_stopping_rule", "^(iteration|percentage|quantile)$", "VARIANT", REG_EXTENDED, "Stopping rule for local loop :iteration, percentage, quantile. Default: percentage.");
 
+        struct arg_lit *test_coarsening                      = arg_lit0(NULL, "test_coarsening", "(Default: disabled)");
+        struct arg_lit *test_initial_partitioning            = arg_lit0(NULL, "test_initial_partitioning", "(Default: disabled)");
+        struct arg_lit *test_uncoarsening                    = arg_lit0(NULL, "test_uncoarsening", "(Default: disabled)");
+
         struct arg_end *end                                  = arg_end(100);
 
         // Define argtable.
@@ -277,6 +281,9 @@ int parse_parameters(int argn, char **argv,
                 remove_edges_in_matching,
                 multitry_kway_global_loop_stopping_rule,
                 multitry_kway_local_loop_stopping_rule,
+                test_coarsening,
+                test_initial_partitioning,
+                test_uncoarsening,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -1272,6 +1279,18 @@ int parse_parameters(int argn, char **argv,
                         fprintf(stderr, "Invalid local loop stopping rule: \"%s\"\n", val);
                         exit(0);
                 }
+        }
+
+        if (test_coarsening->count > 0) {
+                partition_config.test_coarsening = true;
+        }
+
+        if (test_initial_partitioning->count > 0) {
+                partition_config.test_initial_partitioning = true;
+        }
+
+        if (test_uncoarsening->count > 0) {
+                partition_config.test_uncoarsening = true;
         }
 
         return 0;

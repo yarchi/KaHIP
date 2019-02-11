@@ -214,16 +214,50 @@ void graph_partitioner::single_run( PartitionConfig & config, graph_access & G) 
                                         } 
                                 }
                                 CLOCK_START;
-                                coarsen.perform_coarsening(config, G, hierarchy);
+                                if (config.first_try && config.test_coarsening) {
+                                        config.num_threads = 79;
+                                        parallel::g_thread_pool.Resize(config.num_threads - 1);
+                                        config.first_try = false;
+
+                                        coarsen.perform_coarsening(config, G, hierarchy);
+
+                                        config.num_threads = 1;
+                                        parallel::g_thread_pool.Clear();
+                                } else {
+                                        coarsen.perform_coarsening(config, G, hierarchy);
+                                }
                                 CLOCK_END("Coarsening");
 
                                 CLOCK_START_N;
-                                init_part.perform_initial_partitioning(config, hierarchy);
+                                if (config.first_try && config.test_initial_partitioning) {
+                                        config.num_threads = 79;
+                                        parallel::g_thread_pool.Resize(config.num_threads - 1);
+                                        config.first_try = false;
+
+                                        init_part.perform_initial_partitioning(config, hierarchy);
+
+                                        config.num_threads = 1;
+                                        parallel::g_thread_pool.Clear();
+                                } else {
+                                        init_part.perform_initial_partitioning(config, hierarchy);
+                                }
                                 CLOCK_END("Initial partitioning");
 
                                 CLOCK_START_N;
-                                uncoarsen.perform_uncoarsening(config, hierarchy);
+                                if (config.first_try && config.test_uncoarsening) {
+                                        config.num_threads = 79;
+                                        parallel::g_thread_pool.Resize(config.num_threads - 1);
+                                        config.first_try = false;
+
+                                        uncoarsen.perform_uncoarsening(config, hierarchy);
+
+                                        config.num_threads = 1;
+                                        parallel::g_thread_pool.Clear();
+                                } else {
+                                        uncoarsen.perform_uncoarsening(config, hierarchy);
+                                }
                                 CLOCK_END("Uncoarsening");
+
                                 if( config.mode_node_separators ) {
                                         quality_metrics qm;
                                         std::cerr <<  "vcycle result " << qm.separator_weight(G)  << std::endl;

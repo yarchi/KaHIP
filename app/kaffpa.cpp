@@ -179,8 +179,6 @@ int main(int argn, char **argv) {
         parallel::g_thread_pool.Resize(partition_config.num_threads - 1);
 
         std::cout <<  "graph has " <<  G.number_of_nodes() <<  " nodes and " <<  G.number_of_edges() <<  " edges"  << std::endl;
-        std::cout << "Max degree\t" << G.getMaxDegree() << std::endl;
-        print_graph_stat(G);
 
         if (partition_config.label_propagation_refinement) {
                 std::cout << "Algorithm\t" << partition_config.configuration << std::endl;
