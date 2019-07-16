@@ -805,7 +805,6 @@ EdgeWeight label_propagation_refinement::parallel_label_propagation_with_queue_w
 
                 std::swap(queue, next_queue);
                 std::swap(queue_contains, next_queue_contains);
-                futures.clear();
         }
         CLOCK_END("Parallel lp: iterations");
 

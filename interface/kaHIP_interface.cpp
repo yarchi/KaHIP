@@ -150,6 +150,8 @@ void kaffpa(int* n,
                 case STRONGSOCIAL: 
                         cfg.strongsocial(partition_config);
                         break;
+
+                case FASTSOCIAL_PARALLEL:
                 case FASTSOCIALMULTITRY_PARALLEL:
 #ifdef __gnu_linux__
                         if (numa_available() < 0) {
@@ -159,7 +161,12 @@ void kaffpa(int* n,
                         numa_set_interleave_mask(numa_all_nodes_ptr);
                         old_numa_mask_ptr = numa_get_interleave_mask();
 #endif
-                        cfg.fastsocialmultitry_parallel(partition_config);
+                        if (mode == FASTSOCIALMULTITRY_PARALLEL) {
+                                cfg.fastsocialmultitry_parallel(partition_config);
+                        } else if (mode == FASTSOCIAL_PARALLEL) {
+                                cfg.fastsocial_parallel(partition_config);
+                        }
+
                         parallel::PinToCore(partition_config.main_core);
                         parallel::g_thread_pool.Resize(partition_config.num_threads - 1);
                         break;
@@ -171,7 +178,7 @@ void kaffpa(int* n,
         partition_config.seed = seed;
         internal_kaffpa_call(partition_config, suppress_output, n, vwgt, xadj, adjcwgt, adjncy, nparts, imbalance, edgecut, part);
 
-        if (mode == FASTSOCIALMULTITRY_PARALLEL) {
+        if (mode == FASTSOCIALMULTITRY_PARALLEL || mode == FASTSOCIAL_PARALLEL) {
                 parallel::Unpin();
                 parallel::g_thread_pool.Clear();
 #ifdef __gnu_linux__
