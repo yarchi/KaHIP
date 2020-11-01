@@ -68,8 +68,9 @@ int uncoarsening::perform_uncoarsening_cut(const PartitionConfig& config, graph_
                         }
                         CLOCK_END(">> Build boundary");
 
+                        bool save_ht_log = hierarchy.isEmpty();
                         CLOCK_START_N;
-                        improvement += perform_multitry_kway(cfg, *G, boundary);
+                        improvement += perform_multitry_kway(cfg, *G, boundary, save_ht_log);
                         CLOCK_END(">> Refinement");
                 }
 
@@ -104,7 +105,7 @@ void uncoarsening::perform_label_propagation(PartitionConfig& config, graph_acce
         }
 }
 
-EdgeWeight uncoarsening::perform_multitry_kway(PartitionConfig& config, graph_access& G, boundary_type& boundary) {
+EdgeWeight uncoarsening::perform_multitry_kway(PartitionConfig& config, graph_access& G, boundary_type& boundary, bool save_ht_log) {
         CLOCK_START;
         quality_metrics qm;
         EdgeWeight old_cut = 0;
@@ -116,7 +117,7 @@ EdgeWeight uncoarsening::perform_multitry_kway(PartitionConfig& config, graph_ac
                 std::cout << "balance before\t" << old_balance << std::endl;
         }
 
-        parallel::multitry_kway_fm multitry_kway(config, G, boundary);
+        parallel::multitry_kway_fm multitry_kway(config, G, boundary, save_ht_log);
         EdgeWeight improvement = multitry_kway.perform_refinement(config, G, boundary, config.global_multitry_rounds,
                                                                   true, config.kway_adaptive_limits_alpha);
 

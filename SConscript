@@ -128,6 +128,18 @@ if env['program'] == 'kaffpa':
         env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS -D_REENTRANT -U_OPENMP -Wno-unused-function')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')
         env.Program('kaffpa', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'tbbmalloc_proxy', 'libargtable2', 'pthread', 'dl', 'atomic', 'libittnotify', 'dl', 'numa', 'omp'])
+if env['program'] == 'kaffpa_gen_ht_sequence':
+        env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS -D_REENTRANT -U_OPENMP -Wno-unused-function')
+        env.Append(CCFLAGS  = '-DMODE_KAFFPA')
+        env.Program('kaffpa_gen_ht_sequence', ['app/kaffpa.cpp']+libkaffpa_files, LIBS=['tbb', 'tbbmalloc', 'tbbmalloc_proxy', 'libargtable2', 'pthread', 'dl', 'atomic', 'dl', 'numa', 'omp'])
+if env['program'] == 'bfs_to_file':
+        env.Append(CXXFLAGS = '-DMODE_KAFFPA -Wno-unused-function')
+        env.Append(CCFLAGS  = '-DMODE_KAFFPA')
+        env.Program('bfs_to_file', ['app/bfs_to_file.cpp', 'lib/io/graph_io.cpp'], LIBS = ['libargtable2'])
+if env['program'] == 'convert_to_mtx':
+        env.Append(CXXFLAGS = '-DMODE_KAFFPA -Wno-unused-function')
+        env.Append(CCFLAGS  = '-DMODE_KAFFPA')
+        env.Program('convert_to_mtx', ['app/convert_to_mtx.cpp', 'lib/io/graph_io.cpp'], LIBS = ['libargtable2'])
 if env['program'] == 'kaffpa_test':
         env.Append(CXXFLAGS = '-DMODE_KAFFPA -DCPP11THREADS')
         env.Append(CCFLAGS  = '-DMODE_KAFFPA')

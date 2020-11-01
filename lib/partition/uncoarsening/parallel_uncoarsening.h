@@ -10,7 +10,7 @@ public:
 private:
         void perform_label_propagation(PartitionConfig& config, graph_access& G);
 
-        EdgeWeight perform_multitry_kway(PartitionConfig& config, graph_access& G, boundary_type& boundary);
+        EdgeWeight perform_multitry_kway(PartitionConfig& config, graph_access& G, boundary_type& boundary, bool save_ht_log = false);
 };
 
 }

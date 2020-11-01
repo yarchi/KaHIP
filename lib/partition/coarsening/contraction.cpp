@@ -30,6 +30,8 @@
 
 #include "data-structures/definitions.h"
 
+#include <fstream>
+
 contraction::contraction() {
 
 }
@@ -198,10 +200,12 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
         block_size = std::max(block_size, 1000u);
         std::cout << "block_size\t" << block_size << std::endl;
 
+
         auto task = [&](uint32_t id) {
                 auto handle = new_edges.getHandle();
                 std::vector<NodeWeight> my_block_infos(no_of_coarse_vertices);
                 NodeID begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                std::vector<std::pair<NodeID, NodeID>> ht_keys;
                 while (begin < G.number_of_nodes()) {
                         NodeID end = std::min(begin + block_size, G.number_of_nodes());
 
@@ -218,7 +222,7 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
                                                 EdgeWeight edge_weight = G.getEdgeWeight(e);
                                                 uint64_t key = get_uint64_from_pair_unsorted(source_cluster,
                                                                                              target_cluster);
-
+                                                ht_keys.emplace_back(source_cluster, target_cluster);
                                                 handle.insertOrUpdate(key, edge_weight,
                                                                       [](size_t& lhs, const size_t& rhs) {
                                                                               return lhs += rhs;
@@ -228,6 +232,12 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
                                 } endfor
                         }
                         begin = offset.fetch_add(block_size, std::memory_order_relaxed);
+                }
+                if (partition_config.ht_save_contraction_ht) {
+                        std::ofstream out("contraction_ht_thread_" + std::to_string(id));
+                        for (const auto& rec : ht_keys) {
+                                out << rec.first << ' ' << rec.second << ' ' << 1 << std::endl;
+                        }
                 }
                 return my_block_infos;
         };
@@ -243,6 +253,9 @@ void contraction::parallel_fast_contract_clustering(const PartitionConfig& parti
                 }
         }, block_infos);
         CLOCK_END("Construct hash table and aux data");
+        if (partition_config.ht_save_contraction_ht) {
+                abort();
+        }
 
         CLOCK_START_N;
         std::vector<parallel::AtomicWrapper<EdgeID>> offsets(no_of_coarse_vertices);

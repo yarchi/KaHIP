@@ -30,7 +30,8 @@ struct PartitionConfig
 {
         PartitionConfig() {}
 
-
+        std::string graph_algo_type;
+        bool ht_save_contraction_ht = false;
         //============================================================
         //=======================MATCHING=============================
         //============================================================
@@ -433,6 +434,7 @@ struct PartitionConfig
         MultitryKwayLoopStoppingRule multitry_kway_global_loop_stopping_rule = MultitryKwayLoopStoppingRule::ITERATION;
         MultitryKwayLoopStoppingRule multitry_kway_local_loop_stopping_rule = MultitryKwayLoopStoppingRule::PERCENTAGE;
         //bool accept_small_coarser_graphs = false;
+        std::string out_file;
 };
 
 

@@ -561,12 +561,14 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
 //                                                                   std::memory_order_relaxed));
 
         if (td.parts_sizes[from] == 1) {
+                ++td.false_single;
                 return false;
         }
 
         NodeWeight part_weight = td.parts_weights[to];
 
         if (part_weight + this_nodes_weight >= td.config.upper_bound_partition) {
+                ++td.false_overweight;
                 return false;
         }
         td.parts_weights[to] = part_weight + this_nodes_weight;
@@ -594,6 +596,7 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
                         Gain gain = td.compute_gain(target, target_from, targets_to, ext_degree);
 
                         if (td.num_threads_finished.load(std::memory_order_acq_rel) > 0) {
+                                ++td.false_other_threads_stop;
                                 return false;
                         }
 
@@ -616,6 +619,7 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
                         Gain gain = td.compute_gain(target, target_from, targets_to, ext_degree);
 
                         if (td.num_threads_finished.load(std::memory_order_acq_rel) > 0) {
+                                ++td.false_other_threads_stop;
                                 return false;
                         }
 
@@ -630,7 +634,7 @@ inline bool kway_graph_refinement_core::local_move_node(thread_data_refinement_c
                         }
                 }
         } endfor
-
+        ++td.true_move;
         return true;
 }
 }

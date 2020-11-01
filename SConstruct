@@ -55,11 +55,11 @@ def GetEnvironment():
 
   env = Environment(options=opts, ENV=os.environ)
   if not env['variant'] in ['optimized','optimized_output','debug']:
-    print 'Illegal value for variant: %s' % env['variant']
+    print('Illegal value for variant: %s' % env['variant'])
     sys.exit(1)
   
-  if not env['program'] in ['kaffpa', 'kaffpa_test', 'kaffpa_compare_with_sequential', 'kaffpa_test_stopping_rule', 'kaffpaE', 'partition_to_vertex_separator','improve_vertex_separator','library','graphchecker','label_propagation','evaluator','node_separator']:
-    print 'Illegal value for program: %s' % env['program']
+  if not env['program'] in ['kaffpa', 'kaffpa_gen_ht_sequence', 'bfs_to_file', 'convert_to_mtx', 'kaffpa_test', 'kaffpa_compare_with_sequential', 'kaffpa_test_stopping_rule', 'kaffpaE', 'partition_to_vertex_separator','improve_vertex_separator','library','graphchecker','label_propagation','evaluator','node_separator']:
+    print('Illegal value for program: %s' % env['program'])
     sys.exit(1)
 
   # Special configuration for 64 bit machines.

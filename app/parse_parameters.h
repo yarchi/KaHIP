@@ -197,7 +197,8 @@ int parse_parameters(int argn, char **argv,
         struct arg_lit *remove_edges_in_matching             = arg_lit0(NULL, "remove_edges_in_matching", "Remove edges in parallel local max or not. (Default: false)");
         struct arg_rex *multitry_kway_global_loop_stopping_rule = arg_rex0(NULL, "multitry_kway_global_loop_stopping_rule", "^(iteration|percentage|quantile)$", "VARIANT", REG_EXTENDED, "Stopping rule for global loop :iteration, percentage, quantile. Default: iteration.");
         struct arg_rex *multitry_kway_local_loop_stopping_rule = arg_rex0(NULL, "multitry_kway_local_loop_stopping_rule", "^(iteration|percentage|quantile)$", "VARIANT", REG_EXTENDED, "Stopping rule for local loop :iteration, percentage, quantile. Default: percentage.");
-
+        struct arg_rex *graph_algo_type                      = arg_rex0(NULL, "graph_algo_type", "^(bfs|dfs|2_hop)$", "VARIANT", REG_EXTENDED, "graph_algo_type");
+        struct arg_lit *ht_save_contraction_ht               = arg_lit0(NULL, "ht_save_contraction_ht", "Save keys of hash table in contraction (Default: false)");
         struct arg_end *end                                  = arg_end(100);
 
         // Define argtable.
@@ -277,6 +278,8 @@ int parse_parameters(int argn, char **argv,
                 remove_edges_in_matching,
                 multitry_kway_global_loop_stopping_rule,
                 multitry_kway_local_loop_stopping_rule,
+                graph_algo_type,
+                ht_save_contraction_ht,
 #elif defined MODE_EVALUATOR
                 k,   
                 preconfiguration, 
@@ -1272,6 +1275,24 @@ int parse_parameters(int argn, char **argv,
                         fprintf(stderr, "Invalid local loop stopping rule: \"%s\"\n", val);
                         exit(0);
                 }
+        }
+
+        if (graph_algo_type->count) {
+                const char* val = graph_algo_type->sval[0];
+                if(strcmp("bfs", val) == 0) {
+                        partition_config.graph_algo_type = "bfs";
+                } else if (strcmp("dfs", val) == 0) {
+                        partition_config.graph_algo_type = "dfs";
+                } else if (strcmp("2_hop", val) == 0) {
+                        partition_config.graph_algo_type = "2_hop";
+                } else {
+                        fprintf(stderr, "Invalid traversal type: \"%s\"\n", val);
+                        exit(0);
+                }
+        }
+
+        if (ht_save_contraction_ht->count > 0) {
+                partition_config.ht_save_contraction_ht = true;
         }
 
         return 0;

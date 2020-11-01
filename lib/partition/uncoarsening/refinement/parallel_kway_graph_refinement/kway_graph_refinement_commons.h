@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <map>
+#include <fstream>
 #include "data_structure/graph_access.h"
 #include "data_structure/parallel/algorithm.h"
 #include "data_structure/parallel/atomics.h"
@@ -16,6 +17,18 @@
 #include "partition/uncoarsening/refinement/parallel_kway_graph_refinement/fast_boundary.h"
 
 namespace parallel {
+
+enum query_type {
+        FIND = 0,
+        INSERT,
+        CLEAR,
+        INIT
+};
+
+struct ht_query {
+        uint32_t key;
+        query_type query;
+};
 
 class thread_data_refinement_core : public parallel::thread_config {
 public:
@@ -72,6 +85,10 @@ public:
         int unperformed_gain;
         double time_compute_gain;
         size_t num_part_accesses;
+        size_t true_move;
+        size_t false_single;
+        size_t false_overweight;
+        size_t false_other_threads_stop;
 
         // local statistics about stopping reason
         uint32_t stop_empty_queue;
@@ -79,6 +96,9 @@ public:
         uint32_t stop_max_number_of_swaps;
         uint32_t stop_faction_of_nodes_moved;
 
+        // generation of insertion/find sequences for hash tables
+
+        std::vector<ht_query> ht_sequence;
 
         thread_data_refinement_core(uint32_t _id,
                                     uint32_t _seed,
@@ -126,6 +146,10 @@ public:
                 ,       stop_stopping_rule(0)
                 ,       stop_max_number_of_swaps(0)
                 ,       stop_faction_of_nodes_moved(0)
+                ,       true_move(0)
+                ,       false_single(0)
+                ,       false_overweight(0)
+                ,       false_other_threads_stop(0)
                 ,       m_reset_counter(_reset_counter)
         {
                 size_t type_size = sizeof(round_struct);
@@ -149,6 +173,17 @@ public:
 //                start_nodes.reserve(100);
         }
 
+        ~thread_data_refinement_core() {
+
+        }
+
+        void save_ht_log() {
+                std::ofstream out("ht_thread_" + std::to_string(id));
+                for (const auto& rec : ht_sequence) {
+                        out << rec.key << ' ' << rec.query << std::endl;
+                }
+        }
+
         thread_data_refinement_core(const thread_data_refinement_core& td) = delete;
         thread_data_refinement_core(thread_data_refinement_core&& td) = default;
 
@@ -157,7 +192,9 @@ public:
 
         inline PartitionID get_local_partition(NodeID node) {
                 // ht
+
                 PartitionID part;
+                ht_sequence.push_back({node, query_type::FIND});
                 if (nodes_partitions->contains(node, part)) {
                         return part;
                 } else {
@@ -185,6 +222,7 @@ public:
 
         inline void set_local_partition(NodeID id, PartitionID part_id) {
                 (*nodes_partitions)[id] = part_id;
+                ht_sequence.push_back({id, query_type::INSERT});
         }
 
         void partial_reset_thread_data() {
@@ -193,7 +231,8 @@ public:
                 if (nodes_partitions.get() == nullptr) {
                         ALWAYS_ASSERT(bits_number(G.number_of_nodes() - 1) > 0);
                         size_t mem_size = get_mem_for_thread(id, config);
-                        nodes_partitions =std::make_unique<nodes_partitions_hash_table>(G.number_of_nodes(), mem_size);
+                        nodes_partitions = std::make_unique<nodes_partitions_hash_table>(G.number_of_nodes(), mem_size);
+                        ht_sequence.push_back({(NodeID) mem_size, query_type::INIT});
                 }
 
                 if (queue.get() == nullptr) {
@@ -216,6 +255,7 @@ public:
 
                 // ht
                 nodes_partitions->clear();
+                ht_sequence.push_back({0, query_type::CLEAR});
 
                 //nodes_partitions.reserve(131072);
 

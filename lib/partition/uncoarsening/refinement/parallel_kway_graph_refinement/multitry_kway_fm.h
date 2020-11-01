@@ -20,7 +20,8 @@ public:
 
         thread_data_factory(PartitionConfig& config,
                             graph_access& G,
-                            boundary_type& boundary)
+                            boundary_type& boundary,
+                            bool save_ht_log = false)
                 :       num_threads_finished(0)
                 ,       queue(config.num_threads)
                 ,       time_setup_start_nodes(0.0)
@@ -36,6 +37,7 @@ public:
                 ,       m_parts_sizes(config.k)
                 ,       m_moved_count(config.num_threads)
                 ,       m_reset_counter(0)
+                ,       m_save_ht_log(save_ht_log)
         {
                 for (PartitionID block = 0; block < G.get_partition_count(); ++block) {
                         m_parts_weights[block].get().store(boundary.get_block_weight(block), std::memory_order_relaxed);
@@ -131,10 +133,15 @@ public:
 
                 // vertices and edges
                 size_t total_num_part_accesses = 0;
+                size_t total_true_move = 0;
+                size_t total_false_single = 0;
+                size_t total_false_overweight = 0;
+                size_t total_false_other_threads_stop = 0;
                 uint32_t total_tried_movements = 0;
                 uint32_t total_accepted_movements = 0;
                 uint32_t total_affected_movements = 0;
                 uint32_t total_scaned_neighbours = 0;
+
 
                 // time
                 double total = 0.0;
@@ -178,6 +185,10 @@ public:
 //                                  << std::endl;
 
                         total_num_part_accesses += m_thread_data[id].get().num_part_accesses;
+                        total_true_move += m_thread_data[id].get().true_move;
+                        total_false_single += m_thread_data[id].get().false_single;
+                        total_false_overweight += m_thread_data[id].get().false_overweight;
+                        total_false_other_threads_stop += m_thread_data[id].get().false_other_threads_stop;
                         total_tried_movements += m_thread_data[id].get().tried_movements;
                         total_accepted_movements += m_thread_data[id].get().accepted_movements;
                         total_affected_movements += m_thread_data[id].get().affected_movements;
@@ -196,6 +207,11 @@ public:
                         proc_stat.proc_id = id;
                         proc_stat.total_thread_time = m_thread_data[id].get().total_thread_time;
                         proc_stat.num_part_accesses = m_thread_data[id].get().num_part_accesses;
+                        proc_stat.true_move = m_thread_data[id].get().true_move;
+                        proc_stat.false_single = m_thread_data[id].get().false_single;
+                        proc_stat.false_overweight = m_thread_data[id].get().false_overweight;
+                        proc_stat.false_other_threads_stop = m_thread_data[id].get().false_other_threads_stop;
+
                         proc_stat.tried_movements = m_thread_data[id].get().tried_movements;
                         proc_stat.accepted_movements = m_thread_data[id].get().accepted_movements;
                         proc_stat.scaned_neighbours = m_thread_data[id].get().scaned_neighbours;
@@ -218,6 +234,10 @@ public:
 
                 stat.total_compute_gain_time = total_time_compute_gain;
                 stat.total_num_part_accesses = total_num_part_accesses;
+                stat.total_true_move = total_true_move;
+                stat.total_false_single = total_false_single;
+                stat.total_false_overweight = total_false_overweight;
+                stat.total_false_other_threads_stop = total_false_other_threads_stop;
                 stat.total_tried_movements = total_tried_movements;
                 stat.total_accepted_movements = total_accepted_movements;
                 stat.total_affected_movements = total_affected_movements;
@@ -233,6 +253,10 @@ public:
 
                 std::cout << "Time move nodes (change boundary)\t" << total_time_move_nodes_change_boundary<< " s" << std::endl;
                 std::cout << "Total num part accesses\t" << total_num_part_accesses << std::endl;
+                std::cout << "total_true_move\t" << total_true_move << std::endl;
+                std::cout << "total_false_single\t" << total_false_single << std::endl;
+                std::cout << "total_false_overweight\t" << total_false_overweight << std::endl;
+                std::cout << "total_false_other_threads_stop\t" << total_false_other_threads_stop << std::endl;
                 std::cout << "Total tried moves\t" << total_tried_movements << std::endl;
                 std::cout << "Total accepted moves\t" << total_accepted_movements << std::endl;
                 std::cout << "Total affected moves\t" << total_affected_movements << std::endl;
@@ -302,6 +326,10 @@ public:
                 std::cout << "Time move nodes (change boundary)\t" << stat.total_time_move_nodes_change_boundary << " s" << std::endl;
                 std::cout << "Time compute gain\t" << stat.total_compute_gain_time << std::endl;
                 std::cout << "Number of partition accesses\t" << stat.total_num_part_accesses << std::endl;
+                std::cout << "true move\t" << stat.total_true_move << std::endl;
+                std::cout << "false_single\t" << stat.total_false_single << std::endl;
+                std::cout << "false_overweight\t" << stat.total_false_overweight << std::endl;
+                std::cout << "false_other_threads_stop\t" << stat.total_false_other_threads_stop << std::endl;
 
 //                for (auto& pr : stat.proc_stats) {
 //                        std::cout << "proc_id\t" << pr.proc_id << " | "
@@ -340,6 +368,9 @@ public:
 
         virtual ~thread_data_factory() {
                 print_iteration_statistics();
+                if (m_save_ht_log) {
+                        m_thread_data.front().get().save_ht_log();
+                }
         }
 
         AtomicWrapper<uint32_t> num_threads_finished;
@@ -377,6 +408,10 @@ public:
                 double avg_compute_gain_time = 0.0;
 
                 uint64_t total_num_part_accesses = 0;
+                size_t total_true_move = 0;
+                size_t total_false_single = 0;
+                size_t total_false_overweight = 0;
+                size_t total_false_other_threads_stop = 0;
                 uint32_t total_tried_movements = 0;
                 uint32_t total_accepted_movements = 0;
                 uint32_t total_affected_movements = 0;
@@ -396,6 +431,10 @@ public:
                         double total_thread_time = 0.0;
 
                         uint64_t num_part_accesses = 0;
+                        size_t true_move = 0;
+                        size_t false_single = 0;
+                        size_t false_overweight = 0;
+                        size_t false_other_threads_stop = 0;
                         uint32_t tried_movements = 0;
                         uint32_t accepted_movements = 0;
                         uint32_t affected_movements = 0;
@@ -418,6 +457,10 @@ public:
                                 proc_id = ps.proc_id;
 
                                 num_part_accesses += ps.num_part_accesses;
+                                true_move += ps.true_move;
+                                false_single += ps.false_single;
+                                false_overweight += ps.false_overweight;
+                                false_other_threads_stop += ps.false_other_threads_stop;
                                 total_thread_time += ps.total_thread_time;
                                 tried_movements += ps.tried_movements;
                                 accepted_movements += ps.accepted_movements;
@@ -454,6 +497,10 @@ public:
                         total_compute_gain_time += stat.total_compute_gain_time;
 
                         total_num_part_accesses += stat.total_num_part_accesses;
+                        total_true_move += stat.total_true_move;
+                        total_false_single += stat.total_false_single;
+                        total_false_overweight += stat.total_false_overweight;
+                        total_false_other_threads_stop += stat.total_false_other_threads_stop;
                         total_tried_movements += stat.total_tried_movements;
                         total_accepted_movements += stat.total_accepted_movements;
                         total_affected_movements += stat.total_affected_movements;
@@ -490,6 +537,7 @@ public:
         graph_access& m_G;
         boundary_type& m_boundary;
 
+
         // global data
         std::vector<AtomicWrapper<bool>> m_moved_idx;
         //Cvector<AtomicWrapper<bool>> m_moved_idx;
@@ -497,14 +545,15 @@ public:
         Cvector <AtomicWrapper<NodeWeight>> m_parts_sizes;
         Cvector <AtomicWrapper<int>> m_moved_count;
         AtomicWrapper<uint32_t> m_reset_counter;
+        const bool m_save_ht_log;
 };
 
 class multitry_kway_fm {
 public:
         using thread_data_refinement_core = parallel::thread_data_refinement_core;
 
-        multitry_kway_fm(PartitionConfig& config, graph_access& G, boundary_type& boundary)
-                :       m_factory(config, G, boundary)
+        multitry_kway_fm(PartitionConfig& config, graph_access& G, boundary_type& boundary, bool save_ht_log = false)
+                :       m_factory(config, G, boundary, save_ht_log)
         {
                 ALWAYS_ASSERT(config.stop_mls_global_threshold / 100.0 < 1.0);
                 ALWAYS_ASSERT(config.stop_mls_local_threshold / 100.0 < 1.0);

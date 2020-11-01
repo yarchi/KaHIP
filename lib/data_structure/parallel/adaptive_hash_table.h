@@ -2,6 +2,7 @@
 
 #include "data_structure/parallel/algorithm.h"
 #include "data_structure/parallel/hash_table.h"
+#include "data_structure/parallel/random.h"
 
 #include <array>
 
